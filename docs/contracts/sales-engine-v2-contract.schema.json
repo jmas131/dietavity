@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dietavity.local/contracts/sales-engine-v2-contract.schema.json",
+  "title": "Dietavity Sales Engine v2 contracts",
+  "type": "object",
+  "description": "Boundary contracts proposed by Ticket 57. This schema does not authorize actions or define a database schema.",
+  "$defs": {
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object", "required": ["type", "id", "version"], "additionalProperties": false,
+      "description": "Explicit provenance. Generated material is deliberately not a fact, policy, reviewed-knowledge, or system source.",
+      "properties": {
+        "type": {"enum":["canonical_fact","deterministic_policy","reviewed_knowledge","generated_guidance","conversational_generation","system"]},
+        "id": {"type":"string","minLength":1}, "version": {"type":"string","minLength":1},
+        "model_run_id": {"type":"string","minLength":1}, "generation_stage": {"enum":["bounded_reasoning","composer"]}
+      },
+      "allOf": [
+        {"if":{"properties":{"type":{"const":"generated_guidance"}}},"then":{"required":["model_run_id","generation_stage"],"properties":{"generation_stage":{"const":"bounded_reasoning"}}}},
+        {"if":{"properties":{"type":{"const":"conversational_generation"}}},"then":{"required":["model_run_id","generation_stage"],"properties":{"generation_stage":{"const":"composer"}}}},
+        {"if":{"properties":{"type":{"enum":["canonical_fact","deterministic_policy","reviewed_knowledge","system"]}}},"then":{"not":{"anyOf":[{"required":["model_run_id"]},{"required":["generation_stage"]}]}}}
+      ]
+    },
+    "historyMessage": {
+      "type": "object", "required": ["role", "text", "occurred_at"], "additionalProperties": false,
+      "properties": { "role": {"enum":["customer","assistant"]}, "text": {"type":"string"}, "occurred_at": {"$ref":"#/$defs/timestamp"}, "source_id": {"type":"string"}, "final_visible": {"type":"boolean"} }
+    },
+    "obligation": {
+      "type": "object", "required": ["id","category","current_turn_evidence","confidence","ambiguous"], "additionalProperties": false,
+      "properties": {
+        "id": {"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},
+        "category": {"enum":["product_fact","provider_service_fact","practical_guidance","conversational_task","commercial_purchase_intent","reminder_request","medication_management","safety_sensitive_nutrition","clarification","support_account","social_acknowledgement"]},
+        "subject": {"type":"string"}, "current_turn_evidence": {"type":"string","minLength":1}, "confidence": {"enum":["high","medium","low"]}, "ambiguous": {"type":"boolean"}, "attributes": {"type":"object"}
+      }
+    },
+    "authorizedAction": {
+      "type": "object", "required": ["action_type","authorization_source","authorizing_rule","parameters","preconditions","idempotency","status"], "additionalProperties": false,
+      "properties": {
+        "action_type": {"enum":["create_checkout","provide_checkout_destination","provide_holding_page_destination","schedule_reminder","persist_commercial_transition","update_conversation_state"]},
+        "authorization_source": {"const":"deterministic_policy"}, "authorizing_rule": {"type":"string","minLength":1}, "parameters": {"type":"object"}, "preconditions": {"type":"array","items":{"type":"string"}},
+        "idempotency": {"type":"object","required":["required","key_scope"],"additionalProperties":false,"properties":{"required":{"const":true},"key_scope":{"enum":["inbound_message","session","action"]}}},
+        "status": {"enum":["authorized","rejected","not_requested","executed","failed"]}, "expires_at": {"$ref":"#/$defs/timestamp"}
+      }
+    },
+    "resolvedObligation": {
+      "type": "object", "required": ["obligation_id","resolution_status","authority","source","allowed_claims","prohibited_claims","customer_uncertainty_required"], "additionalProperties": false,
+      "properties": {
+        "obligation_id": {"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"}, "resolution_status": {"enum":["resolved","unknown","clarification_required","prohibited","failed"]},
+        "authority": {"enum":["canonical_fact","deterministic_policy","commercial_authorization","reviewed_knowledge","generated_guidance","conversational_generation","bounded_unknown","clarification_required","prohibited","resolver_failure"]}, "source": {"$ref":"#/$defs/source"},
+        "factual_payload": {}, "policy_decision": {"type":"object"}, "allowed_claims": {"type":"array","items":{"type":"string"}}, "prohibited_claims": {"type":"array","items":{"type":"string"}},
+        "retrieved_knowledge_references": {"type":"array","items":{"$ref":"#/$defs/source"}}, "llm_reasoning_permitted": {"type":"boolean"}, "customer_uncertainty_required": {"type":"boolean"}, "action_authorization": {"$ref":"#/$defs/authorizedAction"}
+      },
+      "allOf": [
+        {"if":{"properties":{"authority":{"const":"bounded_unknown"}}},"then":{"properties":{"customer_uncertainty_required":{"const":true}}}},
+        {"if":{"properties":{"authority":{"const":"canonical_fact"}}},"then":{"properties":{"source":{"properties":{"type":{"const":"canonical_fact"}}}}}},
+        {"if":{"properties":{"authority":{"enum":["deterministic_policy","commercial_authorization"]}}},"then":{"properties":{"source":{"properties":{"type":{"const":"deterministic_policy"}}}}}},
+        {"if":{"properties":{"authority":{"const":"reviewed_knowledge"}}},"then":{"properties":{"source":{"properties":{"type":{"const":"reviewed_knowledge"}}}}}},
+        {"if":{"properties":{"authority":{"const":"generated_guidance"}}},"then":{"properties":{"source":{"properties":{"type":{"const":"generated_guidance"}}}}}},
+        {"if":{"properties":{"authority":{"const":"conversational_generation"}}},"then":{"properties":{"source":{"properties":{"type":{"const":"conversational_generation"}}}}}},
+        {"if":{"properties":{"authority":{"enum":["canonical_fact","deterministic_policy","commercial_authorization","bounded_unknown","clarification_required","prohibited","resolver_failure"]}}},"then":{"properties":{"llm_reasoning_permitted":{"const":false}}}}
+      ]
+    },
+    "retrievedKnowledge": {
+      "type": "object", "required": ["source","review_status","domain","retrieved_reference"], "additionalProperties": false,
+      "properties": {"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"reviewed_knowledge"}}}]},"review_status":{"enum":["approved","rejected","expired"]},"domain":{"enum":["nutrition_education","glp1_nutrition","recipe","ingredient_substitution","meal_preparation","faq"]},"retrieved_reference":{"type":"string"},"excerpt":{"type":"string"},"relevance":{"type":"number","minimum":0,"maximum":1},"effective_from":{"$ref":"#/$defs/timestamp"},"reviewed_at":{"$ref":"#/$defs/timestamp"}}
+    }
+  },
+  "properties": {
+    "ConversationContext": {
+      "type": "object", "required": ["contract_version","context_id","locale","current_message","history","session_state","offer_context","customer_state","commercial_state","metadata","authoritative_context","informational_context"], "additionalProperties": false,
+      "properties": {
+        "contract_version":{"const":"2.0"},"context_id":{"type":"string"},"locale":{"const":"es-MX"},
+        "current_message":{"allOf":[{"$ref":"#/$defs/historyMessage"},{"properties":{"role":{"const":"customer"}}}]},"history":{"type":"array","items":{"$ref":"#/$defs/historyMessage"}},
+        "session_state":{"type":"object","required":["session_id"],"additionalProperties":true,"properties":{"session_id":{"type":"string","minLength":1}}},"offer_context":{"type":"object","additionalProperties":true},"customer_state":{"type":"object","additionalProperties":true},"commercial_state":{"type":"object","additionalProperties":true},"metadata":{"type":"object"},"authoritative_context":{"type":"object"},"informational_context":{"type":"object","properties":{"knowledge":{"type":"array","items":{"$ref":"#/$defs/retrievedKnowledge"}}},"additionalProperties":true}
+      }
+    },
+    "Obligation": {"$ref":"#/$defs/obligation"},
+    "ResolvedObligation": {"$ref":"#/$defs/resolvedObligation"},
+    "AuthorizedAction": {"$ref":"#/$defs/authorizedAction"},
+    "ResponsePlan": {
+      "type":"object", "required":["contract_version","context_id","obligation_ids","resolved_obligations","required_coverage","canonical_facts","policy_outcomes","required_safety_language","bounded_uncertainties","authorized_actions","prohibited_claims","prohibited_actions","question_budget","locale"], "additionalProperties":false,
+      "properties": {
+        "contract_version":{"const":"2.0"},"context_id":{"type":"string"},"obligation_ids":{"type":"array","items":{"type":"string"},"uniqueItems":true},"resolved_obligations":{"type":"array","items":{"$ref":"#/$defs/resolvedObligation"}},"required_coverage":{"type":"array","items":{"type":"string"},"uniqueItems":true},"canonical_facts":{"type":"array","items":{"type":"object"}},"policy_outcomes":{"type":"array","items":{"type":"object"}},"permitted_reasoning":{"type":"array","items":{"type":"object"}},"retrieved_knowledge":{"type":"array","items":{"$ref":"#/$defs/retrievedKnowledge"}},"required_safety_language":{"type":"array","items":{"type":"string"}},"bounded_uncertainties":{"type":"array","items":{"type":"string"}},"authorized_actions":{"type":"array","items":{"$ref":"#/$defs/authorizedAction"}},"prohibited_claims":{"type":"array","items":{"type":"string"}},"prohibited_actions":{"type":"array","items":{"type":"string"}},"question_budget":{"type":"integer","minimum":0,"maximum":1},"locale":{"const":"es-MX"},"completion_requirement":{"type":"string"}
+      }
+    }
+  },
+  "additionalProperties": false
+}
