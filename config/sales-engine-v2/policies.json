@@ -1,0 +1,70 @@
+{
+  "policy_dictionary_version": "2026-09-22.1",
+  "policies": [
+    {
+      "id": "safety.medication_management",
+      "version": 1,
+      "status": "active",
+      "category": "medication_management",
+      "subtypes": ["dose_change", "stop", "start", "timing", "prescription_decision", "other_management"],
+      "outcome": "prohibited",
+      "reason_code": "MEDICATION_MANAGEMENT_REQUIRES_CLINICIAN",
+      "required_handling": ["refer_to_clinician"],
+      "prohibited_handling": ["medication_management_advice"]
+    },
+    {
+      "id": "commercial.checkout.standard",
+      "version": 1,
+      "status": "active",
+      "category": "commercial_purchase_intent",
+      "subtypes": ["explicit_current_request", "valid_current_confirmation"],
+      "campaign": "standard",
+      "outcome": "authorized",
+      "action_type": "provide_checkout_destination",
+      "reason_code": "CHECKOUT_AUTHORIZED",
+      "required_context": ["offer_version", "channel", "commercial_state.current_purchase_request", "commercial_state.safety_clear"]
+    },
+    {
+      "id": "commercial.checkout.glp1_canary",
+      "version": 1,
+      "status": "active",
+      "category": "commercial_purchase_intent",
+      "subtypes": ["explicit_current_request", "valid_current_confirmation"],
+      "campaign": "glp1_validation",
+      "outcome": "authorized",
+      "action_type": "provide_holding_page_destination",
+      "reason_code": "GLP1_HOLDING_PAGE_AUTHORIZED",
+      "required_context": ["offer_version", "channel", "commercial_state.current_purchase_request", "commercial_state.safety_clear"]
+    },
+    {
+      "id": "reminder.explicit_complete",
+      "version": 1,
+      "status": "active",
+      "category": "reminder_request",
+      "subtypes": ["explicit"],
+      "outcome": "authorized",
+      "action_type": "schedule_reminder",
+      "reason_code": "REMINDER_AUTHORIZED",
+      "required_context": ["reminder.requested", "reminder.scheduled_for"]
+    },
+    {
+      "id": "reminder.explicit_incomplete",
+      "version": 1,
+      "status": "active",
+      "category": "reminder_request",
+      "subtypes": ["explicit"],
+      "outcome": "clarification_required",
+      "reason_code": "REMINDER_CONTEXT_INCOMPLETE",
+      "when": {"reminder_scheduled_for": "missing"}
+    },
+    {
+      "id": "reminder.unsupported",
+      "version": 1,
+      "status": "active",
+      "category": "reminder_request",
+      "subtypes": ["unsupported"],
+      "outcome": "unsupported",
+      "reason_code": "REMINDER_UNSUPPORTED"
+    }
+  ]
+}
