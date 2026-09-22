@@ -1,0 +1,17 @@
+# Ticket 58 — canonical fact store
+
+`config/sales-engine-v2/product-facts.json` is the reviewed, version-controlled input for the initial canonical facts. It stores structured values only, never customer wording. `scripts/generate-sales-engine-v2-product-fact-seed.js` validates it and generates the migration seed payload; the Ticket 58 regression compares that payload to the migration exactly.
+
+Initial facts become effective at the Ticket 58 approval/migration boundary (`2026-09-22T00:00:00Z`), rather than claiming an unverified historical effective date. A row resolves only when `status = active`, it is not deprecated, and `valid_from <= as_of < valid_to` (or no `valid_to`). More than one matching row is a resolver failure, never an arbitrary winner.
+
+The scope contract permits only JSON values (objects, arrays, strings, booleans, numbers, and null). Resolver scope identity recursively sorts every object key; array order remains significant. PostgreSQL uses JSONB's recursive object-key canonicalization through `scope::text`. Consequently equivalent nested objects resolve as the same scope in both boundaries; unsupported JavaScript values are rejected.
+
+`unknown` has two deliberate structured forms. A reviewed `state: unknown` row returns `status: unknown`, `authority: bounded_unknown`, canonical source identity/version, provenance, and `reviewed: true`, while asserting no value. No matching row returns the same bounded-unknown authority but `source: null` and `reviewed: false`; it does not invent provenance. `not_applicable` returns its own `status: not_applicable`, canonical source/provenance, and no value, so downstream v2 components can distinguish it from uncertainty.
+
+The reviewed inventory excludes prompt-only positioning, safety/action policy, and practical knowledge. `offer.public_refund_policy` is a commercial fact—not deterministic policy—and is explicitly reviewed `unknown` because no public refund position is approved. Unsupported payment methods such as PayPal are absent/unreviewed and resolve to bounded unknown, not false.
+
+Offer scope is deliberately narrow. Portal delivery, WhatsApp support, prepared-food delivery, and in-person location are documented only as claims of `28d-149-v1`, so they are offer-scoped rather than silently provider-wide. Ticket 44 expressly defines Dietavity's GLP-1 medication sale, delivery, and prescription boundary at provider level, so only those three facts remain `offer_version: null`.
+
+The table is backend-only: RLS is forced, public/client privileges are revoked, and only `service_role` receives access. Repository migrations use additive/idempotent guards, so this migration is safely rerunnable: table/extension creation is guarded, the exclusion constraint and trigger are conditionally created, and seed insertion uses the identity/version conflict key. It does not apply, activate, or call any migration.
+
+This ticket has no route, workflow, LLM, policy, or action integration. The resolver is pure and works from an injected fact snapshot; a future database adapter must supply a read snapshot and propagate database failures as `FACT_STORE_UNAVAILABLE`, never as a business unknown.

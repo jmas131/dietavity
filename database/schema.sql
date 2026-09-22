@@ -4308,6 +4308,66 @@ CREATE TABLE public.purchases (
 ALTER TABLE public.purchases OWNER TO postgres;
 
 --
+-- Name: product_fact_value_is_valid(text, jsonb); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.product_fact_value_is_valid(target_value_type text, target_value jsonb) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  SELECT CASE target_value_type
+    WHEN 'boolean' THEN jsonb_typeof(target_value) = 'boolean'
+    WHEN 'integer' THEN jsonb_typeof(target_value) = 'number' AND trunc((target_value #>> '{}')::numeric) = (target_value #>> '{}')::numeric
+    WHEN 'money' THEN jsonb_typeof(target_value) = 'object' AND jsonb_typeof(target_value -> 'amount') = 'number' AND (target_value ->> 'amount')::numeric >= 0 AND jsonb_typeof(target_value -> 'currency') = 'string' AND length(target_value ->> 'currency') = 3 AND target_value ->> 'currency' = upper(target_value ->> 'currency')
+    WHEN 'enum' THEN jsonb_typeof(target_value) = 'string' AND target_value #>> '{}' <> ''
+    WHEN 'enum_set' THEN jsonb_typeof(target_value) = 'array' AND jsonb_array_length(target_value) > 0 AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(target_value) AS item WHERE jsonb_typeof(item) <> 'string' OR item #>> '{}' = '') AND (SELECT count(*) = count(DISTINCT item #>> '{}') FROM jsonb_array_elements(target_value) AS item)
+    WHEN 'object' THEN jsonb_typeof(target_value) = 'object'
+    WHEN 'text' THEN jsonb_typeof(target_value) = 'string'
+    ELSE false
+  END;
+$$;
+
+ALTER FUNCTION public.product_fact_value_is_valid(target_value_type text, target_value jsonb) OWNER TO postgres;
+
+REVOKE ALL ON FUNCTION public.product_fact_value_is_valid(target_value_type text, target_value jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.product_fact_value_is_valid(target_value_type text, target_value jsonb) TO service_role;
+
+--
+-- Name: product_facts; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.product_facts (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    fact_key text NOT NULL,
+    offer_version text,
+    scope jsonb DEFAULT '{}'::jsonb NOT NULL,
+    offer_scope_key text GENERATED ALWAYS AS (coalesce(offer_version, ''::text)) STORED,
+    scope_key text GENERATED ALWAYS AS ((scope)::text) STORED,
+    state text NOT NULL,
+    value_type text NOT NULL,
+    value jsonb,
+    valid_from timestamp with time zone NOT NULL,
+    valid_to timestamp with time zone,
+    version integer NOT NULL,
+    provenance text NOT NULL,
+    status text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT product_facts_deprecated_active_check CHECK ((NOT ((state = 'deprecated'::text) AND (status = 'active'::text)))),
+    CONSTRAINT product_facts_key_check CHECK ((fact_key ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$'::text)),
+    CONSTRAINT product_facts_known_value_check CHECK (((state <> ALL (ARRAY['known_true'::text, 'known_false'::text])) OR ((value IS NOT NULL) AND public.product_fact_value_is_valid(value_type, value)))),
+    CONSTRAINT product_facts_scope_object_check CHECK ((jsonb_typeof(scope) = 'object'::text)),
+    CONSTRAINT product_facts_state_check CHECK ((state = ANY (ARRAY['known_true'::text, 'known_false'::text, 'unknown'::text, 'not_applicable'::text, 'deprecated'::text]))),
+    CONSTRAINT product_facts_status_check CHECK ((status = ANY (ARRAY['active'::text, 'deprecated'::text, 'draft'::text]))),
+    CONSTRAINT product_facts_unknown_value_check CHECK (((state <> ALL (ARRAY['unknown'::text, 'not_applicable'::text])) OR (value IS NULL))),
+    CONSTRAINT product_facts_validity_check CHECK (((valid_to IS NULL) OR (valid_to > valid_from))),
+    CONSTRAINT product_facts_value_type_check CHECK ((value_type = ANY (ARRAY['boolean'::text, 'integer'::text, 'money'::text, 'enum'::text, 'enum_set'::text, 'object'::text, 'text'::text]))),
+    CONSTRAINT product_facts_version_check CHECK ((version > 0))
+);
+
+ALTER TABLE ONLY public.product_facts FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.product_facts OWNER TO postgres;
+
+--
 -- Name: sales_funnel_events; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -5102,6 +5162,27 @@ ALTER TABLE ONLY public.purchases
 --
 -- Name: sales_funnel_events sales_funnel_events_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
+
+--
+-- Name: product_facts product_facts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.product_facts
+    ADD CONSTRAINT product_facts_pkey PRIMARY KEY (id);
+
+--
+-- Name: product_facts product_facts_identity_version_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.product_facts
+    ADD CONSTRAINT product_facts_identity_version_key UNIQUE (fact_key, offer_scope_key, scope_key, version);
+
+--
+-- Name: product_facts product_facts_no_active_validity_overlap; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.product_facts
+    ADD CONSTRAINT product_facts_no_active_validity_overlap EXCLUDE USING gist (fact_key WITH =, offer_scope_key WITH =, scope_key WITH =, tstzrange(valid_from, coalesce(valid_to, 'infinity'::timestamp with time zone), '[)'::text) WITH &&) WHERE ((status = 'active'::text));
 
 ALTER TABLE ONLY public.sales_funnel_events
     ADD CONSTRAINT sales_funnel_events_pkey PRIMARY KEY (id);
@@ -6082,6 +6163,12 @@ CREATE TRIGGER programs_set_updated_at BEFORE UPDATE ON public.programs FOR EACH
 
 CREATE TRIGGER purchases_set_updated_at BEFORE UPDATE ON public.purchases FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+--
+-- Name: product_facts set_product_facts_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER set_product_facts_updated_at BEFORE UPDATE ON public.product_facts FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
 
 --
 -- Name: shopping_items shopping_items_set_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
@@ -6637,6 +6724,12 @@ ALTER TABLE public.programs ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.purchases ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: product_facts; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.product_facts ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: sales_funnel_events; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -7886,6 +7979,13 @@ GRANT ALL ON TABLE public.purchases TO service_role;
 
 
 --
+-- Name: TABLE product_facts; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.product_facts TO service_role;
+
+
+--
 -- Name: TABLE sales_funnel_events; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -8336,4 +8436,3 @@ ALTER EVENT TRIGGER pgrst_drop_watch OWNER TO supabase_admin;
 --
 
 \unrestrict ppu74BOdonNyZyvQ1U6cB7AsrlN63zjij6QTTwrXCdDQSPmjOr4fqSPvDrywIwa
-
