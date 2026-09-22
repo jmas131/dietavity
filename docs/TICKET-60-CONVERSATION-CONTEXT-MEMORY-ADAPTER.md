@@ -19,9 +19,9 @@ This ticket adds a pure, synchronous adapter at `lib/sales-engine-v2/memory-adap
 | Medication boundary, checkout/reminder authorization | POLICY_NOT_MEMORY | Ticket 59 only. |
 | Intent labels, buyer signals, historical classifications, strategy, reminders | DERIVED_INTERPRETATION_NOT_MEMORY | Excluded. Future Interpreter/orchestrator owns current obligations. |
 | Raw prompts, model drafts, execution/provider/payment IDs, credentials, profile/health data | GENERATED_RESPONSE_NOT_MEMORY / DEPRECATED_OR_LEGACY | Excluded. |
-| Current purchase request and `safety_clear` for Ticket 59 | NEEDS_DECISION | A future Interpreter plus orchestration adapter must establish these structured policy inputs; memory must not supply them. |
+| Current purchase request and deterministic `safety_gate` for Ticket 59 | NEEDS_DECISION | A future Interpreter plus resolution boundary must establish these structured policy inputs; memory must not supply them. |
 
-The source table has `id uuid DEFAULT gen_random_uuid()` and `created_at timestamptz DEFAULT now()`. Its primary key is UUID-only; there is no memory-row sequence, insertion ordinal, provider ordinal, or composite ordering index. Therefore UUID lexical order is not conversational chronology. Ticket 57's `created_at ASC, id ASC` describes a deterministic presentation order, but the production reference merely configures the `Postgres Chat Memory` node with its table/session key and exposes no SQL ordering guarantee. The known `public.messages.processing_order` is an authoritative bigint sequence for inbound reservations, but no memory row stores or links to it. Distinct equal memory timestamps consequently fail `MEMORY_ORDER_AMBIGUOUS`; the adapter does not invent chronology. The known test/harness forms use `human`/`ai` with `content` or legacy `data.content`. The Ticket 48 isolated harness has final-only in-memory transcript entries. Both production rows and harness entries converge through `normalizeMemoryEntry` to the same shape, without writes.
+The source table has `id uuid DEFAULT gen_random_uuid()` and `created_at timestamptz DEFAULT now()`. Its primary key is UUID-only; there is no memory-row sequence, insertion ordinal, provider ordinal, or composite ordering index. Therefore UUID lexical order is not conversational chronology. Chronology is `occurred_at` only; the production reference merely configures the `Postgres Chat Memory` node with its table/session key and exposes no SQL ordering guarantee. The known `public.messages.processing_order` is an authoritative bigint sequence for inbound reservations, but no memory row stores or links to it. Distinct equal memory timestamps consequently fail `MEMORY_ORDER_AMBIGUOUS`; the adapter does not invent chronology. The known test/harness forms use `human`/`ai` with `content` or legacy `data.content`. The Ticket 48 isolated harness has final-only in-memory transcript entries. Both production rows and harness entries converge through `normalizeMemoryEntry` to the same shape, without writes.
 
 ## Canonical contract
 
@@ -55,7 +55,7 @@ Options default to `maxPriorTurns: 20` and `maxPriorCharacters: 12000`. The adap
 
 `runtimeMetadata` must contain `conversation_id`, `session_id`, and `channel: 'whatsapp'`; locale defaults only to `es-MX`. Optional values are offer version, reviewed campaign (`standard` or `glp1_validation`), and the two operational booleans above. Unexpected fields and malformed values fail. It cannot infer a campaign from GLP-1 text.
 
-Ticket 59 remains compatible but unchanged: its `commercial_state.current_purchase_request` and `safety_clear` must be supplied later by a server-controlled orchestration boundary after interpretation/policy inputs exist. This adapter refuses to manufacture either from historical messages or session-memory classifications.
+Ticket 59 remains compatible: its `commercial_state.current_purchase_request` and deterministic `safety_gate` must be supplied later by a resolution boundary after interpretation/policy inputs exist. This adapter refuses to manufacture either from historical messages or session-memory classifications.
 
 ## API and failure semantics
 

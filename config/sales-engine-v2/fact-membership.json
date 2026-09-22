@@ -1,0 +1,11 @@
+{
+  "version": "2026-09-22.1",
+  "definitions": [
+    {
+      "fact_key": "payment.supported_methods",
+      "operation": "contains",
+      "complete_set": true,
+      "normalization": "ascii_lowercase"
+    }
+  ]
+}

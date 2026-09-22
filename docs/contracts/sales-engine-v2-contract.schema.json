@@ -33,21 +33,21 @@
       }
     },
     "authorizedAction": {
-      "type": "object", "required": ["action_type","authorization_source","authorizing_rule","parameters","preconditions","idempotency","status"], "additionalProperties": false,
+      "type": "object", "required": ["action_type","authorization_source","authorizing_rule","parameters","preconditions","constraints","idempotency","status"], "additionalProperties": false,
       "properties": {
         "action_type": {"enum":["create_checkout","provide_checkout_destination","provide_holding_page_destination","schedule_reminder","persist_commercial_transition","update_conversation_state"]},
-        "authorization_source": {"const":"deterministic_policy"}, "authorizing_rule": {"type":"string","minLength":1}, "parameters": {"type":"object"}, "preconditions": {"type":"array","items":{"type":"string"}},
+        "authorization_source": {"const":"deterministic_policy"}, "authorizing_rule": {"type":"string","minLength":1}, "parameters": {"type":"object"}, "preconditions": {"type":"array","items":{"type":"string"}}, "constraints":{"type":"object"},
         "idempotency": {"type":"object","required":["required","key_scope"],"additionalProperties":false,"properties":{"required":{"const":true},"key_scope":{"enum":["inbound_message","session","action"]}}},
-        "status": {"enum":["authorized","rejected","not_requested","executed","failed"]}, "expires_at": {"$ref":"#/$defs/timestamp"}
+        "status": {"const":"authorized"}, "expires_at": {"$ref":"#/$defs/timestamp"}
       }
     },
     "resolvedObligation": {
       "type": "object", "required": ["obligation_id","resolution_status","authority","source","allowed_claims","prohibited_claims","customer_uncertainty_required"], "additionalProperties": false,
       "properties": {
-        "obligation_id": {"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"}, "resolution_status": {"enum":["resolved","unknown","clarification_required","prohibited","failed"]},
-        "authority": {"enum":["canonical_fact","deterministic_policy","commercial_authorization","reviewed_knowledge","generated_guidance","conversational_generation","bounded_unknown","clarification_required","prohibited","resolver_failure"]}, "source": {},
+        "obligation_id": {"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"}, "resolution_status": {"enum":["resolved","unknown","clarification_required","prohibited","failed","deferred"]},
+        "authority": {"type":["string","null"],"enum":["canonical_fact","deterministic_policy","commercial_authorization","reviewed_knowledge","generated_guidance","conversational_generation","bounded_unknown","clarification_required","prohibited","resolver_failure",null]}, "source": {},
         "factual_payload": {}, "policy_decision": {"type":"object"}, "allowed_claims": {"type":"array","items":{"type":"string"}}, "prohibited_claims": {"type":"array","items":{"type":"string"}},
-        "retrieved_knowledge_references": {"type":"array","items":{"$ref":"#/$defs/source"}}, "llm_reasoning_permitted": {"type":"boolean"}, "customer_uncertainty_required": {"type":"boolean"}, "action_authorization": {"$ref":"#/$defs/authorizedAction"}
+        "retrieved_knowledge_references": {"type":"array","items":{"$ref":"#/$defs/source"}}, "llm_reasoning_permitted": {"type":"boolean"}, "customer_uncertainty_required": {"type":"boolean"}, "action_authorization": {"$ref":"#/$defs/authorizedAction"}, "next_stage":{"enum":["reviewed_knowledge_or_reasoning","conversational_generation","support_resolution","response_composition"]}
       },
       "allOf": [
         {"if":{"properties":{"authority":{"const":"bounded_unknown"}}},"then":{"properties":{"customer_uncertainty_required":{"const":true}}}},
@@ -60,6 +60,9 @@
         {"if":{"properties":{"authority":{"const":"clarification_required"}}},"then":{"properties":{"source":{"type":"null"}}}},
         {"if":{"properties":{"authority":{"const":"prohibited"}}},"then":{"properties":{"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"deterministic_policy"}}}]}}}},
         {"if":{"properties":{"authority":{"const":"resolver_failure"}}},"then":{"properties":{"source":{"type":"null"}}}},
+        {"if":{"properties":{"resolution_status":{"const":"deferred"}}},"then":{"required":["next_stage","llm_reasoning_permitted"],"properties":{"authority":{"const":null},"source":{"type":"null"},"allowed_claims":{"maxItems":0},"prohibited_claims":{"maxItems":0},"customer_uncertainty_required":{"const":false},"llm_reasoning_permitted":{"const":false}},"not":{"anyOf":[{"required":["factual_payload"]},{"required":["policy_decision"]},{"required":["action_authorization"]},{"required":["retrieved_knowledge_references"]}]}}},
+        {"if":{"properties":{"authority":{"const":null}}},"then":{"properties":{"resolution_status":{"const":"deferred"}}}},
+        {"if":{"required":["next_stage"]},"then":{"properties":{"resolution_status":{"const":"deferred"}}}},
         {"if":{"properties":{"authority":{"enum":["canonical_fact","deterministic_policy","commercial_authorization","bounded_unknown","clarification_required","prohibited","resolver_failure"]}}},"then":{"properties":{"llm_reasoning_permitted":{"const":false}}}}
       ]
     },

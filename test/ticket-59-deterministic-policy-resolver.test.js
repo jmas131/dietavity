@@ -34,11 +34,10 @@ test('Ticket 59 medication-management safety requires clinician handling and nev
   assert.equal(productScope.authority, 'bounded_unknown');
 });
 
-test('Ticket 59 authorizes only a structured, safety-clear standard checkout destination', () => {
-  const context = { commercial_state: { current_purchase_request: true, safety_clear: true } };
+test('Ticket 59 authorizes only a structured clear-gate standard checkout destination', () => {
+  const context = { commercial_state: { current_purchase_request: true, safety_gate: 'clear' } };
   const result = resolve('commercial_purchase_intent', 'explicit_current_request', context);
   assert.equal(result.authority, 'commercial_authorization');
-  assert.equal(result.action_authorization.decision, 'authorized');
   assert.equal(result.action_authorization.action_type, 'provide_checkout_destination');
   assert.equal(result.action_authorization.constraints.side_effect_execution, 'not_performed');
   assert.deepEqual(result.source, { type: 'deterministic_policy', id: 'commercial.checkout.standard', version: '1' });
@@ -49,7 +48,7 @@ test('Ticket 59 authorizes only a structured, safety-clear standard checkout des
 });
 
 test('Ticket 59 preserves the structured GLP-1 holding-page boundary without raw-language detection', () => {
-  const context = { campaign: 'glp1_validation', commercial_state: { current_purchase_request: true, safety_clear: true } };
+  const context = { campaign: 'glp1_validation', commercial_state: { current_purchase_request: true, safety_gate: 'clear' } };
   const holding = resolve('commercial_purchase_intent', 'explicit_current_request', context);
   assert.equal(holding.action_authorization.action_type, 'provide_holding_page_destination');
   assert.equal(holding.reason_code, 'GLP1_HOLDING_PAGE_AUTHORIZED');

@@ -32,7 +32,7 @@ No materially conflicting authority was found for the implemented medication bou
 - `commercial.checkout.glp1_canary`: the same structured request with `glp1_validation` authorizes only `provide_holding_page_destination`; asking for normal checkout is prohibited.
 - `reminder.explicit_complete`, `.explicit_incomplete`, and `.unsupported`: authorize only a complete explicit reminder, require clarification when its time is absent, and represent unsupported requests separately. `when.reminder_scheduled_for: "missing"` means the `reminder` object is absent, its `scheduled_for` property is absent, or that property is explicitly `null`. A present `scheduled_for` must be an ISO timestamp; any other present value, malformed reminder object, unknown reminder field, or invalid boolean remains `POLICY_REQUEST_INVALID`. The complete rule requires a present timestamp, so complete and incomplete rules cannot both match.
 
-Authoritative context fields are deliberately allowlisted: `offer_version`, `channel`, `campaign`, `commercial_state.current_purchase_request`, `commercial_state.safety_clear`, and structured reminder fields. Any unexpected or malformed field is `POLICY_REQUEST_INVALID`, never authorization evidence. `create_checkout` is never authorized by this resolver; it is an execution concern requiring later operational safeguards.
+Authoritative context fields are deliberately allowlisted: `offer_version`, `channel`, `campaign`, `commercial_state.current_purchase_request`, `commercial_state.safety_gate`, and structured reminder fields. The gate is one of `clear`, `blocked`, or `indeterminate`; only `clear` matches a commercial authorization rule, while `blocked` and `indeterminate` produce deterministic commercial prohibitions. It is derived by a future resolution boundary from current deterministic safety outcomes, not memory, raw language, or Interpreter confidence. Any unexpected or malformed field is `POLICY_REQUEST_INVALID`, never authorization evidence. `create_checkout` is never authorized by this resolver; it is an execution concern requiring later operational safeguards.
 
 ## API and result semantics
 
@@ -46,7 +46,7 @@ Positive results carry Ticket 57-compatible provenance:
 
 Safety policies use `deterministic_policy`; commercial authorization uses `commercial_authorization` with the same deterministic-policy source. All policy outcomes set `llm_reasoning_permitted: false`.
 
-`no_applicable_policy` with `NO_APPLICABLE_POLICY` is distinct from `prohibited`, `clarification_required`, `unsupported`, and resolver errors. Future action executors must fail closed unless an explicit matching `action_authorization.decision === 'authorized'` exists. Malformed input/store failures throw `PolicyResolverError`; two matching policies throw `POLICY_AMBIGUOUS`, so file order never decides authority.
+`policy_decision` retains the policy ID/version, outcome, reason code, and handling requirements. `action_authorization` is present only for a policy-authorized action and is the canonical Ticket 57 `AuthorizedAction`: it contains no duplicate decision, policy ID/version, or reason-code fields. `no_applicable_policy` with `NO_APPLICABLE_POLICY` is distinct from `prohibited`, `clarification_required`, `unsupported`, and resolver errors. Future action executors must fail closed unless an `action_authorization` with `status === 'authorized'` exists. Malformed input/store failures throw `PolicyResolverError`; two matching policies throw `POLICY_AMBIGUOUS`, so file order never decides authority.
 
 ## Integration requirements
 

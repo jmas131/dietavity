@@ -14,7 +14,8 @@ const factResolver = createFactResolver({ facts });
 const policyResolver = createPolicyResolver({ policies });
 
 const SOURCE_TYPES = new Set(['canonical_fact', 'deterministic_policy', 'reviewed_knowledge', 'generated_guidance', 'conversational_generation', 'system']);
-const AUTHORITIES = new Set(['canonical_fact', 'deterministic_policy', 'commercial_authorization', 'reviewed_knowledge', 'generated_guidance', 'conversational_generation', 'bounded_unknown', 'clarification_required', 'prohibited', 'resolver_failure']);
+const AUTHORITIES = new Set(['canonical_fact', 'deterministic_policy', 'commercial_authorization', 'reviewed_knowledge', 'generated_guidance', 'conversational_generation', 'bounded_unknown', 'clarification_required', 'prohibited', 'resolver_failure', null]);
+const DEFERRED_STAGES = new Set(['reviewed_knowledge_or_reasoning', 'conversational_generation', 'support_resolution', 'response_composition']);
 
 function sourceIsValid(source) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return false;
@@ -30,7 +31,9 @@ function sourceIsValid(source) {
 // the normative schema's enumerations and makes every authority/source pair
 // explicit without adding a validation framework.
 function resolvedContractValid(value) {
-  if (!value || typeof value !== 'object' || !AUTHORITIES.has(value.authority) || typeof value.obligation_id !== 'string' || !/^o-[A-Za-z0-9._-]+$/.test(value.obligation_id) || !['resolved', 'unknown', 'clarification_required', 'prohibited', 'failed'].includes(value.resolution_status) || !Array.isArray(value.allowed_claims) || !Array.isArray(value.prohibited_claims) || typeof value.customer_uncertainty_required !== 'boolean' || !('source' in value)) return false;
+  if (!value || typeof value !== 'object' || !AUTHORITIES.has(value.authority) || typeof value.obligation_id !== 'string' || !/^o-[A-Za-z0-9._-]+$/.test(value.obligation_id) || !['resolved', 'unknown', 'clarification_required', 'prohibited', 'failed', 'deferred'].includes(value.resolution_status) || !Array.isArray(value.allowed_claims) || !Array.isArray(value.prohibited_claims) || typeof value.customer_uncertainty_required !== 'boolean' || !('source' in value)) return false;
+  if (value.resolution_status === 'deferred') return value.authority === null && value.source === null && DEFERRED_STAGES.has(value.next_stage) && value.allowed_claims.length === 0 && value.prohibited_claims.length === 0 && value.customer_uncertainty_required === false && value.llm_reasoning_permitted === false && !['factual_payload', 'policy_decision', 'action_authorization', 'retrieved_knowledge_references'].some(key => key in value);
+  if (value.authority === null || 'next_stage' in value) return false;
   const source = value.source;
   if (value.authority === 'bounded_unknown') return value.customer_uncertainty_required && (source === null || (sourceIsValid(source) && source.type === 'canonical_fact'));
   if (value.authority === 'clarification_required' || value.authority === 'resolver_failure') return source === null;
@@ -43,6 +46,10 @@ function resolvedContractValid(value) {
 
 function resolved(authority, source, resolution_status = 'resolved') {
   return { obligation_id: 'o-1', resolution_status, authority, source, allowed_claims: [], prohibited_claims: [], customer_uncertainty_required: authority === 'bounded_unknown' };
+}
+
+function deferred(next_stage) {
+  return { obligation_id: 'o-deferred', resolution_status: 'deferred', authority: null, source: null, allowed_claims: [], prohibited_claims: [], customer_uncertainty_required: false, llm_reasoning_permitted: false, next_stage };
 }
 
 function asResolved(result, obligationId = 'o-1') {
@@ -91,6 +98,26 @@ test('Ticket 61A rejects null and mismatched provenance, including missing model
   ]) assert.equal(resolvedContractValid(value), false, JSON.stringify(value));
 });
 
+test('Ticket 61A accepts every deferred lifecycle stage without inventing authority', () => {
+  for (const next_stage of DEFERRED_STAGES) assert.equal(resolvedContractValid(deferred(next_stage)), true, next_stage);
+});
+
+test('Ticket 61A rejects deferred lifecycle authority, source, stage, and payload violations', () => {
+  const canonical = { type: 'canonical_fact', id: 'fact', version: '1' };
+  const action = { action_type: 'provide_checkout_destination', authorization_source: 'deterministic_policy', authorizing_rule: 'rule.v1', parameters: {}, preconditions: [], constraints: {}, idempotency: { required: true, key_scope: 'inbound_message' }, status: 'authorized' };
+  for (const value of [
+    { ...resolved(null, null), resolution_status: 'resolved' },
+    { ...resolved(null, null, 'unknown') },
+    { ...deferred('reviewed_knowledge_or_reasoning'), authority: 'canonical_fact' },
+    { ...deferred('reviewed_knowledge_or_reasoning'), source: canonical },
+    { ...resolved('canonical_fact', canonical), next_stage: 'reviewed_knowledge_or_reasoning' },
+    { ...deferred('reviewed_knowledge_or_reasoning'), factual_payload: true },
+    { ...deferred('reviewed_knowledge_or_reasoning'), policy_decision: {} },
+    { ...deferred('reviewed_knowledge_or_reasoning'), action_authorization: action },
+    { ...deferred('reviewed_knowledge_or_reasoning'), retrieved_knowledge_references: [] },
+  ]) assert.equal(resolvedContractValid(value), false, JSON.stringify(value));
+});
+
 test('Ticket 61A maps representative Ticket 58 resolver outputs into the normative contract without changing their source semantics', () => {
   const request = (factKey, offerVersion = '28d-149-v1') => ({ factKey, offerVersion, scope: {}, asOf: '2026-09-22T00:00:01.000Z' });
   const known = factResolver.resolveFact(request('offer.price'));
@@ -116,8 +143,8 @@ test('Ticket 61A maps representative Ticket 59 outputs into the normative contra
   const base = { offer_version: '28d-149-v1', channel: 'whatsapp' };
   const obligation = (category, subtype) => ({ id: 'o-1', category, subtype, ambiguous: false });
   const deterministic = resolve({ obligation: obligation('medication_management', 'dose_change'), context: base });
-  const commercial = resolve({ obligation: obligation('commercial_purchase_intent', 'explicit_current_request'), context: { ...base, commercial_state: { current_purchase_request: true, safety_clear: true } } });
-  const prohibited = resolve({ obligation: obligation('commercial_purchase_intent', 'explicit_current_request'), context: { ...base, commercial_state: { current_purchase_request: true, safety_clear: true } }, requested_action_type: 'create_checkout' });
+  const commercial = resolve({ obligation: obligation('commercial_purchase_intent', 'explicit_current_request'), context: { ...base, commercial_state: { current_purchase_request: true, safety_gate: 'clear' } } });
+  const prohibited = resolve({ obligation: obligation('commercial_purchase_intent', 'explicit_current_request'), context: { ...base, commercial_state: { current_purchase_request: true, safety_gate: 'clear' } }, requested_action_type: 'create_checkout' });
   const noPolicy = resolve({ obligation: obligation('product_fact', 'price'), context: base });
   const policyClarification = resolve({ obligation: obligation('reminder_request', 'explicit'), context: base });
   const sourceLessClarification = resolve({ obligation: { ...obligation('reminder_request', 'explicit'), ambiguous: true }, context: base });

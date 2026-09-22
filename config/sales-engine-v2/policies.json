@@ -22,7 +22,8 @@
       "outcome": "authorized",
       "action_type": "provide_checkout_destination",
       "reason_code": "CHECKOUT_AUTHORIZED",
-      "required_context": ["offer_version", "channel", "commercial_state.current_purchase_request", "commercial_state.safety_clear"]
+      "required_context": ["offer_version", "channel", "commercial_state.current_purchase_request"],
+      "when": {"safety_gate": "clear"}
     },
     {
       "id": "commercial.checkout.glp1_canary",
@@ -34,7 +35,28 @@
       "outcome": "authorized",
       "action_type": "provide_holding_page_destination",
       "reason_code": "GLP1_HOLDING_PAGE_AUTHORIZED",
-      "required_context": ["offer_version", "channel", "commercial_state.current_purchase_request", "commercial_state.safety_clear"]
+      "required_context": ["offer_version", "channel", "commercial_state.current_purchase_request"],
+      "when": {"safety_gate": "clear"}
+    },
+    {
+      "id": "commercial.checkout.safety_blocked",
+      "version": 1,
+      "status": "active",
+      "category": "commercial_purchase_intent",
+      "subtypes": ["explicit_current_request", "valid_current_confirmation"],
+      "outcome": "prohibited",
+      "reason_code": "COMMERCIAL_SAFETY_GATE_BLOCKED",
+      "when": {"safety_gate": "blocked"}
+    },
+    {
+      "id": "commercial.checkout.safety_indeterminate",
+      "version": 1,
+      "status": "active",
+      "category": "commercial_purchase_intent",
+      "subtypes": ["explicit_current_request", "valid_current_confirmation"],
+      "outcome": "prohibited",
+      "reason_code": "COMMERCIAL_SAFETY_GATE_INDETERMINATE",
+      "when": {"safety_gate": "indeterminate"}
     },
     {
       "id": "reminder.explicit_complete",
