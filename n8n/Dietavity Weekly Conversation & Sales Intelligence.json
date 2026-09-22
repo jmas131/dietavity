@@ -1,0 +1,255 @@
+{
+  "name": "Dietavity Weekly Conversation & Sales Intelligence",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6e35d5b6-48f1-45de-9f8e-f0dbf14072a1",
+      "name": "Weekly Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH local_clock AS (\n  SELECT (NOW() AT TIME ZONE 'America/Mexico_City')::date AS current_local_date\n), bounds AS (\n  SELECT\n    ((current_local_date - 7)::timestamp AT TIME ZONE 'America/Mexico_City') AS window_start,\n    (current_local_date::timestamp AT TIME ZONE 'America/Mexico_City') AS window_end,\n    (current_local_date - 7)::text AS reporting_start_date,\n    (current_local_date - 1)::text AS reporting_end_date\n  FROM local_clock\n)\nSELECT\n  message.id,\n  message.session_id,\n  message.timestamp,\n  message.direction,\n  message.body,\n  message.message_kind,\n  message.in_reply_to_id,\n  message.delivery_status,\n  bounds.reporting_start_date,\n  bounds.reporting_end_date\nFROM bounds\nLEFT JOIN public.messages AS message\n  ON message.timestamp >= bounds.window_start\n AND message.timestamp < bounds.window_end\n AND message.session_id IS NOT NULL\n AND message.direction IN ('inbound', 'outbound')\n AND message.body IS NOT NULL\nORDER BY message.session_id, message.timestamp, message.id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        0
+      ],
+      "id": "c02ac4ea-aac8-41de-a5db-a65c04eb1df0",
+      "name": "Fetch Canonical Messages - Previous 7 Complete Days",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst canonicalProductContext = \"# Posicionamiento Comercial\\n- Propuesta principal: Dietavity elimina la carga diaria de decidir qué comer al decirle a la persona qué comer cada día.\\n- Valor práctico: ofrece un programa personalizado de 28 días con comidas saludables, fáciles y familiares, adaptadas a los objetivos y preferencias de la persona. Dietavity hace por ella el trabajo de organizar sus comidas.\\n- Orden comercial: primero explica la guía diaria; después la facilidad y familiaridad; luego la personalización y los objetivos; presenta la longevidad solo como sustento del enfoque cuando sea relevante.\\n- \\\"Fáciles\\\" significa prácticas y realistas para la vida cotidiana. No prometas comidas en cinco minutos, instantáneas ni sin cocinar.\\n- \\\"Familiares\\\" significa comidas reconocibles con ingredientes que se pueden conseguir razonablemente en México. No presentes el programa como una dieta mexicana ni como la adopción de una dieta japonesa, italiana, española, noruega, mediterránea u otra dieta extranjera.\\n- Puede ayudar a comer más saludable, controlar el peso, sentirse mejor u organizar las comidas, pero nunca garantiza esos resultados.\\n- La inspiración en principios de alimentación presentes en poblaciones longevas es una razón para creer en el enfoque, no el titular de venta. Menciónala cuando pregunten qué hace diferente a Dietavity, en qué se basa, por qué funciona así o qué tipo de alimentación usa; no la introduzcas innecesariamente en cada respuesta.\\n- No repitas mecánicamente esta descripción completa. Respeta la divulgación progresiva y responde solo lo necesario para la necesidad actual.\\n\\n# Producto y Oferta Canónicos\\n- Producto: Programa personalizado Dietavity de 28 días.\\n- Promesa: En Dietavity te decimos qué comer cada día durante 28 días, con comidas fáciles, familiares, saludables y pensadas para tus objetivos y preferencias.\\n- Beneficio práctico: Dietavity organiza las comidas y reduce la carga diaria de decidir qué comer.\\n- Precio: $149 MXN.\\n- Facturación: un solo pago; no es suscripción, no hay mensualidad ni renovación automática.\\n- Incluye desayuno, comida, cena y snack durante 28 días.\\n- Entrega: portal Dietavity.\\n- Después del pago verificado, la persona completa su personalización con la información que comparte.\\n- La fecha de compra y la fecha de inicio son distintas. Puede elegir desde hoy hasta 30 días calendario después.\\n- Durante el programa puede pedir por WhatsApp ayuda bajo demanda: recetas, ideas de comidas, orientación práctica y orientación para restaurantes. Solo explica la ausencia de mensajes diarios proactivos si la persona pregunta por ellos.\\n- Métodos aceptados: tarjeta de crédito, tarjeta de débito, OXXO y Apple Pay. Responde primero el método o la restricción concreta de la persona y evita enumerar opciones irrelevantes. Para OXXO, solo está confirmado que se selecciona dentro del Checkout seguro y que la persona debe seguir las indicaciones mostradas ahí; no inventes códigos, comprobantes, vencimientos ni pasos de tienda. No enumeres proveedores no aceptados; si preguntan por uno, responde únicamente con los métodos aceptados.\\n- Los identificadores internos de la oferta nunca se muestran a clientes.\\n\\n# Límites Médicos, de Privacidad y de Política\\n- No diagnostiques, prescribas tratamientos, modifiques medicamentos ni presentes Dietavity como sustituto de atención médica o profesional apropiada.\\n- No garantices pérdida de peso ni inventes rangos de kilogramos.\\n- Explica que durante la personalización se pueden proporcionar alergias, condiciones y otra información relevante, sin prometer tratamiento médico.\\n- Si preguntan directamente, explica con claridad que Dietavity usa inteligencia artificial y que un nutriólogo humano no elabora individualmente cada programa.\\n- Si prefieren atención humana, reconoce la preferencia con transparencia sin ofrecer un producto humano que Dietavity no tenga.\\n- Si cuestionan por qué pagar Dietavity en vez de usar una IA directamente, reconoce que pueden hacerlo y explica sin presión el valor real: un programa completo y personalizado de 28 días, organizado en el portal, con guía de comidas, continuidad y ayuda bajo demanda por WhatsApp.\\n- No inventes políticas de reembolso, descuentos, promociones, escasez, garantías, bonos ni fechas límite.\\n- La política pública de reembolso no está definida en los artefactos canónicos; indica que soporte debe confirmar el caso en lugar de inventar una regla.\\n\\n# Additional verified product boundary\\n- Dietavity is not a prepared-food delivery service.\\n- WhatsApp is available for assistance.\\n- Any capability not stated in this canonical context requires verification.\";\nconst secret = String($env.DAILY_AUDITOR_HMAC_SECRET || '');\nif (secret.length < 32) {\n  throw new Error('DAILY_AUDITOR_HMAC_SECRET must contain at least 32 characters');\n}\n\nconst redact = (value) => String(value ?? '')\n  .replace(/\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/gi, '[EMAIL REDACTED]')\n  .replace(/https?:\\/\\/[^\\s<>\"']*(?:\\/setup\\/|\\/portal\\/|\\/recuperar-acceso(?:\\/|\\?|$)|portal[_-]?token|[?&](?:token|access_token|key|session)=)[^\\s<>\"']*/gi, '[SENSITIVE LINK REDACTED]')\n  .replace(/\\b(?:sk|pk|cs|pi|cus|sub|whsec)_(?:live|test)?_?[A-Za-z0-9_-]{8,}\\b/gi, '[TOKEN REDACTED]')\n  .replace(/\\b(?:portal[_-]?token|access[_-]?token)\\s*[:=]\\s*[A-Za-z0-9._~-]{8,}\\b/gi, '[TOKEN REDACTED]')\n  .replace(/\\+\\d(?:[\\s().-]*\\d){7,14}\\b/g, '[PHONE REDACTED]')\n  .replace(/\\b(?:tel(?:éfono)?|whatsapp|cel(?:ular)?|móvil)\\s*[:=-]?\\s*(?:\\+?\\d[\\s().-]*){7,15}\\b/gi, '[PHONE REDACTED]')\n  .replace(/\\b\\d{10}\\b/g, '[PHONE REDACTED]');\n\nconst labelFor = (sessionId) => `CONVERSATION-${crypto\n  .createHmac('sha256', secret)\n  .update(String(sessionId), 'utf8')\n  .digest('hex')\n  .slice(0, 8)\n  .toUpperCase()}`;\n\nconst rawRows = items.map((item) => item.json || {});\nconst reportingStartDate = rawRows.find((row) => row.reporting_start_date)?.reporting_start_date;\nconst reportingEndDate = rawRows.find((row) => row.reporting_end_date)?.reporting_end_date;\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(reportingStartDate || '')) ||\n    !/^\\d{4}-\\d{2}-\\d{2}$/.test(String(reportingEndDate || ''))) {\n  throw new Error('Weekly auditor query did not return a valid reporting window');\n}\n\nconst rows = rawRows\n  .filter((row) => row.id && row.session_id && row.timestamp && row.body != null)\n  .sort((left, right) => {\n    const byTime = new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime();\n    return byTime || String(left.id).localeCompare(String(right.id));\n  });\n\nconst conversations = new Map();\nfor (const row of rows) {\n  const label = labelFor(row.session_id);\n  if (!conversations.has(label)) conversations.set(label, []);\n\n  const actor = row.direction === 'inbound' ? 'CUSTOMER' : 'DIETAVITY';\n  const kind = row.message_kind ? ` [${String(row.message_kind).slice(0, 60)}]` : '';\n  const delivery = row.direction === 'outbound' && row.delivery_status\n    ? ` [delivery: ${String(row.delivery_status).slice(0, 40)}]`\n    : '';\n  conversations.get(label).push(`${actor}${kind}${delivery}:\\n${redact(row.body)}`);\n}\n\nconst totalConversations = conversations.size;\nconst period = `${reportingStartDate} to ${reportingEndDate}`;\nif (totalConversations === 0) {\n  return [{\n    json: {\n      analysis_required: false,\n      reporting_start_date: reportingStartDate,\n      reporting_end_date: reportingEndDate,\n      total_conversations: 0,\n      report_html: `<h1>WEEKLY CONVERSATION &amp; SALES INTELLIGENCE REPORT</h1><p><strong>Reporting period:</strong> ${period} (America/Mexico_City; previous 7 complete days)</p><p><strong>Conversations reviewed:</strong> 0</p><p><strong>Prospect conversations:</strong> 0<br><strong>Customer/support conversations:</strong> 0<br><strong>Sample quality:</strong> No relevant conversations; no commercial conclusions can be drawn.</p><h2>EXECUTIVE SUMMARY</h2><ul><li>No customer-visible conversations were available for analysis.</li></ul><h2>PRIORITIES FOR NEXT WEEK</h2><p>No conversation-derived priority.</p><h2>ENGINEERING TICKET</h2><p>None recommended this week.</p>`,\n    },\n  }];\n}\n\nconst transcript = Array.from(conversations.entries())\n  .map(([label, messages]) => `${label}\\n\\n${messages.join('\\n\\n')}`)\n  .join('\\n\\n==================================================\\n\\n');\n\nconst system_message = `You are Dietavity's Weekly Conversation & Sales Intelligence Auditor. Your primary question is: What did this week's WhatsApp conversations teach us that can help Dietavity generate more revenue or improve customer experience?\n\nAnalyze complete conversations across contact intent, recurring questions and objections, observable funnel progression, what helped or hurt sales, customer language, Meta-ad and landing-page insights, positioning, product/offer lessons, customer experience, and genuine technical defects. Do not force customer support or probable testing into sales categories.\n\nEVIDENCE CONTRACT\n- Separate OBSERVED (directly supported), INTERPRETATION (what it may mean), and RECOMMENDED ACTION (what to consider).\n- Counts must represent distinct conversations, not messages. Use count null when a meaningful count cannot be supported.\n- One conversation is an isolated observation, not a recurring pattern. Normally assign weak evidence; severity may independently justify escalation.\n- Set evidence strength from the number of supporting conversations, consistency, and ambiguity. State when the sample is too small for strong conclusions.\n- Use only supplied anonymous conversation labels. Paraphrase and minimize personal content. Never infer identity.\n\nFUNNEL CONTRACT\n- For prospects, identify initial contact, meaningful interest, explicit purchase intent, Checkout reached, and observed drop-off only when supported by messages.\n- A Checkout link means Checkout reached, not payment. This input has no reliable purchase-state source, so purchase_confirmed must be null.\n\nPRODUCT AND SAFETY CONTRACT\n${canonicalProductContext}\n\n- Do not invent capabilities, policies, people, files, special payment behavior, guarantees, refunds, factura/invoicing, therapeutic diets, clinical outcomes, medical adaptations, or human escalation. If not verified above, write \"Product capability requires verification\".\n- Confusion that Dietavity delivers prepared food is positioning/product clarity, never a recommendation to build food delivery.\n- A medical-condition conversation may yield a safety or clarity observation, but never a diagnosis, therapeutic promise, clinical diet, medication change, or unsupported health claim.\n\nCLASSIFICATION AND ACTION CONTRACT\n- Classify nontechnical lessons as MARKETING, SALES CONVERSATION, PRODUCT / OFFER, CUSTOMER EXPERIENCE, or NO ACTION. Use TECHNICAL DEFECT only for an actual system/software failure.\n- Preserve contradictory positioning evidence; do not force support for current positioning.\n- Routine sales-quality observations wait for this weekly report. Workflow/runtime failures are already routed immediately to Dietavity's existing Global Error Handler, so do not propose another monitoring system.\n- Still surface message evidence of payment-state corruption, duplicate charges, unsafe health responses, privacy/security issues, repeated duplicate outbound delivery, widespread Checkout failure, or widespread messaging failure.\n- Priorities are recommendations for human review only. Do not modify messages, ads, copy, product behavior, database state, tickets, or production configuration.\n\nTEST/DEBUG TRAFFIC\nNo reliable test-traffic marker is supplied. Do not exclude conversations or call them organic based on message-text guesses. State this limitation in test_traffic_handling. You may describe an observation as possibly test-related when context suggests it, without removing it from counts.\n\nENGINEERING TICKET THRESHOLD\nRecommend at most one ticket, only when an actual technical/system defect is supported or reproducible, engineering is the appropriate solution, and no unverified product assumption is required. ticket_recommended must be false and proposed_ticket null otherwise. Marketing, sales, offer, prepared-food-delivery confusion, and isolated nontechnical anecdotes never justify an engineering ticket. Any proposed ticket requires human approval.`;\n\nconst user_message = `Reporting period: ${period}, America/Mexico_City. This is the previous 7 complete local calendar days; the current partial day is excluded.\nConversations reviewed: ${totalConversations}\nCanonical source: public.messages customer-visible inbound/outbound ledger.\n\n${transcript}`;\n\nreturn [{\n  json: {\n    analysis_required: true,\n    reporting_start_date: reportingStartDate,\n    reporting_end_date: reportingEndDate,\n    total_conversations: totalConversations,\n    total_messages: rows.length,\n    system_message,\n    user_message,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "74780fbf-2955-4b61-b0ab-ec908855fc1b",
+      "name": "Prepare Weekly Intelligence Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5d36edfd-aaf9-4b19-af27-bb81797f5f9d",
+              "leftValue": "={{ $json.analysis_required }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "id": "da46d0e0-918c-4b72-a574-9a04461bbd15",
+      "name": "Has Conversations to Analyze?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-5-mini\",\n  \"response_format\": {\n    \"type\": \"json_schema\",\n    \"json_schema\": {\n      \"name\": \"weekly_conversation_sales_intelligence\",\n      \"strict\": true,\n      \"schema\": {\n        \"type\": \"object\",\n        \"additionalProperties\": false,\n        \"required\": [\n          \"prospect_conversations\",\n          \"customer_support_conversations\",\n          \"sample_quality\",\n          \"executive_summary\",\n          \"sales_funnel_signals\",\n          \"prospect_wants\",\n          \"questions_and_objections\",\n          \"what_helped_sales\",\n          \"what_hurt_sales\",\n          \"marketing_positioning_insights\",\n          \"product_customer_experience_insights\",\n          \"technical_findings\",\n          \"test_traffic_handling\",\n          \"priorities_next_week\",\n          \"ticket_recommended\",\n          \"proposed_ticket\"\n        ],\n        \"properties\": {\n          \"prospect_conversations\": {\n            \"type\": \"integer\",\n            \"minimum\": 0\n          },\n          \"customer_support_conversations\": {\n            \"type\": \"integer\",\n            \"minimum\": 0\n          },\n          \"sample_quality\": {\n            \"type\": \"string\"\n          },\n          \"executive_summary\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            },\n            \"maxItems\": 5\n          },\n          \"sales_funnel_signals\": {\n            \"type\": \"object\",\n            \"additionalProperties\": false,\n            \"required\": [\n              \"initial_contacts\",\n              \"meaningful_interest\",\n              \"explicit_purchase_intent\",\n              \"checkout_reached\",\n              \"purchase_confirmed\",\n              \"drop_off_points\"\n            ],\n            \"properties\": {\n              \"initial_contacts\": {\n                \"type\": \"integer\",\n                \"minimum\": 0\n              },\n              \"meaningful_interest\": {\n                \"type\": \"integer\",\n                \"minimum\": 0\n              },\n              \"explicit_purchase_intent\": {\n                \"type\": \"integer\",\n                \"minimum\": 0\n              },\n              \"checkout_reached\": {\n                \"type\": \"integer\",\n                \"minimum\": 0\n              },\n              \"purchase_confirmed\": {\n                \"type\": \"null\"\n              },\n              \"drop_off_points\": {\n                \"type\": \"array\",\n                \"items\": {\n                  \"type\": \"string\"\n                },\n                \"maxItems\": 5\n              }\n            }\n          },\n          \"prospect_wants\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"object\",\n              \"additionalProperties\": false,\n              \"required\": [\n                \"theme\",\n                \"count\",\n                \"observed\",\n                \"interpretation\",\n                \"recommended_action\",\n                \"evidence_strength\",\n                \"evidence\"\n              ],\n              \"properties\": {\n                \"theme\": {\n                  \"type\": \"string\"\n                },\n                \"count\": {\n                  \"anyOf\": [\n                    {\n                      \"type\": \"integer\",\n                      \"minimum\": 1\n                    },\n                    {\n                      \"type\": \"null\"\n                    }\n                  ]\n                },\n                \"observed\": {\n                  \"type\": \"string\"\n                },\n                \"interpretation\": {\n                  \"type\": \"string\"\n                },\n                \"recommended_action\": {\n                  \"type\": \"string\"\n                },\n                \"evidence_strength\": {\n                  \"type\": \"string\",\n                  \"enum\": [\n                    \"weak\",\n                    \"moderate\",\n                    \"strong\"\n                  ]\n                },\n                \"evidence\": {\n                  \"type\": \"array\",\n                  \"items\": {\n                    \"type\": \"string\",\n                    \"pattern\": \"^CONVERSATION-[A-F0-9]{8}$\"\n                  },\n                  \"maxItems\": 10\n                }\n              }\n            },\n            \"maxItems\": 8\n          },\n          \"questions_and_objections\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"object\",\n              \"additionalProperties\": false,\n              \"required\": [\n                \"theme\",\n                \"count\",\n                \"observed\",\n                \"interpretation\",\n                \"recommended_action\",\n                \"evidence_strength\",\n                \"evidence\"\n              ],\n              \"properties\": {\n                \"theme\": {\n                  \"type\": \"string\"\n                },\n                \"count\": {\n                  \"anyOf\": [\n                    {\n                      \"type\": \"integer\",\n                      \"minimum\": 1\n                    },\n                    {\n                      \"type\": \"null\"\n                    }\n                  ]\n                },\n                \"observed\": {\n                  \"type\": \"string\"\n                },\n                \"interpretation\": {\n                  \"type\": \"string\"\n                },\n                \"recommended_action\": {\n                  \"type\": \"string\"\n                },\n                \"evidence_strength\": {\n                  \"type\": \"string\",\n                  \"enum\": [\n                    \"weak\",\n                    \"moderate\",\n                    \"strong\"\n                  ]\n                },\n                \"evidence\": {\n                  \"type\": \"array\",\n                  \"items\": {\n                    \"type\": \"string\",\n                    \"pattern\": \"^CONVERSATION-[A-F0-9]{8}$\"\n                  },\n                  \"maxItems\": 10\n                }\n              }\n            },\n            \"maxItems\": 8\n          },\n          \"what_helped_sales\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            },\n            \"maxItems\": 6\n          },\n          \"what_hurt_sales\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            },\n            \"maxItems\": 6\n          },\n          \"marketing_positioning_insights\": {\n            \"type\": \"object\",\n            \"additionalProperties\": false,\n            \"required\": [\n              \"customer_language\",\n              \"ad_landing_page_insights\",\n              \"signals_supporting_positioning\",\n              \"signals_challenging_positioning\"\n            ],\n            \"properties\": {\n              \"customer_language\": {\n                \"type\": \"array\",\n                \"items\": {\n                  \"type\": \"string\"\n                },\n                \"maxItems\": 6\n              },\n              \"ad_landing_page_insights\": {\n                \"type\": \"array\",\n                \"items\": {\n                  \"type\": \"string\"\n                },\n                \"maxItems\": 6\n              },\n              \"signals_supporting_positioning\": {\n                \"type\": \"array\",\n                \"items\": {\n                  \"type\": \"string\"\n                },\n                \"maxItems\": 5\n              },\n              \"signals_challenging_positioning\": {\n                \"type\": \"array\",\n                \"items\": {\n                  \"type\": \"string\"\n                },\n                \"maxItems\": 5\n              }\n            }\n          },\n          \"product_customer_experience_insights\": {\n            \"type\": \"array\",\n            \"maxItems\": 6,\n            \"items\": {\n              \"type\": \"object\",\n              \"additionalProperties\": false,\n              \"required\": [\n                \"classification\",\n                \"insight\",\n                \"evidence_strength\"\n              ],\n              \"properties\": {\n                \"classification\": {\n                  \"type\": \"string\",\n                  \"enum\": [\n                    \"MARKETING\",\n                    \"SALES CONVERSATION\",\n                    \"PRODUCT / OFFER\",\n                    \"CUSTOMER EXPERIENCE\",\n                    \"NO ACTION\"\n                  ]\n                },\n                \"insight\": {\n                  \"type\": \"string\"\n                },\n                \"evidence_strength\": {\n                  \"type\": \"string\",\n                  \"enum\": [\n                    \"weak\",\n                    \"moderate\",\n                    \"strong\"\n                  ]\n                }\n              }\n            }\n          },\n          \"technical_findings\": {\n            \"type\": \"array\",\n            \"maxItems\": 5,\n            \"items\": {\n              \"type\": \"object\",\n              \"additionalProperties\": false,\n              \"required\": [\n                \"title\",\n                \"observed\",\n                \"impact\",\n                \"severity\",\n                \"reproducibility\",\n                \"evidence_strength\",\n                \"evidence\"\n              ],\n              \"properties\": {\n                \"title\": {\n                  \"type\": \"string\"\n                },\n                \"observed\": {\n                  \"type\": \"string\"\n                },\n                \"impact\": {\n                  \"type\": \"string\"\n                },\n                \"severity\": {\n                  \"type\": \"string\",\n                  \"enum\": [\n                    \"low\",\n                    \"medium\",\n                    \"high\",\n                    \"critical\"\n                  ]\n                },\n                \"reproducibility\": {\n                  \"type\": \"string\",\n                  \"enum\": [\n                    \"unclear\",\n                    \"supported\",\n                    \"confirmed\"\n                  ]\n                },\n                \"evidence_strength\": {\n                  \"type\": \"string\",\n                  \"enum\": [\n                    \"weak\",\n                    \"moderate\",\n                    \"strong\"\n                  ]\n                },\n                \"evidence\": {\n                  \"type\": \"array\",\n                  \"items\": {\n                    \"type\": \"string\",\n                    \"pattern\": \"^CONVERSATION-[A-F0-9]{8}$\"\n                  },\n                  \"maxItems\": 10\n                }\n              }\n            }\n          },\n          \"test_traffic_handling\": {\n            \"type\": \"string\"\n          },\n          \"priorities_next_week\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            },\n            \"maxItems\": 3\n          },\n          \"ticket_recommended\": {\n            \"type\": \"boolean\"\n          },\n          \"proposed_ticket\": {\n            \"anyOf\": [\n              {\n                \"type\": \"null\"\n              },\n              {\n                \"type\": \"object\",\n                \"additionalProperties\": false,\n                \"required\": [\n                  \"classification\",\n                  \"title\",\n                  \"objective\",\n                  \"observed_evidence\",\n                  \"required_behavior\",\n                  \"regression_cases\",\n                  \"acceptance_criteria\",\n                  \"non_goals\"\n                ],\n                \"properties\": {\n                  \"classification\": {\n                    \"type\": \"string\",\n                    \"enum\": [\n                      \"TECHNICAL DEFECT\"\n                    ]\n                  },\n                  \"title\": {\n                    \"type\": \"string\"\n                  },\n                  \"objective\": {\n                    \"type\": \"string\"\n                  },\n                  \"observed_evidence\": {\n                    \"type\": \"string\"\n                  },\n                  \"required_behavior\": {\n                    \"type\": \"string\"\n                  },\n                  \"regression_cases\": {\n                    \"type\": \"array\",\n                    \"items\": {\n                      \"type\": \"string\"\n                    },\n                    \"maxItems\": 8\n                  },\n                  \"acceptance_criteria\": {\n                    \"type\": \"array\",\n                    \"items\": {\n                      \"type\": \"string\"\n                    },\n                    \"maxItems\": 8\n                  },\n                  \"non_goals\": {\n                    \"type\": \"array\",\n                    \"items\": {\n                      \"type\": \"string\"\n                    },\n                    \"maxItems\": 8\n                  }\n                }\n              }\n            ]\n          }\n        }\n      }\n    }\n  },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": {{ JSON.stringify($json.system_message) }}\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.user_message) }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        896,
+        -96
+      ],
+      "id": "88b5f766-1d2f-4f1e-983f-f0512993642a",
+      "name": "AI Weekly Sales Intelligence Auditor"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sanitizeReport = (value) => String(value ?? '')\n  .replace(/\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/gi, '[EMAIL REDACTED]')\n  .replace(/https?:\\/\\/[^\\s<>\"']*(?:\\/setup\\/|\\/portal\\/|\\/recuperar-acceso(?:\\/|\\?|$)|portal[_-]?token|[?&](?:token|access_token|key|session)=)[^\\s<>\"']*/gi, '[SENSITIVE LINK REDACTED]')\n  .replace(/\\b(?:sk|pk|cs|pi|cus|sub|whsec)_(?:live|test)?_?[A-Za-z0-9_-]{8,}\\b/gi, '[TOKEN REDACTED]')\n  .replace(/\\b(?:SM|MM|PN|AC)[A-F0-9]{32}\\b/gi, '[PROVIDER ID REDACTED]')\n  .replace(/\\+\\d(?:[\\s().-]*\\d){7,14}\\b/g, '[PHONE REDACTED]')\n  .replace(/\\b(?:tel(?:éfono)?|whatsapp|cel(?:ular)?|móvil)\\s*[:=-]?\\s*(?:\\+?\\d[\\s().-]*){7,15}\\b/gi, '[PHONE REDACTED]')\n  .replace(/\\b\\d{10}\\b/g, '[PHONE REDACTED]');\n\nconst escapeHtml = (value) => sanitizeReport(value)\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;')\n  .replace(/\"/g, '&quot;')\n  .replace(/'/g, '&#39;');\n\nconst content = $json.choices?.[0]?.message?.content;\nif (!content) throw new Error('Weekly conversation intelligence auditor returned no model content');\n\nlet audit;\ntry {\n  audit = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (error) {\n  throw new Error(`Weekly conversation intelligence auditor returned invalid JSON: ${error.message}`);\n}\n\nconst prepared = $('Prepare Weekly Intelligence Input').first().json;\nconst total = Number(prepared.total_conversations) || 0;\nconst labelPattern = /^CONVERSATION-[A-F0-9]{8}$/;\nconst boundedCount = (value) => Math.max(0, Math.min(total, Number.isInteger(value) ? value : 0));\nconst list = (values, emptyText = 'No supported finding.') => Array.isArray(values) && values.length\n  ? `<ul>${values.map((value) => `<li>${escapeHtml(value)}</li>`).join('')}</ul>`\n  : `<p>${escapeHtml(emptyText)}</p>`;\nconst evidence = (values) => Array.isArray(values)\n  ? [...new Set(values.filter((label) => labelPattern.test(String(label))))].slice(0, 10)\n  : [];\nconst renderFindings = (values) => Array.isArray(values) && values.length\n  ? values.slice(0, 8).map((finding) => {\n    const labels = evidence(finding.evidence);\n    const count = Number.isInteger(finding.count) ? Math.min(total, Math.max(1, finding.count)) : null;\n    return `<h3>${escapeHtml(finding.theme || 'Untitled theme')}</h3>` +\n      `<p><strong>Count:</strong> ${count === null ? 'Not reliably countable' : count}</p>` +\n      `<p><strong>OBSERVED:</strong> ${escapeHtml(finding.observed || 'No observation supplied.')}</p>` +\n      `<p><strong>INTERPRETATION:</strong> ${escapeHtml(finding.interpretation || 'No interpretation supplied.')}</p>` +\n      `<p><strong>RECOMMENDED ACTION:</strong> ${escapeHtml(finding.recommended_action || 'No action recommended.')}</p>` +\n      `<p><strong>Evidence strength:</strong> ${escapeHtml(finding.evidence_strength || 'weak')}<br>` +\n      `<strong>Anonymous evidence:</strong> ${labels.length ? labels.map(escapeHtml).join(', ') : 'None supplied.'}</p>`;\n  }).join('')\n  : '<p>No supported finding.</p>';\n\nconst funnel = audit.sales_funnel_signals || {};\nconst marketing = audit.marketing_positioning_insights || {};\nconst productInsights = Array.isArray(audit.product_customer_experience_insights)\n  ? audit.product_customer_experience_insights.slice(0, 6)\n  : [];\nconst technicalFindings = Array.isArray(audit.technical_findings)\n  ? audit.technical_findings.slice(0, 5)\n  : [];\n\nlet html = '<h1>WEEKLY CONVERSATION &amp; SALES INTELLIGENCE REPORT</h1>';\nhtml += `<p><strong>Reporting period:</strong> ${escapeHtml(prepared.reporting_start_date)} to ${escapeHtml(prepared.reporting_end_date)} (America/Mexico_City; previous 7 complete days)</p>`;\nhtml += `<p><strong>Conversations reviewed:</strong> ${total}<br>`;\nhtml += `<strong>Prospect conversations:</strong> ${boundedCount(audit.prospect_conversations)}<br>`;\nhtml += `<strong>Customer/support conversations:</strong> ${boundedCount(audit.customer_support_conversations)}<br>`;\nhtml += `<strong>Sample quality:</strong> ${escapeHtml(audit.sample_quality || 'Not assessed.')}</p>`;\n\nhtml += '<h2>EXECUTIVE SUMMARY</h2>' + list((audit.executive_summary || []).slice(0, 5));\nhtml += '<h2>SALES FUNNEL SIGNALS</h2>';\nhtml += `<p><strong>Initial contacts:</strong> ${boundedCount(funnel.initial_contacts)}<br>`;\nhtml += `<strong>Meaningful interest:</strong> ${boundedCount(funnel.meaningful_interest)}<br>`;\nhtml += `<strong>Explicit purchase intent:</strong> ${boundedCount(funnel.explicit_purchase_intent)}<br>`;\nhtml += `<strong>Checkout reached:</strong> ${boundedCount(funnel.checkout_reached)}<br>`;\nhtml += '<strong>Purchase confirmed:</strong> Not observable from public.messages alone.</p>';\nhtml += '<h3>Main observed drop-off points</h3>' + list((funnel.drop_off_points || []).slice(0, 5));\n\nhtml += '<h2>WHAT PROSPECTS WANTED</h2>' + renderFindings(audit.prospect_wants);\nhtml += '<h2>QUESTIONS &amp; OBJECTIONS</h2>' + renderFindings(audit.questions_and_objections);\nhtml += '<h2>WHAT HELPED SALES</h2>' + list((audit.what_helped_sales || []).slice(0, 6));\nhtml += '<h2>WHAT HURT SALES</h2>' + list((audit.what_hurt_sales || []).slice(0, 6));\n\nhtml += '<h2>MARKETING &amp; POSITIONING INSIGHTS</h2>';\nhtml += '<h3>Customer language</h3>' + list((marketing.customer_language || []).slice(0, 6));\nhtml += '<h3>Potential ad/landing-page insights</h3>' + list((marketing.ad_landing_page_insights || []).slice(0, 6));\nhtml += '<h3>Signals supporting current positioning</h3>' + list((marketing.signals_supporting_positioning || []).slice(0, 5));\nhtml += '<h3>Signals challenging current positioning</h3>' + list((marketing.signals_challenging_positioning || []).slice(0, 5));\n\nhtml += '<h2>PRODUCT / CUSTOMER EXPERIENCE INSIGHTS</h2>';\nhtml += productInsights.length\n  ? `<ul>${productInsights.map((item) => `<li><strong>${escapeHtml(item.classification || 'NO ACTION')}:</strong> ${escapeHtml(item.insight || '')} <em>(Evidence: ${escapeHtml(item.evidence_strength || 'weak')})</em></li>`).join('')}</ul>`\n  : '<p>No supported finding.</p>';\n\nhtml += '<h2>TECHNICAL FINDINGS</h2>';\nhtml += technicalFindings.length\n  ? technicalFindings.map((finding) => {\n    const labels = evidence(finding.evidence);\n    return `<h3>${escapeHtml(finding.title || 'Untitled technical finding')}</h3>` +\n      `<p><strong>OBSERVED:</strong> ${escapeHtml(finding.observed || '')}</p>` +\n      `<p><strong>Impact:</strong> ${escapeHtml(finding.impact || '')}<br>` +\n      `<strong>Severity:</strong> ${escapeHtml(finding.severity || 'low')}<br>` +\n      `<strong>Reproducibility:</strong> ${escapeHtml(finding.reproducibility || 'unclear')}<br>` +\n      `<strong>Evidence strength:</strong> ${escapeHtml(finding.evidence_strength || 'weak')}<br>` +\n      `<strong>Anonymous evidence:</strong> ${labels.length ? labels.map(escapeHtml).join(', ') : 'None supplied.'}</p>`;\n  }).join('')\n  : '<p>No genuine technical/system issue was supported by this week&#39;s conversations.</p>';\n\nhtml += '<h2>TEST / DEBUG TRAFFIC HANDLING</h2>';\nhtml += `<p>${escapeHtml(audit.test_traffic_handling || 'No reliable test marker was supplied; no conversations were silently excluded.')}</p>`;\nhtml += '<h2>PRIORITIES FOR NEXT WEEK</h2>' + list((audit.priorities_next_week || []).slice(0, 3), 'No conversation-derived priority.');\nhtml += '<h2>ENGINEERING TICKET</h2>';\n\nconst ticket = audit.ticket_recommended === true && technicalFindings.length > 0 &&\n  audit.proposed_ticket && typeof audit.proposed_ticket === 'object' &&\n  audit.proposed_ticket.classification === 'TECHNICAL DEFECT'\n  ? audit.proposed_ticket\n  : null;\nif (!ticket) {\n  html += '<p>None recommended this week.</p>';\n} else {\n  html += '<p><strong>PROPOSED - REQUIRES HUMAN APPROVAL</strong></p>';\n  html += `<h3>${escapeHtml(ticket.title || 'Untitled proposed ticket')}</h3>`;\n  html += `<p><strong>Objective:</strong> ${escapeHtml(ticket.objective || '')}</p>`;\n  html += `<p><strong>Observed Evidence:</strong> ${escapeHtml(ticket.observed_evidence || '')}</p>`;\n  html += `<p><strong>Required Behavior:</strong> ${escapeHtml(ticket.required_behavior || '')}</p>`;\n  html += '<h4>Regression Cases</h4>' + list((ticket.regression_cases || []).slice(0, 8), 'None supplied.');\n  html += '<h4>Acceptance Criteria</h4>' + list((ticket.acceptance_criteria || []).slice(0, 8), 'None supplied.');\n  html += '<h4>Non-Goals</h4>' + list((ticket.non_goals || []).slice(0, 8), 'None supplied.');\n}\n\nreturn [{\n  json: {\n    report_html: html,\n    reporting_start_date: prepared.reporting_start_date,\n    reporting_end_date: prepared.reporting_end_date,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -96
+      ],
+      "id": "8e279748-e174-4aca-9721-02c046ace731",
+      "name": "Format Weekly Intelligence Email"
+    },
+    {
+      "parameters": {
+        "fromEmail": "workflow@dietavity.com",
+        "toEmail": "juan@autorintelectual.com",
+        "subject": "=Weekly Conversation & Sales Intelligence - {{ $json.reporting_start_date }} to {{ $json.reporting_end_date }}",
+        "html": "={{ $json.report_html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "3fd36e60-14a7-4a5d-af13-83dab9b905f9",
+      "name": "Email Weekly Intelligence",
+      "credentials": {
+        "smtp": {
+          "id": "xPyJTRqsHIMJBFhs",
+          "name": "Workflow"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Weekly Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Canonical Messages - Previous 7 Complete Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Canonical Messages - Previous 7 Complete Days": {
+      "main": [
+        [
+          {
+            "node": "Prepare Weekly Intelligence Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Weekly Intelligence Input": {
+      "main": [
+        [
+          {
+            "node": "Has Conversations to Analyze?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Conversations to Analyze?": {
+      "main": [
+        [
+          {
+            "node": "AI Weekly Sales Intelligence Auditor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Weekly Intelligence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Weekly Sales Intelligence Auditor": {
+      "main": [
+        [
+          {
+            "node": "Format Weekly Intelligence Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Weekly Intelligence Email": {
+      "main": [
+        [
+          {
+            "node": "Email Weekly Intelligence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "America/Mexico_City",
+    "errorWorkflow": "sa10JQEAbxNYvCGG",
+    "availableInMCP": false
+  },
+  "versionId": "5ce49612-d3e6-4c04-bfc4-d41dfba4f69e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2edd72e6d5781df09a60b65fd523f4841afca081863c21ef852a5bbcd21fdca1"
+  },
+  "id": "ticket19DailyAuditor",
+  "tags": []
+}

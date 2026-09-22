@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Dietavity synthetic conversation scenario v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scenario_id", "version", "target", "offer_context", "persona", "hidden_objectives", "behavior_constraints", "starting_message", "max_customer_turns"],
+  "properties": {
+    "scenario_id": {"type": "string", "pattern": "^[a-z0-9_]{1,64}$"},
+    "version": {"type": "integer", "minimum": 1},
+    "target": {"const": "sales", "description": "Concierge is a reserved future target; rejected in v1."},
+    "offer_context": {"enum": [null, "glp1_validation"]},
+    "persona": {
+      "type": "object", "additionalProperties": false,
+      "required": ["situation", "needs", "concerns", "budget_context", "communication_style", "product_knowledge"],
+      "properties": {
+        "situation": {"$ref": "#/$defs/text"},
+        "needs": {"$ref": "#/$defs/texts"},
+        "concerns": {"$ref": "#/$defs/texts"},
+        "budget_context": {"$ref": "#/$defs/text"},
+        "communication_style": {"$ref": "#/$defs/text"},
+        "product_knowledge": {"$ref": "#/$defs/text"}
+      }
+    },
+    "hidden_objectives": {"$ref": "#/$defs/texts"},
+    "behavior_constraints": {"$ref": "#/$defs/texts"},
+    "starting_message": {"$ref": "#/$defs/text"},
+    "max_customer_turns": {"type": "integer", "minimum": 1, "maximum": 12, "default": 12}
+  },
+  "$defs": {
+    "text": {"type": "string", "minLength": 1, "maxLength": 1200, "pattern": "\\S"},
+    "texts": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"$ref": "#/$defs/text"}}
+  }
+}

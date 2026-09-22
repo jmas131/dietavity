@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compra no completada | Dietavity</title>
+  <meta name="description" content="La compra de tu programa Dietavity no se completó. Puedes intentar el pago de nuevo o pedir ayuda por WhatsApp.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#F5F1E8">
+  <% if (typeof metaPixelId === 'string' && metaPixelId) { %>
+    <script id="meta-pixel-loader" src="/js/meta-pixel.js" data-pixel-id="<%= metaPixelId %>"></script>
+  <% } %>
+
+  <link rel="icon" href="/images/dietavity-favicon-96x96.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body class="bg-light">
+  <main class="container py-5">
+    <section class="status-card text-center mx-auto">
+      <img
+        src="/images/dietavity-logo.webp"
+        alt="Dietavity"
+        class="img-fluid mb-4"
+        style="max-width: 180px;"
+      >
+      <h1 class="fw-bold mb-3">Tu compra no se completó</h1>
+      <p class="lead mb-3">El Checkout se cerró antes de finalizar el pago.</p>
+      <p class="text-muted mb-4">
+        Tu programa no se activó. Puedes intentar el pago de nuevo o pedir ayuda.
+      </p>
+      <a href="/programa-de-28-dias" class="btn btn-success btn-lg px-4 dietavity-button">
+        Volver a intentar
+      </a>
+      <p class="small text-muted mt-3 mb-0">
+        ¿Tienes dudas?
+        <a href="https://wa.me/18158698400">Pregúntanos por WhatsApp</a>
+      </p>
+    </section>
+
+    <footer class="site-footer text-center small text-muted">
+      <nav aria-label="Enlaces legales y de servicio">
+        <a href="/">Inicio</a>
+        <a href="/terminos-y-condiciones">Términos y Condiciones</a>
+        <a href="/aviso-de-privacidad">Aviso de Privacidad</a>
+      </nav>
+    </footer>
+  </main>
+</body>
+
+</html>

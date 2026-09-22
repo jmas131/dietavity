@@ -1,0 +1,175 @@
+{
+  "name": "Dietavity Weekly Report",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  COALESCE(message.session_id, 'user:' || message.user_id::text) AS session_id,\n  message.timestamp AS created_at,\n  message.direction AS role,\n  regexp_replace(\n    message.body,\n    'https://checkout\\.stripe\\.com/[^[:space:]]+',\n    '[Checkout URL]',\n    'gi'\n  ) AS content\nFROM public.messages AS message\nWHERE message.timestamp >= NOW() - INTERVAL '7 days'\n  AND message.direction IN ('inbound', 'outbound')\n  AND message.body IS NOT NULL\nORDER BY session_id, message.timestamp, message.id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "b798d80d-b268-48cb-88dd-83c1df76d793",
+      "name": "SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtHour": 22
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7f4af64c-c9e2-40ba-b0ba-534987d1e84b",
+      "name": "Schedule Weekly Report"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n{\n  model: \"gpt-5-mini\",\n  response_format: { type: \"text\" },\n  messages: [\n    {\n      role: \"system\",\n      content: $json.system_message\n    },\n    {\n      role: \"user\",\n      content: $json.user_message\n    }\n  ]\n}\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        560,
+        0
+      ],
+      "id": "80d56143-bfd9-40d8-af0c-d7b28d811c72",
+      "name": "Data Analysis Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const conversations = new Map();\n\nconst sanitizeForAnalysis = (value) => String(value ?? '')\n  .replace(/\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/gi, '[email removed]')\n  .replace(/https?:\\/\\/[^\\s<>\"']*(?:\\/setup\\/|\\/recuperar-acceso(?:\\/|\\?|$)|portal[_-]?token|[?&]token=)[^\\s<>\"']*/gi, '[link removed]')\n  .replace(/\\+\\d(?:[\\s().-]*\\d){7,14}\\b/g, '[phone removed]')\n  .replace(/\\b(?:tel(?:éfono)?|whatsapp|cel(?:ular)?|móvil)\\s*[:=-]?\\s*(?:\\+?\\d[\\s().-]*){7,15}\\b/gi, '[phone removed]')\n  .replace(/\\b\\d{10}\\b/g, '[phone removed]');\n\nfor (const item of items) {\n  const session = item.json.session_id;\n  if (!conversations.has(session)) conversations.set(session, []);\n\n  const role = item.json.role === 'inbound' ? 'User' : 'Assistant';\n  conversations.get(session).push(\n    `${role}: ${sanitizeForAnalysis(item.json.content)}`\n  );\n}\n\nlet user_message = `\nDietavity customer-visible WhatsApp conversations with activity in the last 7 days.\n\nConversations observed in the last 7 days:\n${conversations.size}\n\n`;\n\nArray.from(conversations.values()).forEach((messages, index) => {\n  user_message += `\n==================================================\nCONVERSATION ${index + 1}\n==================================================\n\n${messages.join('\\n\\n')}\n\n`;\n});\n\nconst system_message = `\nYou are a senior product analyst for Dietavity, a WhatsApp AI nutrition assistant focused on longevity nutrition.\n\nAnalyze the conversations observed during the last 7 days for aggregate commercial and product learning.\n\nGenerate a report containing:\n\n1. Conversations observed during the last 7 days.\n2. Most common user goals.\n3. Main objections.\n4. Main causes of drop-off or abandonment.\n5. Assistant failure cases.\n6. Purchase-intent signals.\n7. Common questions and FAQ candidates.\n8. Onboarding improvement recommendations.\n9. Marketing and positioning insights.\n10. Representative user patterns, paraphrased and aggregated.\n\nFocus on practical recommendations that help explain hesitation, misunderstandings, repeated questions, strong purchase intent, assistant failures, and opportunities for onboarding, FAQs, marketing, and positioning.\n\nPrivacy and reporting requirements:\n- Do not reproduce verbatim customer messages.\n- Paraphrase representative user patterns; do not invent quotes.\n- Do not include personal identifiers or infer identities.\n- Aggregate and generalize health-related information.\n- Do not expose sensitive personal details unless strictly necessary to explain an aggregate product or safety issue.\n\nOutput as clean HTML suitable for an email body.\n\nHTML requirements:\n- Use headings, paragraphs, and lists.\n- Highlight important numbers using <strong>.\n- Do not include markdown.\n- Do not include html, head, or body tags.\n- Return only the HTML fragment.\n`;\n\nreturn [{\n  json: {\n    system_message,\n    user_message,\n    total_conversations: conversations.size,\n    total_messages: items.length\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        0
+      ],
+      "id": "358652d6-21a8-4944-88cc-de24e5c95b71",
+      "name": "Build Onboarding Analysis Input"
+    },
+    {
+      "parameters": {
+        "fromEmail": "workflow@dietavity.com",
+        "toEmail": "juan@autorintelectual.com",
+        "subject": "Reporte semanal",
+        "html": "={{ $json.choices[0].message.content }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        768,
+        0
+      ],
+      "id": "c682d55b-7ed1-44f2-831e-859273362a68",
+      "name": "Send an Email",
+      "webhookId": "2d6b378a-faac-4933-9edd-347ba394d6aa",
+      "credentials": {
+        "smtp": {
+          "id": "xPyJTRqsHIMJBFhs",
+          "name": "Workflow"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "SQL query": {
+      "main": [
+        [
+          {
+            "node": "Build Onboarding Analysis Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Onboarding Analysis Input": {
+      "main": [
+        [
+          {
+            "node": "Data Analysis Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Analysis Agent": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "def88a7a-2205-483d-8b0b-c0b305d31efa",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2edd72e6d5781df09a60b65fd523f4841afca081863c21ef852a5bbcd21fdca1"
+  },
+  "nodeGroups": [],
+  "id": "UZW4SW99dvQjMfk5",
+  "tags": []
+}

@@ -1,0 +1,2025 @@
+{
+  "label": "Deterministic replay of recorded live-model output; not a new live run",
+  "source": {
+    "filename": "context_switching_001-output.json",
+    "sha256": "c0da11f2157c101bf582da254d49c3c42cb79abcbe070541bff2789303ac8635",
+    "repair": "Appended missing final outer-array closing bracket only.",
+    "run_id": "38782",
+    "scenario_id": "context_switching_001",
+    "label": "Synthetic outcome - not market evidence",
+    "sales_engine_sha256": "9e7ee97b4f55df72f29d7c20a4964e691f05e7e5050e6cf0131f564887c21caf",
+    "judge_status": "judge_output_failure"
+  },
+  "baseline_path": "outputs/ticket-51/inactive-scenario-g-harness.json",
+  "baseline_sha256": "35a1a6dd9addcbe2785a1a49c0fee4807ea3d21515618c67bfcbfa1f603caf84",
+  "current_sales_engine_sha256": "432a9358383d3d525a4840fbd52709c227dcb75f5674d3bd239ee79823b8db2c",
+  "turns": [
+    {
+      "turn": 9,
+      "recorded": {
+        "turn": 9,
+        "customer_message": "¿Cuánto tiempo tardan en generar el plan personalizado después del pago, y hay límite de mensajes/consultas por WhatsApp durante los 28 días?",
+        "final_dietavity_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+        "diagnostics": {
+          "buyer_signal": "question",
+          "topic": "post_purchase",
+          "health_scope": false,
+          "strategy": "answer_question",
+          "offer_context": null,
+          "generated_response": "Buena pregunta — respondo por partes:\n\n1) Tiempo para generar el plan después del pago  \nNo tenemos un plazo público fijo que garantice horas o días. El flujo es: tu pago se verifica → completas la personalización (mes/año de nacimiento, estatura, peso, estilo de alimentación, alergias, alimentos a evitar, condiciones médicas y notas opcionales) → generamos tu programa y lo entregamos en el portal. Intentamos procesar cada caso lo antes posible, pero el tiempo exacto te lo confirmará el sistema tras la verificación del pago.\n\n2) Mensajes/consultas por WhatsApp durante los 28 días  \nDurante el programa tienes apoyo por WhatsApp bajo demanda para recetas, sustituciones por alergias, ideas prácticas y orientación para restaurantes. No hay un límite público anunciado de mensajes; la asistencia está pensada para responder tus dudas a lo largo del programa dentro de ese servicio bajo demanda.\n\n¿Quieres que te explique ahora cómo es el paso de personalización que viene después del pago?",
+          "deterministic_response_or_fallback": "Los $149 MXN cubren tu programa personalizado de 28 días y no hay renovación automática. Al terminar, si quieres continuar, puedes adquirir un nuevo programa; tú decides si hacerlo.",
+          "final_validated_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "allow_purchase_cta": false,
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "last_question_type": null,
+          "next_question_state": null,
+          "holding_page_would_be_sent": false,
+          "checkout_would_be_created": false,
+          "intercepted_action": null,
+          "fallback_identity": "multi_topic:canonical_facts",
+          "interpretation": {
+            "interpretation_valid": true,
+            "buyer_signal": "question",
+            "topic": "start_date",
+            "goal": null,
+            "goal_supplied": false,
+            "timing_iso": null,
+            "explicit_reminder_request": false,
+            "material_question": true,
+            "substantive_engagement": true,
+            "needs_clarification": false
+          },
+          "explicit_current_questions_present": true,
+          "explicit_current_question_topics": [
+            "personalization",
+            "WhatsApp_assistance"
+          ],
+          "multi_topic_turn": true,
+          "generated_answer_coverage": {
+            "covered_topics": [
+              "personalization",
+              "WhatsApp_assistance"
+            ],
+            "missing_topics": [],
+            "covered_count": 2,
+            "requested_count": 2
+          },
+          "final_answer_coverage": {
+            "covered_topics": [
+              "personalization",
+              "WhatsApp_assistance"
+            ],
+            "missing_topics": [],
+            "covered_count": 2,
+            "requested_count": 2
+          },
+          "coverage_warnings": [],
+          "customer_style": {
+            "style": "brief_whatsapp",
+            "questions": 1,
+            "sentences": 1
+          }
+        },
+        "assertions": [
+          {
+            "name": "explicit_current_reminder_intent",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "qualifying_purchase_authorization",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "glp1_holding_only",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "accompanying_question_coverage",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "nonempty_response",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "at_most_one_question",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "no_multiple_jobs",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "no_internal_identifiers",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "no_known_unsupported_claims",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "no_repeated_generic_opener",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "max_turns",
+            "status": "PASS",
+            "turn": 9
+          },
+          {
+            "name": "no_side_effect_execution",
+            "status": "PASS",
+            "turn": 9
+          }
+        ],
+        "session_before": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        },
+        "recorded_at": "2026-09-20T15:31:57.637Z"
+      },
+      "baseline": {
+        "decision": {
+          "buyer_signal": "question",
+          "material_question": true,
+          "topic": "post_purchase",
+          "goal": null,
+          "strategy": "answer_question",
+          "pending_action": "respond",
+          "conversation_stage": "evaluating",
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "reminder_scheduled_for": null,
+          "next_last_question_type": null,
+          "allow_purchase_cta": false,
+          "max_questions": 0,
+          "events": [
+            "meaningful_engagement"
+          ],
+          "offer_version": "28d-149-v1",
+          "interpretation_valid": true,
+          "deterministic_reason": "post_28_day_continuation",
+          "deterministic_response": "Los $149 MXN cubren tu programa personalizado de 28 días y no hay renovación automática. Al terminar, si quieres continuar, puedes adquirir un nuevo programa; tú decides si hacerlo.",
+          "session_id": "__harness48__:38782:context_switching_001"
+        },
+        "turn": {
+          "turn": 9,
+          "customer_message": "¿Cuánto tiempo tardan en generar el plan personalizado después del pago, y hay límite de mensajes/consultas por WhatsApp durante los 28 días?",
+          "final_dietavity_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "diagnostics": {
+            "buyer_signal": "question",
+            "topic": "post_purchase",
+            "health_scope": false,
+            "strategy": "answer_question",
+            "offer_context": null,
+            "generated_response": "Buena pregunta — respondo por partes:\n\n1) Tiempo para generar el plan después del pago  \nNo tenemos un plazo público fijo que garantice horas o días. El flujo es: tu pago se verifica → completas la personalización (mes/año de nacimiento, estatura, peso, estilo de alimentación, alergias, alimentos a evitar, condiciones médicas y notas opcionales) → generamos tu programa y lo entregamos en el portal. Intentamos procesar cada caso lo antes posible, pero el tiempo exacto te lo confirmará el sistema tras la verificación del pago.\n\n2) Mensajes/consultas por WhatsApp durante los 28 días  \nDurante el programa tienes apoyo por WhatsApp bajo demanda para recetas, sustituciones por alergias, ideas prácticas y orientación para restaurantes. No hay un límite público anunciado de mensajes; la asistencia está pensada para responder tus dudas a lo largo del programa dentro de ese servicio bajo demanda.\n\n¿Quieres que te explique ahora cómo es el paso de personalización que viene después del pago?",
+            "deterministic_response_or_fallback": "Los $149 MXN cubren tu programa personalizado de 28 días y no hay renovación automática. Al terminar, si quieres continuar, puedes adquirir un nuevo programa; tú decides si hacerlo.",
+            "final_validated_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "allow_purchase_cta": false,
+            "checkout_authorized": false,
+            "checkout_authorization_type": null,
+            "last_question_type": null,
+            "next_question_state": null,
+            "holding_page_would_be_sent": false,
+            "checkout_would_be_created": false,
+            "intercepted_action": null,
+            "fallback_identity": "multi_topic:canonical_facts",
+            "interpretation": {
+              "interpretation_valid": true,
+              "buyer_signal": "question",
+              "topic": "start_date",
+              "goal": null,
+              "goal_supplied": false,
+              "timing_iso": null,
+              "explicit_reminder_request": false,
+              "material_question": true,
+              "substantive_engagement": true,
+              "needs_clarification": false
+            },
+            "explicit_current_questions_present": true,
+            "explicit_current_question_topics": [
+              "personalization",
+              "WhatsApp_assistance"
+            ],
+            "multi_topic_turn": true,
+            "generated_answer_coverage": {
+              "covered_topics": [
+                "personalization",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 2,
+              "requested_count": 2
+            },
+            "final_answer_coverage": {
+              "covered_topics": [
+                "personalization",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 2,
+              "requested_count": 2
+            },
+            "coverage_warnings": [],
+            "customer_style": {
+              "style": "brief_whatsapp",
+              "questions": 1,
+              "sentences": 1
+            }
+          },
+          "assertions": [
+            {
+              "name": "explicit_current_reminder_intent",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "qualifying_purchase_authorization",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "glp1_holding_only",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "accompanying_question_coverage",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "nonempty_response",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "at_most_one_question",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_multiple_jobs",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_internal_identifiers",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_known_unsupported_claims",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_repeated_generic_opener",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "max_turns",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_side_effect_execution",
+              "status": "PASS",
+              "turn": 9
+            }
+          ],
+          "session_before": {
+            "session_id": "__harness48__:38782:context_switching_001",
+            "conversation_stage": "evaluating",
+            "offer_context": null,
+            "goal": "see an example meal plan",
+            "last_question_type": null,
+            "last_question_at": null,
+            "commercial_context_expires_at": null
+          },
+          "recorded_at": "2026-09-20T15:31:57.637Z"
+        },
+        "session_after": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        }
+      },
+      "current": {
+        "decision": {
+          "historical_state_used_for_intent": false,
+          "buyer_signal": "question",
+          "material_question": true,
+          "topic": "fulfillment_timing",
+          "goal": null,
+          "strategy": "answer_question",
+          "pending_action": "respond",
+          "conversation_stage": "evaluating",
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "reminder_scheduled_for": null,
+          "next_last_question_type": null,
+          "allow_purchase_cta": false,
+          "max_questions": 0,
+          "events": [
+            "meaningful_engagement"
+          ],
+          "offer_version": "28d-149-v1",
+          "interpretation_valid": true,
+          "deterministic_reason": "current_fulfillment_question",
+          "deterministic_response": "Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nNo tengo un límite de mensajes o consultas confirmado para prometerte.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "session_id": "__harness48__:38782:context_switching_001"
+        },
+        "turn": {
+          "turn": 9,
+          "customer_message": "¿Cuánto tiempo tardan en generar el plan personalizado después del pago, y hay límite de mensajes/consultas por WhatsApp durante los 28 días?",
+          "final_dietavity_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. No tengo un límite de mensajes o consultas confirmado para prometerte.\n\n4. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "diagnostics": {
+            "buyer_signal": "question",
+            "topic": "fulfillment_timing",
+            "health_scope": false,
+            "strategy": "answer_question",
+            "offer_context": null,
+            "generated_response": "Buena pregunta — respondo por partes:\n\n1) Tiempo para generar el plan después del pago  \nNo tenemos un plazo público fijo que garantice horas o días. El flujo es: tu pago se verifica → completas la personalización (mes/año de nacimiento, estatura, peso, estilo de alimentación, alergias, alimentos a evitar, condiciones médicas y notas opcionales) → generamos tu programa y lo entregamos en el portal. Intentamos procesar cada caso lo antes posible, pero el tiempo exacto te lo confirmará el sistema tras la verificación del pago.\n\n2) Mensajes/consultas por WhatsApp durante los 28 días  \nDurante el programa tienes apoyo por WhatsApp bajo demanda para recetas, sustituciones por alergias, ideas prácticas y orientación para restaurantes. No hay un límite público anunciado de mensajes; la asistencia está pensada para responder tus dudas a lo largo del programa dentro de ese servicio bajo demanda.\n\n¿Quieres que te explique ahora cómo es el paso de personalización que viene después del pago?",
+            "deterministic_response_or_fallback": "Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nNo tengo un límite de mensajes o consultas confirmado para prometerte.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "final_validated_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. No tengo un límite de mensajes o consultas confirmado para prometerte.\n\n4. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "allow_purchase_cta": false,
+            "checkout_authorized": false,
+            "checkout_authorization_type": null,
+            "last_question_type": null,
+            "next_question_state": null,
+            "holding_page_would_be_sent": false,
+            "checkout_would_be_created": false,
+            "intercepted_action": null,
+            "fallback_identity": "multi_topic:canonical_facts",
+            "interpretation": {
+              "interpretation_valid": true,
+              "buyer_signal": "question",
+              "topic": "start_date",
+              "goal": null,
+              "goal_supplied": false,
+              "timing_iso": null,
+              "explicit_reminder_request": false,
+              "material_question": true,
+              "substantive_engagement": true,
+              "needs_clarification": false
+            },
+            "historical_state_used_for_intent": false,
+            "explicit_current_questions_present": true,
+            "explicit_current_question_topics": [
+              "fulfillment_timing",
+              "personalization",
+              "support_limits",
+              "WhatsApp_assistance"
+            ],
+            "multi_topic_turn": true,
+            "generated_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [
+                "support_limits"
+              ],
+              "covered_count": 3,
+              "requested_count": 4
+            },
+            "final_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "support_limits",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 4,
+              "requested_count": 4
+            },
+            "coverage_warnings": [],
+            "customer_style": {
+              "style": "brief_whatsapp",
+              "questions": 1,
+              "sentences": 1
+            }
+          },
+          "assertions": [
+            {
+              "name": "explicit_current_reminder_intent",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "qualifying_purchase_authorization",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "glp1_holding_only",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "accompanying_question_coverage",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "nonempty_response",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "at_most_one_question",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_multiple_jobs",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_internal_identifiers",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_known_unsupported_claims",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_repeated_generic_opener",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "max_turns",
+              "status": "PASS",
+              "turn": 9
+            },
+            {
+              "name": "no_side_effect_execution",
+              "status": "PASS",
+              "turn": 9
+            }
+          ],
+          "session_before": {
+            "session_id": "__harness48__:38782:context_switching_001",
+            "conversation_stage": "evaluating",
+            "offer_context": null,
+            "goal": "see an example meal plan",
+            "last_question_type": null,
+            "last_question_at": null,
+            "commercial_context_expires_at": null
+          },
+          "recorded_at": "2026-09-20T15:31:57.637Z"
+        },
+        "session_after": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        }
+      }
+    },
+    {
+      "turn": 10,
+      "recorded": {
+        "turn": 10,
+        "customer_message": "¿Cuánto tiempo tardan en generar mi plan personalizado después de pagar? ¿Hay límite de mensajes o un tiempo de respuesta estimado por WhatsApp durante los 28 días?",
+        "final_dietavity_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. Después del pago completas tu personalización y consultas tu programa de 28 días en el portal Dietavity.\n\n3. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n4. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+        "diagnostics": {
+          "buyer_signal": "question",
+          "topic": "post_purchase",
+          "health_scope": false,
+          "strategy": "answer_question",
+          "offer_context": null,
+          "generated_response": "Después de pagar verificado, te explico la secuencia y lo que puedes esperar:\n\n- Generación del plan: una vez que el pago queda confirmado, te pedimos que completes la personalización en el portal (mes y año de nacimiento, estatura, peso, estilo de alimentación, alergias, alimentos a evitar, condiciones médicas y notas opcionales). Con esos datos generamos tu programa de 28 días y lo entregamos en el portal. Puedes elegir la fecha de inicio entre hoy y hasta 30 días calendario después de la compra. No hay un plazo público garantizado para la generación; el proceso comienza después del pago verificado y la personalización.\n\n- Soporte por WhatsApp durante los 28 días: el apoyo es bajo demanda —puedes pedir recetas, sustituciones por alergias, ideas prácticas y orientación para restaurantes. No existe un límite formal de mensajes durante el programa. Tampoco hay un tiempo de respuesta estimado garantizado; el equipo intenta responder lo antes posible, pero no ofrecemos un SLA ni notificaciones automáticas. Tampoco enviamos mensajes diarios proactivos a menos que tú los solicites.\n\nSi quieres, te recuerdo brevemente qué datos solicitarás en la personalización para tenerlos listos cuando completes el pago. ¿Quieres que te los enumere?",
+          "deterministic_response_or_fallback": "Los $149 MXN cubren tu programa personalizado de 28 días y no hay renovación automática. Al terminar, si quieres continuar, puedes adquirir un nuevo programa; tú decides si hacerlo.",
+          "final_validated_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. Después del pago completas tu personalización y consultas tu programa de 28 días en el portal Dietavity.\n\n3. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n4. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "allow_purchase_cta": false,
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "last_question_type": null,
+          "next_question_state": null,
+          "holding_page_would_be_sent": false,
+          "checkout_would_be_created": false,
+          "intercepted_action": null,
+          "fallback_identity": "multi_topic:canonical_facts",
+          "interpretation": {
+            "interpretation_valid": true,
+            "buyer_signal": "question",
+            "topic": "start_date",
+            "goal": null,
+            "goal_supplied": false,
+            "timing_iso": null,
+            "explicit_reminder_request": false,
+            "material_question": true,
+            "substantive_engagement": true,
+            "needs_clarification": false
+          },
+          "explicit_current_questions_present": true,
+          "explicit_current_question_topics": [
+            "personalization",
+            "after_payment",
+            "support_timing",
+            "WhatsApp_assistance"
+          ],
+          "multi_topic_turn": true,
+          "generated_answer_coverage": {
+            "covered_topics": [
+              "personalization",
+              "after_payment",
+              "support_timing",
+              "WhatsApp_assistance"
+            ],
+            "missing_topics": [],
+            "covered_count": 4,
+            "requested_count": 4
+          },
+          "final_answer_coverage": {
+            "covered_topics": [
+              "personalization",
+              "after_payment",
+              "support_timing",
+              "WhatsApp_assistance"
+            ],
+            "missing_topics": [],
+            "covered_count": 4,
+            "requested_count": 4
+          },
+          "coverage_warnings": [],
+          "customer_style": {
+            "style": "brief_whatsapp",
+            "questions": 2,
+            "sentences": 2
+          }
+        },
+        "assertions": [
+          {
+            "name": "explicit_current_reminder_intent",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "qualifying_purchase_authorization",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "glp1_holding_only",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "accompanying_question_coverage",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "nonempty_response",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "at_most_one_question",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "no_multiple_jobs",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "no_internal_identifiers",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "no_known_unsupported_claims",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "no_repeated_generic_opener",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "max_turns",
+            "status": "PASS",
+            "turn": 10
+          },
+          {
+            "name": "no_side_effect_execution",
+            "status": "PASS",
+            "turn": 10
+          }
+        ],
+        "session_before": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        },
+        "recorded_at": "2026-09-20T15:32:09.542Z"
+      },
+      "baseline": {
+        "decision": {
+          "buyer_signal": "question",
+          "material_question": true,
+          "topic": "post_purchase",
+          "goal": null,
+          "strategy": "answer_question",
+          "pending_action": "respond",
+          "conversation_stage": "evaluating",
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "reminder_scheduled_for": null,
+          "next_last_question_type": null,
+          "allow_purchase_cta": false,
+          "max_questions": 0,
+          "events": [
+            "meaningful_engagement"
+          ],
+          "offer_version": "28d-149-v1",
+          "interpretation_valid": true,
+          "deterministic_reason": "post_28_day_continuation",
+          "deterministic_response": "Los $149 MXN cubren tu programa personalizado de 28 días y no hay renovación automática. Al terminar, si quieres continuar, puedes adquirir un nuevo programa; tú decides si hacerlo.",
+          "session_id": "__harness48__:38782:context_switching_001"
+        },
+        "turn": {
+          "turn": 10,
+          "customer_message": "¿Cuánto tiempo tardan en generar mi plan personalizado después de pagar? ¿Hay límite de mensajes o un tiempo de respuesta estimado por WhatsApp durante los 28 días?",
+          "final_dietavity_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. Después del pago completas tu personalización y consultas tu programa de 28 días en el portal Dietavity.\n\n3. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n4. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "diagnostics": {
+            "buyer_signal": "question",
+            "topic": "post_purchase",
+            "health_scope": false,
+            "strategy": "answer_question",
+            "offer_context": null,
+            "generated_response": "Después de pagar verificado, te explico la secuencia y lo que puedes esperar:\n\n- Generación del plan: una vez que el pago queda confirmado, te pedimos que completes la personalización en el portal (mes y año de nacimiento, estatura, peso, estilo de alimentación, alergias, alimentos a evitar, condiciones médicas y notas opcionales). Con esos datos generamos tu programa de 28 días y lo entregamos en el portal. Puedes elegir la fecha de inicio entre hoy y hasta 30 días calendario después de la compra. No hay un plazo público garantizado para la generación; el proceso comienza después del pago verificado y la personalización.\n\n- Soporte por WhatsApp durante los 28 días: el apoyo es bajo demanda —puedes pedir recetas, sustituciones por alergias, ideas prácticas y orientación para restaurantes. No existe un límite formal de mensajes durante el programa. Tampoco hay un tiempo de respuesta estimado garantizado; el equipo intenta responder lo antes posible, pero no ofrecemos un SLA ni notificaciones automáticas. Tampoco enviamos mensajes diarios proactivos a menos que tú los solicites.\n\nSi quieres, te recuerdo brevemente qué datos solicitarás en la personalización para tenerlos listos cuando completes el pago. ¿Quieres que te los enumere?",
+            "deterministic_response_or_fallback": "Los $149 MXN cubren tu programa personalizado de 28 días y no hay renovación automática. Al terminar, si quieres continuar, puedes adquirir un nuevo programa; tú decides si hacerlo.",
+            "final_validated_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. Después del pago completas tu personalización y consultas tu programa de 28 días en el portal Dietavity.\n\n3. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n4. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "allow_purchase_cta": false,
+            "checkout_authorized": false,
+            "checkout_authorization_type": null,
+            "last_question_type": null,
+            "next_question_state": null,
+            "holding_page_would_be_sent": false,
+            "checkout_would_be_created": false,
+            "intercepted_action": null,
+            "fallback_identity": "multi_topic:canonical_facts",
+            "interpretation": {
+              "interpretation_valid": true,
+              "buyer_signal": "question",
+              "topic": "start_date",
+              "goal": null,
+              "goal_supplied": false,
+              "timing_iso": null,
+              "explicit_reminder_request": false,
+              "material_question": true,
+              "substantive_engagement": true,
+              "needs_clarification": false
+            },
+            "explicit_current_questions_present": true,
+            "explicit_current_question_topics": [
+              "personalization",
+              "after_payment",
+              "support_timing",
+              "WhatsApp_assistance"
+            ],
+            "multi_topic_turn": true,
+            "generated_answer_coverage": {
+              "covered_topics": [
+                "personalization",
+                "after_payment",
+                "support_timing",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 4,
+              "requested_count": 4
+            },
+            "final_answer_coverage": {
+              "covered_topics": [
+                "personalization",
+                "after_payment",
+                "support_timing",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 4,
+              "requested_count": 4
+            },
+            "coverage_warnings": [],
+            "customer_style": {
+              "style": "brief_whatsapp",
+              "questions": 2,
+              "sentences": 2
+            }
+          },
+          "assertions": [
+            {
+              "name": "explicit_current_reminder_intent",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "qualifying_purchase_authorization",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "glp1_holding_only",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "accompanying_question_coverage",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "nonempty_response",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "at_most_one_question",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_multiple_jobs",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_internal_identifiers",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_known_unsupported_claims",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_repeated_generic_opener",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "max_turns",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_side_effect_execution",
+              "status": "PASS",
+              "turn": 10
+            }
+          ],
+          "session_before": {
+            "session_id": "__harness48__:38782:context_switching_001",
+            "conversation_stage": "evaluating",
+            "offer_context": null,
+            "goal": "see an example meal plan",
+            "last_question_type": null,
+            "last_question_at": null,
+            "commercial_context_expires_at": null
+          },
+          "recorded_at": "2026-09-20T15:32:09.542Z"
+        },
+        "session_after": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        }
+      },
+      "current": {
+        "decision": {
+          "historical_state_used_for_intent": false,
+          "buyer_signal": "question",
+          "material_question": true,
+          "topic": "fulfillment_timing",
+          "goal": null,
+          "strategy": "answer_question",
+          "pending_action": "respond",
+          "conversation_stage": "evaluating",
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "reminder_scheduled_for": null,
+          "next_last_question_type": null,
+          "allow_purchase_cta": false,
+          "max_questions": 0,
+          "events": [
+            "meaningful_engagement"
+          ],
+          "offer_version": "28d-149-v1",
+          "interpretation_valid": true,
+          "deterministic_reason": "current_fulfillment_question",
+          "deterministic_response": "Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nNo tengo un límite de mensajes o consultas confirmado para prometerte.\n\nNo tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "session_id": "__harness48__:38782:context_switching_001"
+        },
+        "turn": {
+          "turn": 10,
+          "customer_message": "¿Cuánto tiempo tardan en generar mi plan personalizado después de pagar? ¿Hay límite de mensajes o un tiempo de respuesta estimado por WhatsApp durante los 28 días?",
+          "final_dietavity_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. No tengo un límite de mensajes o consultas confirmado para prometerte.\n\n4. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n5. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "diagnostics": {
+            "buyer_signal": "question",
+            "topic": "fulfillment_timing",
+            "health_scope": false,
+            "strategy": "answer_question",
+            "offer_context": null,
+            "generated_response": "Después de pagar verificado, te explico la secuencia y lo que puedes esperar:\n\n- Generación del plan: una vez que el pago queda confirmado, te pedimos que completes la personalización en el portal (mes y año de nacimiento, estatura, peso, estilo de alimentación, alergias, alimentos a evitar, condiciones médicas y notas opcionales). Con esos datos generamos tu programa de 28 días y lo entregamos en el portal. Puedes elegir la fecha de inicio entre hoy y hasta 30 días calendario después de la compra. No hay un plazo público garantizado para la generación; el proceso comienza después del pago verificado y la personalización.\n\n- Soporte por WhatsApp durante los 28 días: el apoyo es bajo demanda —puedes pedir recetas, sustituciones por alergias, ideas prácticas y orientación para restaurantes. No existe un límite formal de mensajes durante el programa. Tampoco hay un tiempo de respuesta estimado garantizado; el equipo intenta responder lo antes posible, pero no ofrecemos un SLA ni notificaciones automáticas. Tampoco enviamos mensajes diarios proactivos a menos que tú los solicites.\n\nSi quieres, te recuerdo brevemente qué datos solicitarás en la personalización para tenerlos listos cuando completes el pago. ¿Quieres que te los enumere?",
+            "deterministic_response_or_fallback": "Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nNo tengo un límite de mensajes o consultas confirmado para prometerte.\n\nNo tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "final_validated_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. No tengo un límite de mensajes o consultas confirmado para prometerte.\n\n4. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n5. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "allow_purchase_cta": false,
+            "checkout_authorized": false,
+            "checkout_authorization_type": null,
+            "last_question_type": null,
+            "next_question_state": null,
+            "holding_page_would_be_sent": false,
+            "checkout_would_be_created": false,
+            "intercepted_action": null,
+            "fallback_identity": "multi_topic:canonical_facts",
+            "interpretation": {
+              "interpretation_valid": true,
+              "buyer_signal": "question",
+              "topic": "start_date",
+              "goal": null,
+              "goal_supplied": false,
+              "timing_iso": null,
+              "explicit_reminder_request": false,
+              "material_question": true,
+              "substantive_engagement": true,
+              "needs_clarification": false
+            },
+            "historical_state_used_for_intent": false,
+            "explicit_current_questions_present": true,
+            "explicit_current_question_topics": [
+              "fulfillment_timing",
+              "personalization",
+              "support_limits",
+              "support_timing",
+              "WhatsApp_assistance"
+            ],
+            "multi_topic_turn": true,
+            "generated_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "support_timing",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [
+                "support_limits"
+              ],
+              "covered_count": 4,
+              "requested_count": 5
+            },
+            "final_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "support_limits",
+                "support_timing",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 5,
+              "requested_count": 5
+            },
+            "coverage_warnings": [],
+            "customer_style": {
+              "style": "brief_whatsapp",
+              "questions": 2,
+              "sentences": 2
+            }
+          },
+          "assertions": [
+            {
+              "name": "explicit_current_reminder_intent",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "qualifying_purchase_authorization",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "glp1_holding_only",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "accompanying_question_coverage",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "nonempty_response",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "at_most_one_question",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_multiple_jobs",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_internal_identifiers",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_known_unsupported_claims",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_repeated_generic_opener",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "max_turns",
+              "status": "PASS",
+              "turn": 10
+            },
+            {
+              "name": "no_side_effect_execution",
+              "status": "PASS",
+              "turn": 10
+            }
+          ],
+          "session_before": {
+            "session_id": "__harness48__:38782:context_switching_001",
+            "conversation_stage": "evaluating",
+            "offer_context": null,
+            "goal": "see an example meal plan",
+            "last_question_type": null,
+            "last_question_at": null,
+            "commercial_context_expires_at": null
+          },
+          "recorded_at": "2026-09-20T15:32:09.542Z"
+        },
+        "session_after": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        }
+      }
+    },
+    {
+      "turn": 11,
+      "recorded": {
+        "turn": 11,
+        "customer_message": "Ok, ¿cuánto tiempo suelen tardar en generar el plan tras completar la personalización y hay límite o tiempo de respuesta estimado por WhatsApp durante los 28 días?",
+        "final_dietavity_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+        "diagnostics": {
+          "buyer_signal": "question",
+          "topic": "start_date",
+          "health_scope": false,
+          "strategy": "answer_question",
+          "offer_context": null,
+          "generated_response": "En Dietavity, el plan se genera después de que completes la personalización (que se hace tras el pago) y quedará disponible en tu portal. No hay un plazo confirmado ni un aviso automático de disponibilidad que pueda garantizarte: soporte intenta procesar todo lo antes posible, pero no podemos prometer un tiempo específico.\n\nDurante los 28 días tienes apoyo por WhatsApp bajo demanda (puedes pedir recetas, sustituciones por alergias, ideas de comidas y orientación para restaurantes). No existe un límite formal de mensajes publicado, pero tampoco garantizamos un tiempo de respuesta ni mensajes diarios proactivos; el equipo responde según la carga y procura atender lo antes posible.\n\n¿Quieres que te explique cómo elegir la fecha de inicio del programa una vez que compres?",
+          "deterministic_response_or_fallback": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "final_validated_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "allow_purchase_cta": false,
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "last_question_type": null,
+          "next_question_state": null,
+          "holding_page_would_be_sent": false,
+          "checkout_would_be_created": false,
+          "intercepted_action": null,
+          "fallback_identity": "multi_topic:canonical_facts",
+          "interpretation": {
+            "interpretation_valid": true,
+            "buyer_signal": "question",
+            "topic": "start_date",
+            "goal": null,
+            "goal_supplied": false,
+            "timing_iso": null,
+            "explicit_reminder_request": false,
+            "material_question": true,
+            "substantive_engagement": true,
+            "needs_clarification": false
+          },
+          "explicit_current_questions_present": true,
+          "explicit_current_question_topics": [
+            "personalization",
+            "support_timing",
+            "WhatsApp_assistance"
+          ],
+          "multi_topic_turn": true,
+          "generated_answer_coverage": {
+            "covered_topics": [
+              "personalization",
+              "support_timing",
+              "WhatsApp_assistance"
+            ],
+            "missing_topics": [],
+            "covered_count": 3,
+            "requested_count": 3
+          },
+          "final_answer_coverage": {
+            "covered_topics": [
+              "personalization",
+              "support_timing",
+              "WhatsApp_assistance"
+            ],
+            "missing_topics": [],
+            "covered_count": 3,
+            "requested_count": 3
+          },
+          "coverage_warnings": [],
+          "customer_style": {
+            "style": "brief_whatsapp",
+            "questions": 1,
+            "sentences": 1
+          }
+        },
+        "assertions": [
+          {
+            "name": "explicit_current_reminder_intent",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "qualifying_purchase_authorization",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "glp1_holding_only",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "accompanying_question_coverage",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "nonempty_response",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "at_most_one_question",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "no_multiple_jobs",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "no_internal_identifiers",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "no_known_unsupported_claims",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "no_repeated_generic_opener",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "max_turns",
+            "status": "PASS",
+            "turn": 11
+          },
+          {
+            "name": "no_side_effect_execution",
+            "status": "PASS",
+            "turn": 11
+          }
+        ],
+        "session_before": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        },
+        "recorded_at": "2026-09-20T15:32:22.315Z"
+      },
+      "baseline": {
+        "decision": {
+          "buyer_signal": "question",
+          "material_question": true,
+          "topic": "start_date",
+          "goal": null,
+          "strategy": "answer_question",
+          "pending_action": "respond",
+          "conversation_stage": "evaluating",
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "reminder_scheduled_for": null,
+          "next_last_question_type": null,
+          "allow_purchase_cta": false,
+          "max_questions": 1,
+          "events": [
+            "meaningful_engagement"
+          ],
+          "offer_version": "28d-149-v1",
+          "interpretation_valid": true,
+          "session_id": "__harness48__:38782:context_switching_001"
+        },
+        "turn": {
+          "turn": 11,
+          "customer_message": "Ok, ¿cuánto tiempo suelen tardar en generar el plan tras completar la personalización y hay límite o tiempo de respuesta estimado por WhatsApp durante los 28 días?",
+          "final_dietavity_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "diagnostics": {
+            "buyer_signal": "question",
+            "topic": "start_date",
+            "health_scope": false,
+            "strategy": "answer_question",
+            "offer_context": null,
+            "generated_response": "En Dietavity, el plan se genera después de que completes la personalización (que se hace tras el pago) y quedará disponible en tu portal. No hay un plazo confirmado ni un aviso automático de disponibilidad que pueda garantizarte: soporte intenta procesar todo lo antes posible, pero no podemos prometer un tiempo específico.\n\nDurante los 28 días tienes apoyo por WhatsApp bajo demanda (puedes pedir recetas, sustituciones por alergias, ideas de comidas y orientación para restaurantes). No existe un límite formal de mensajes publicado, pero tampoco garantizamos un tiempo de respuesta ni mensajes diarios proactivos; el equipo responde según la carga y procura atender lo antes posible.\n\n¿Quieres que te explique cómo elegir la fecha de inicio del programa una vez que compres?",
+            "deterministic_response_or_fallback": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "final_validated_response": "1. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n2. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "allow_purchase_cta": false,
+            "checkout_authorized": false,
+            "checkout_authorization_type": null,
+            "last_question_type": null,
+            "next_question_state": null,
+            "holding_page_would_be_sent": false,
+            "checkout_would_be_created": false,
+            "intercepted_action": null,
+            "fallback_identity": "multi_topic:canonical_facts",
+            "interpretation": {
+              "interpretation_valid": true,
+              "buyer_signal": "question",
+              "topic": "start_date",
+              "goal": null,
+              "goal_supplied": false,
+              "timing_iso": null,
+              "explicit_reminder_request": false,
+              "material_question": true,
+              "substantive_engagement": true,
+              "needs_clarification": false
+            },
+            "explicit_current_questions_present": true,
+            "explicit_current_question_topics": [
+              "personalization",
+              "support_timing",
+              "WhatsApp_assistance"
+            ],
+            "multi_topic_turn": true,
+            "generated_answer_coverage": {
+              "covered_topics": [
+                "personalization",
+                "support_timing",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 3,
+              "requested_count": 3
+            },
+            "final_answer_coverage": {
+              "covered_topics": [
+                "personalization",
+                "support_timing",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 3,
+              "requested_count": 3
+            },
+            "coverage_warnings": [],
+            "customer_style": {
+              "style": "brief_whatsapp",
+              "questions": 1,
+              "sentences": 1
+            }
+          },
+          "assertions": [
+            {
+              "name": "explicit_current_reminder_intent",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "qualifying_purchase_authorization",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "glp1_holding_only",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "accompanying_question_coverage",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "nonempty_response",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "at_most_one_question",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_multiple_jobs",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_internal_identifiers",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_known_unsupported_claims",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_repeated_generic_opener",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "max_turns",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_side_effect_execution",
+              "status": "PASS",
+              "turn": 11
+            }
+          ],
+          "session_before": {
+            "session_id": "__harness48__:38782:context_switching_001",
+            "conversation_stage": "evaluating",
+            "offer_context": null,
+            "goal": "see an example meal plan",
+            "last_question_type": null,
+            "last_question_at": null,
+            "commercial_context_expires_at": null
+          },
+          "recorded_at": "2026-09-20T15:32:22.315Z"
+        },
+        "session_after": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        }
+      },
+      "current": {
+        "decision": {
+          "historical_state_used_for_intent": false,
+          "buyer_signal": "question",
+          "material_question": true,
+          "topic": "fulfillment_timing",
+          "goal": null,
+          "strategy": "answer_question",
+          "pending_action": "respond",
+          "conversation_stage": "evaluating",
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "reminder_scheduled_for": null,
+          "next_last_question_type": null,
+          "allow_purchase_cta": false,
+          "max_questions": 0,
+          "events": [
+            "meaningful_engagement"
+          ],
+          "offer_version": "28d-149-v1",
+          "interpretation_valid": true,
+          "deterministic_reason": "current_fulfillment_question",
+          "deterministic_response": "Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nNo tengo un límite de mensajes o consultas confirmado para prometerte.\n\nNo tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "session_id": "__harness48__:38782:context_switching_001"
+        },
+        "turn": {
+          "turn": 11,
+          "customer_message": "Ok, ¿cuánto tiempo suelen tardar en generar el plan tras completar la personalización y hay límite o tiempo de respuesta estimado por WhatsApp durante los 28 días?",
+          "final_dietavity_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. No tengo un límite de mensajes o consultas confirmado para prometerte.\n\n4. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n5. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "diagnostics": {
+            "buyer_signal": "question",
+            "topic": "fulfillment_timing",
+            "health_scope": false,
+            "strategy": "answer_question",
+            "offer_context": null,
+            "generated_response": "En Dietavity, el plan se genera después de que completes la personalización (que se hace tras el pago) y quedará disponible en tu portal. No hay un plazo confirmado ni un aviso automático de disponibilidad que pueda garantizarte: soporte intenta procesar todo lo antes posible, pero no podemos prometer un tiempo específico.\n\nDurante los 28 días tienes apoyo por WhatsApp bajo demanda (puedes pedir recetas, sustituciones por alergias, ideas de comidas y orientación para restaurantes). No existe un límite formal de mensajes publicado, pero tampoco garantizamos un tiempo de respuesta ni mensajes diarios proactivos; el equipo responde según la carga y procura atender lo antes posible.\n\n¿Quieres que te explique cómo elegir la fecha de inicio del programa una vez que compres?",
+            "deterministic_response_or_fallback": "Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nNo tengo un límite de mensajes o consultas confirmado para prometerte.\n\nNo tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "final_validated_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. No tengo un límite de mensajes o consultas confirmado para prometerte.\n\n4. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n5. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "allow_purchase_cta": false,
+            "checkout_authorized": false,
+            "checkout_authorization_type": null,
+            "last_question_type": null,
+            "next_question_state": null,
+            "holding_page_would_be_sent": false,
+            "checkout_would_be_created": false,
+            "intercepted_action": null,
+            "fallback_identity": "multi_topic:canonical_facts",
+            "interpretation": {
+              "interpretation_valid": true,
+              "buyer_signal": "question",
+              "topic": "start_date",
+              "goal": null,
+              "goal_supplied": false,
+              "timing_iso": null,
+              "explicit_reminder_request": false,
+              "material_question": true,
+              "substantive_engagement": true,
+              "needs_clarification": false
+            },
+            "historical_state_used_for_intent": false,
+            "explicit_current_questions_present": true,
+            "explicit_current_question_topics": [
+              "fulfillment_timing",
+              "personalization",
+              "support_limits",
+              "support_timing",
+              "WhatsApp_assistance"
+            ],
+            "multi_topic_turn": true,
+            "generated_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "support_timing",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [
+                "support_limits"
+              ],
+              "covered_count": 4,
+              "requested_count": 5
+            },
+            "final_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "support_limits",
+                "support_timing",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 5,
+              "requested_count": 5
+            },
+            "coverage_warnings": [],
+            "customer_style": {
+              "style": "brief_whatsapp",
+              "questions": 1,
+              "sentences": 1
+            }
+          },
+          "assertions": [
+            {
+              "name": "explicit_current_reminder_intent",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "qualifying_purchase_authorization",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "glp1_holding_only",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "accompanying_question_coverage",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "nonempty_response",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "at_most_one_question",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_multiple_jobs",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_internal_identifiers",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_known_unsupported_claims",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_repeated_generic_opener",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "max_turns",
+              "status": "PASS",
+              "turn": 11
+            },
+            {
+              "name": "no_side_effect_execution",
+              "status": "PASS",
+              "turn": 11
+            }
+          ],
+          "session_before": {
+            "session_id": "__harness48__:38782:context_switching_001",
+            "conversation_stage": "evaluating",
+            "offer_context": null,
+            "goal": "see an example meal plan",
+            "last_question_type": null,
+            "last_question_at": null,
+            "commercial_context_expires_at": null
+          },
+          "recorded_at": "2026-09-20T15:32:22.315Z"
+        },
+        "session_after": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        }
+      }
+    },
+    {
+      "turn": 12,
+      "recorded": {
+        "turn": 12,
+        "customer_message": "¿Ok pero en la práctica cuánto tiempo tarda normalmente en generarse el plan después de que completo la personalización? y ¿tienen un tiempo estimado de respuesta por WhatsApp o límite de mensajes durante los 28 días?",
+        "final_dietavity_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+        "diagnostics": {
+          "buyer_signal": "question",
+          "topic": "post_purchase",
+          "health_scope": false,
+          "strategy": "answer_question",
+          "offer_context": null,
+          "generated_response": "Buen punto — respondo claro a las dos preguntas:\n\n1) ¿Cuánto tarda en generarse el plan después de completar la personalización?\n- El plan se genera después de que tu pago queda verificado y completas la personalización en el portal.  \n- No tenemos un plazo público ni podemos garantizar un tiempo específico de generación en horas o días, ni aviso automático; cuando esté listo lo verás en tu portal.  \n\n2) ¿Hay un tiempo estimado de respuesta o límite de mensajes por WhatsApp durante los 28 días?\n- El apoyo por WhatsApp es bajo demanda: puedes escribir cuando necesites recetas, sustituciones, ideas o guía práctica.  \n- No hay un límite fijo de mensajes durante los 28 días, pero tampoco tenemos un tiempo de respuesta garantizado publicado; el equipo responde lo antes posible.  \n- No ofrecemos mensajes diarios proactivos; la comunicación por WhatsApp se inicia cuando tú lo pides.\n\nSi quieres, te explico ahora qué información te pedirán en la personalización para que vaya más rápida la generación del plan. ¿Quieres que te lo enumere?",
+          "deterministic_response_or_fallback": "Los $149 MXN cubren tu programa personalizado de 28 días y no hay renovación automática. Al terminar, si quieres continuar, puedes adquirir un nuevo programa; tú decides si hacerlo.",
+          "final_validated_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "allow_purchase_cta": false,
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "last_question_type": null,
+          "next_question_state": null,
+          "holding_page_would_be_sent": false,
+          "checkout_would_be_created": false,
+          "intercepted_action": null,
+          "fallback_identity": "multi_topic:canonical_facts",
+          "interpretation": {
+            "interpretation_valid": true,
+            "buyer_signal": "information_request",
+            "topic": "start_date",
+            "goal": null,
+            "goal_supplied": false,
+            "timing_iso": null,
+            "explicit_reminder_request": false,
+            "material_question": true,
+            "substantive_engagement": true,
+            "needs_clarification": false
+          },
+          "explicit_current_questions_present": true,
+          "explicit_current_question_topics": [
+            "fulfillment_timing",
+            "personalization",
+            "WhatsApp_assistance"
+          ],
+          "multi_topic_turn": true,
+          "generated_answer_coverage": {
+            "covered_topics": [
+              "fulfillment_timing",
+              "personalization",
+              "WhatsApp_assistance"
+            ],
+            "missing_topics": [],
+            "covered_count": 3,
+            "requested_count": 3
+          },
+          "final_answer_coverage": {
+            "covered_topics": [
+              "fulfillment_timing",
+              "personalization",
+              "WhatsApp_assistance"
+            ],
+            "missing_topics": [],
+            "covered_count": 3,
+            "requested_count": 3
+          },
+          "coverage_warnings": [],
+          "customer_style": {
+            "style": "brief_whatsapp",
+            "questions": 2,
+            "sentences": 2
+          }
+        },
+        "assertions": [
+          {
+            "name": "explicit_current_reminder_intent",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "qualifying_purchase_authorization",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "glp1_holding_only",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "accompanying_question_coverage",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "nonempty_response",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "at_most_one_question",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "no_multiple_jobs",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "no_internal_identifiers",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "no_known_unsupported_claims",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "no_repeated_generic_opener",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "max_turns",
+            "status": "PASS",
+            "turn": 12
+          },
+          {
+            "name": "no_side_effect_execution",
+            "status": "PASS",
+            "turn": 12
+          }
+        ],
+        "session_before": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        },
+        "recorded_at": "2026-09-20T15:32:34.991Z"
+      },
+      "baseline": {
+        "decision": {
+          "buyer_signal": "question",
+          "material_question": true,
+          "topic": "post_purchase",
+          "goal": null,
+          "strategy": "answer_question",
+          "pending_action": "respond",
+          "conversation_stage": "evaluating",
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "reminder_scheduled_for": null,
+          "next_last_question_type": null,
+          "allow_purchase_cta": false,
+          "max_questions": 0,
+          "events": [
+            "meaningful_engagement"
+          ],
+          "offer_version": "28d-149-v1",
+          "interpretation_valid": true,
+          "deterministic_reason": "post_28_day_continuation",
+          "deterministic_response": "Los $149 MXN cubren tu programa personalizado de 28 días y no hay renovación automática. Al terminar, si quieres continuar, puedes adquirir un nuevo programa; tú decides si hacerlo.",
+          "session_id": "__harness48__:38782:context_switching_001"
+        },
+        "turn": {
+          "turn": 12,
+          "customer_message": "¿Ok pero en la práctica cuánto tiempo tarda normalmente en generarse el plan después de que completo la personalización? y ¿tienen un tiempo estimado de respuesta por WhatsApp o límite de mensajes durante los 28 días?",
+          "final_dietavity_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+          "diagnostics": {
+            "buyer_signal": "question",
+            "topic": "post_purchase",
+            "health_scope": false,
+            "strategy": "answer_question",
+            "offer_context": null,
+            "generated_response": "Buen punto — respondo claro a las dos preguntas:\n\n1) ¿Cuánto tarda en generarse el plan después de completar la personalización?\n- El plan se genera después de que tu pago queda verificado y completas la personalización en el portal.  \n- No tenemos un plazo público ni podemos garantizar un tiempo específico de generación en horas o días, ni aviso automático; cuando esté listo lo verás en tu portal.  \n\n2) ¿Hay un tiempo estimado de respuesta o límite de mensajes por WhatsApp durante los 28 días?\n- El apoyo por WhatsApp es bajo demanda: puedes escribir cuando necesites recetas, sustituciones, ideas o guía práctica.  \n- No hay un límite fijo de mensajes durante los 28 días, pero tampoco tenemos un tiempo de respuesta garantizado publicado; el equipo responde lo antes posible.  \n- No ofrecemos mensajes diarios proactivos; la comunicación por WhatsApp se inicia cuando tú lo pides.\n\nSi quieres, te explico ahora qué información te pedirán en la personalización para que vaya más rápida la generación del plan. ¿Quieres que te lo enumere?",
+            "deterministic_response_or_fallback": "Los $149 MXN cubren tu programa personalizado de 28 días y no hay renovación automática. Al terminar, si quieres continuar, puedes adquirir un nuevo programa; tú decides si hacerlo.",
+            "final_validated_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+            "allow_purchase_cta": false,
+            "checkout_authorized": false,
+            "checkout_authorization_type": null,
+            "last_question_type": null,
+            "next_question_state": null,
+            "holding_page_would_be_sent": false,
+            "checkout_would_be_created": false,
+            "intercepted_action": null,
+            "fallback_identity": "multi_topic:canonical_facts",
+            "interpretation": {
+              "interpretation_valid": true,
+              "buyer_signal": "information_request",
+              "topic": "start_date",
+              "goal": null,
+              "goal_supplied": false,
+              "timing_iso": null,
+              "explicit_reminder_request": false,
+              "material_question": true,
+              "substantive_engagement": true,
+              "needs_clarification": false
+            },
+            "explicit_current_questions_present": true,
+            "explicit_current_question_topics": [
+              "fulfillment_timing",
+              "personalization",
+              "WhatsApp_assistance"
+            ],
+            "multi_topic_turn": true,
+            "generated_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 3,
+              "requested_count": 3
+            },
+            "final_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [],
+              "covered_count": 3,
+              "requested_count": 3
+            },
+            "coverage_warnings": [],
+            "customer_style": {
+              "style": "brief_whatsapp",
+              "questions": 2,
+              "sentences": 2
+            }
+          },
+          "assertions": [
+            {
+              "name": "explicit_current_reminder_intent",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "qualifying_purchase_authorization",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "glp1_holding_only",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "accompanying_question_coverage",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "nonempty_response",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "at_most_one_question",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_multiple_jobs",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_internal_identifiers",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_known_unsupported_claims",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_repeated_generic_opener",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "max_turns",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_side_effect_execution",
+              "status": "PASS",
+              "turn": 12
+            }
+          ],
+          "session_before": {
+            "session_id": "__harness48__:38782:context_switching_001",
+            "conversation_stage": "evaluating",
+            "offer_context": null,
+            "goal": "see an example meal plan",
+            "last_question_type": null,
+            "last_question_at": null,
+            "commercial_context_expires_at": null
+          },
+          "recorded_at": "2026-09-20T15:32:34.991Z"
+        },
+        "session_after": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        }
+      },
+      "current": {
+        "decision": {
+          "historical_state_used_for_intent": false,
+          "buyer_signal": "question",
+          "material_question": true,
+          "topic": "fulfillment_timing",
+          "goal": null,
+          "strategy": "answer_question",
+          "pending_action": "respond",
+          "conversation_stage": "evaluating",
+          "checkout_authorized": false,
+          "checkout_authorization_type": null,
+          "reminder_scheduled_for": null,
+          "next_last_question_type": null,
+          "allow_purchase_cta": false,
+          "max_questions": 0,
+          "events": [
+            "meaningful_engagement"
+          ],
+          "offer_version": "28d-149-v1",
+          "interpretation_valid": true,
+          "deterministic_reason": "current_fulfillment_question",
+          "deterministic_response": "Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nNo tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nNo tengo un límite de mensajes o consultas confirmado para prometerte.",
+          "session_id": "__harness48__:38782:context_switching_001"
+        },
+        "turn": {
+          "turn": 12,
+          "customer_message": "¿Ok pero en la práctica cuánto tiempo tarda normalmente en generarse el plan después de que completo la personalización? y ¿tienen un tiempo estimado de respuesta por WhatsApp o límite de mensajes durante los 28 días?",
+          "final_dietavity_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n4. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\n5. No tengo un límite de mensajes o consultas confirmado para prometerte.",
+          "diagnostics": {
+            "buyer_signal": "question",
+            "topic": "fulfillment_timing",
+            "health_scope": false,
+            "strategy": "answer_question",
+            "offer_context": null,
+            "generated_response": "Buen punto — respondo claro a las dos preguntas:\n\n1) ¿Cuánto tarda en generarse el plan después de completar la personalización?\n- El plan se genera después de que tu pago queda verificado y completas la personalización en el portal.  \n- No tenemos un plazo público ni podemos garantizar un tiempo específico de generación en horas o días, ni aviso automático; cuando esté listo lo verás en tu portal.  \n\n2) ¿Hay un tiempo estimado de respuesta o límite de mensajes por WhatsApp durante los 28 días?\n- El apoyo por WhatsApp es bajo demanda: puedes escribir cuando necesites recetas, sustituciones, ideas o guía práctica.  \n- No hay un límite fijo de mensajes durante los 28 días, pero tampoco tenemos un tiempo de respuesta garantizado publicado; el equipo responde lo antes posible.  \n- No ofrecemos mensajes diarios proactivos; la comunicación por WhatsApp se inicia cuando tú lo pides.\n\nSi quieres, te explico ahora qué información te pedirán en la personalización para que vaya más rápida la generación del plan. ¿Quieres que te lo enumere?",
+            "deterministic_response_or_fallback": "Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nNo tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nNo tengo un límite de mensajes o consultas confirmado para prometerte.",
+            "final_validated_response": "1. Después de que se verifica tu pago y completas la personalización, se genera tu programa y queda disponible en el portal Dietavity. No tengo un tiempo exacto confirmado en horas o días para prometerte.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. No tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\n4. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\n5. No tengo un límite de mensajes o consultas confirmado para prometerte.",
+            "allow_purchase_cta": false,
+            "checkout_authorized": false,
+            "checkout_authorization_type": null,
+            "last_question_type": null,
+            "next_question_state": null,
+            "holding_page_would_be_sent": false,
+            "checkout_would_be_created": false,
+            "intercepted_action": null,
+            "fallback_identity": "multi_topic:canonical_facts",
+            "interpretation": {
+              "interpretation_valid": true,
+              "buyer_signal": "information_request",
+              "topic": "start_date",
+              "goal": null,
+              "goal_supplied": false,
+              "timing_iso": null,
+              "explicit_reminder_request": false,
+              "material_question": true,
+              "substantive_engagement": true,
+              "needs_clarification": false
+            },
+            "historical_state_used_for_intent": false,
+            "explicit_current_questions_present": true,
+            "explicit_current_question_topics": [
+              "fulfillment_timing",
+              "personalization",
+              "support_timing",
+              "WhatsApp_assistance",
+              "support_limits"
+            ],
+            "multi_topic_turn": true,
+            "generated_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "support_timing",
+                "WhatsApp_assistance"
+              ],
+              "missing_topics": [
+                "support_limits"
+              ],
+              "covered_count": 4,
+              "requested_count": 5
+            },
+            "final_answer_coverage": {
+              "covered_topics": [
+                "fulfillment_timing",
+                "personalization",
+                "support_timing",
+                "WhatsApp_assistance",
+                "support_limits"
+              ],
+              "missing_topics": [],
+              "covered_count": 5,
+              "requested_count": 5
+            },
+            "coverage_warnings": [],
+            "customer_style": {
+              "style": "brief_whatsapp",
+              "questions": 2,
+              "sentences": 2
+            }
+          },
+          "assertions": [
+            {
+              "name": "explicit_current_reminder_intent",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "qualifying_purchase_authorization",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "glp1_holding_only",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "accompanying_question_coverage",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "nonempty_response",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "at_most_one_question",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_multiple_jobs",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_internal_identifiers",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_known_unsupported_claims",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_repeated_generic_opener",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "max_turns",
+              "status": "PASS",
+              "turn": 12
+            },
+            {
+              "name": "no_side_effect_execution",
+              "status": "PASS",
+              "turn": 12
+            }
+          ],
+          "session_before": {
+            "session_id": "__harness48__:38782:context_switching_001",
+            "conversation_stage": "evaluating",
+            "offer_context": null,
+            "goal": "see an example meal plan",
+            "last_question_type": null,
+            "last_question_at": null,
+            "commercial_context_expires_at": null
+          },
+          "recorded_at": "2026-09-20T15:32:34.991Z"
+        },
+        "session_after": {
+          "session_id": "__harness48__:38782:context_switching_001",
+          "conversation_stage": "evaluating",
+          "offer_context": null,
+          "goal": "see an example meal plan",
+          "last_question_type": null,
+          "last_question_at": null,
+          "commercial_context_expires_at": null
+        }
+      }
+    }
+  ]
+}

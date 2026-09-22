@@ -1,0 +1,4724 @@
+{
+  "name": "Dietavity live 2.4.2 - Loki",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "/// Build conversational nutrition prompt (NOT for meal plans)\n// Handles: meal_idea, shopping_list, advice, recipe, meal_swap (no recent plan)\n\ntry {\n\n  // Extract inputs\n  const intent      = $input.first().json.intent || \"general\";\n  const entities    = $input.first().json.entities || {};\n  const preferences = $input.first().json.preferences || {};\n  const userMessage = $input.first().json.user_message || \"\";\n  const lastAssistantMessage = $input.first().json.lastAssistantMessage || \"\";\n\n  // Normalize preferences\n  const diet       = preferences.diet || null;\n  const cuisine    = preferences.cuisine || null;\n  const allergies  = Array.isArray(preferences.allergies) ? preferences.allergies : [];\n  const dislikes   = Array.isArray(preferences.dislikes)  ? preferences.dislikes  : [];\n  const conditions = Array.isArray(preferences.conditions)? preferences.conditions: [];\n\n  // Normalize entities\n  const ingredients = Array.isArray(entities.ingredient)\n    ? entities.ingredient\n    : (entities.ingredient ? [entities.ingredient] : []);\n\n  const dishes = Array.isArray(entities.dish)\n    ? entities.dish\n    : (entities.dish ? [entities.dish] : []);\n\n  const mealType  = entities.meal_type  || null;\n  const timeframe = entities.timeframe  || null;\n\n  // Build preferences summary text\n  let prefText = \"\";\n\n  if (diet) prefText += ` La usuaria sigue una dieta ${diet}.`;\n  if (cuisine) prefText += ` Prefiere cocina inspirada en ${cuisine}.`;\n  if (allergies.length) prefText += ` Alergias: ${allergies.join(\", \")}.`;\n  if (dislikes.length) prefText += ` No consume: ${dislikes.join(\", \")}.`;\n  if (conditions.length) prefText += ` Condiciones: ${conditions.join(\", \")}.`;\n\n  // Build entity text\n  let entityText = \"\";\n\n  if (ingredients.length) entityText += ` Ingredientes mencionados: ${ingredients.join(\", \")}.`;\n  if (dishes.length) entityText += ` Platos mencionados: ${dishes.join(\", \")}.`;\n  if (mealType) entityText += ` Tipo de comida: ${mealType}.`;\n  if (timeframe) entityText += ` Contexto temporal: ${timeframe}.`;\n\n  //-------------------------------------------------------------\n  // BUILD PROMPT\n  //-------------------------------------------------------------\n\n  let prompt = \"\";\n\n  switch (intent) {\n\n    // 🌿 MEAL IDEA\n    case \"meal_idea\":\n      prompt = `\nLa usuaria desea una idea de comida o menú corto.\n\nMensaje actual:\n\"${userMessage}\"\n\n${entityText}\n${prefText}\n\nGenera una respuesta breve, cálida y amistosa en español con 1 a 3 ideas adaptadas a sus preferencias.\n`;\n      break;\n\n    // 🍏 SHOPPING LIST\n    case \"shopping_list\":\n      prompt = `\nLa usuaria solicita una lista de compras.\n\nMensaje actual:\n\"${userMessage}\"\n\n${entityText}\n${prefText}\n\nResponde con una lista clara, organizada y práctica.\nNo incluyas cantidades exactas a menos que la usuaria las pida.\n`;\n      break;\n\n    // 💡 ADVICE\n    case \"advice\":\n      prompt = `\nLa usuaria solicita un consejo nutricional.\n\nMensaje actual:\n\"${userMessage}\"\n\n${entityText}\n${prefText}\n\nDa un consejo breve, práctico y amable, inspirado en culturas de longevidad.\nNo des consejos médicos ni de suplementos.\n`;\n      break;\n\n    // 🍽 RECIPE\n    case \"recipe\":\n      prompt = `\nLa usuaria solicita una receta.\n\nMensaje actual:\n\"${userMessage}\"\n\n${entityText}\n${prefText}\n\nGenera una receta breve, simple y saludable, con ingredientes accesibles.\nIncluye pasos cortos y claros.\n`;\n      break;\n\n    // 📎 GENERAL\n    case \"general\":\n      prompt = `\nEl mensaje de la usuaria no coincide con una intención clara.\n\nMensaje actual:\n\"${userMessage}\"\n\n${entityText}\n${prefText}\n\nResponde de forma breve, cálida y amistosa en español.\nSi hace falta información, haz una única pregunta para aclarar qué necesita.\n`;\n      break;\n\n    // 🧩 FALLBACK\n    default:\n      prompt = `\nIntención detectada: ${intent}.\n\nMensaje actual:\n\"${userMessage}\"\n\n${entityText}\n${prefText}\n\nResponde siguiendo las instrucciones del sistema.\n`;\n  }\n\n  //-------------------------------------------------------------\n  // Conversation context\n  //-------------------------------------------------------------\n\n  if (lastAssistantMessage) {\n    prompt =\n`Contexto de la conversación:\n\nÚltima respuesta del asistente (solo como referencia para mantener la continuidad; NO la repitas literalmente):\n\n\"${lastAssistantMessage}\"\n\n------------------------------------------------------------\n\n` + prompt;\n  }\n\n  //-------------------------------------------------------------\n  // Return\n  //-------------------------------------------------------------\n\n  return {\n    json: {\n      prompt,\n      intent,\n      entities: {\n        ...entities,\n        ingredient: ingredients,\n        dish: dishes\n      },\n      preferences: {\n        diet,\n        cuisine,\n        allergies,\n        dislikes,\n        conditions\n      },\n      context: {\n        mealType,\n        timeframe\n      }\n    }\n  };\n\n} catch (err) {\n\n  return {\n    json: {\n      prompt: `Se produjo un error técnico al procesar el mensaje. Responde en español con un mensaje breve y pide a la usuaria que intente de nuevo.`,\n      intent: \"error\",\n      entities: {},\n      preferences: {}\n    }\n  };\n\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3824,
+        1184
+      ],
+      "id": "8edc4427-55d2-4b9d-9398-84bcafe751ed",
+      "name": "Build Nutrition Prompt",
+      "notes": "const userMessage = $('Twilio messages from WhatsApp').first().json.Body || \"\";\n\n$json.intent || \"general\""
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🛡️ Safeguard node\n// Purpose: decide IF nutrition preferences should be updated\n// Identity fields (e.g. name) are intentionally ignored\n\nconst intent = $json.intent || null;\nconst entities = $json.entities || {};\nconst preferences = $json.preferences || {};\n\n// Only nutrition-related entities trigger preference updates\nconst updateNeeded = Boolean(\n  entities.dislike ||\n  entities.allergy ||\n  entities.diet ||\n  entities.cuisine ||\n  entities.condition\n);\n\n// NOTE:\n// - entities.name is intentionally ignored\n// - name updates are handled separately in Unified Merge\n\nreturn {\n  intent,\n  entities,\n  preferences,\n  updateNeeded\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2384,
+        -544
+      ],
+      "id": "e14da027-855a-4efb-ae44-1a6b830f72ea",
+      "name": "Safeguard",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🌿 Unified Preference Merge Node (Schema-clean, normalized)\n// Handles preferences + identity (name) separately\n// Assumes Detect Intent & Entities already ran\n\n// ---------- Helpers ----------\nconst normalize = (v) =>\n  typeof v === \"string\" ? v.trim().toLowerCase() : v;\n\nconst toArray = (v) =>\n  Array.isArray(v) ? v : v != null ? [v] : [];\n\n// ---------- Load current user ----------\nconst user = $('Get User from Supabase').first().json;\n\n// ---------- Load current preferences ----------\nconst currentPrefs = user.preferences || {\n  diet: null,\n  cuisine: null,      // MVP: string\n  dislikes: [],\n  allergies: [],\n  conditions: []\n};\n\nconst entities = $json.entities || {};\nconst mergedPrefs = { ...currentPrefs };\n\n// ---------- Merge diet (string, overwrite) ----------\nif (entities.diet && typeof entities.diet === \"string\") {\n  mergedPrefs.diet = normalize(entities.diet);\n}\n\n// ---------- Merge cuisine (string, overwrite – MVP choice) ----------\nif (entities.cuisine && typeof entities.cuisine === \"string\") {\n  mergedPrefs.cuisine = normalize(entities.cuisine);\n}\n\n// ---------- Merge allergies (array, deduped, normalized) ----------\nif (entities.allergy) {\n  const existing = Array.isArray(mergedPrefs.allergies)\n    ? mergedPrefs.allergies.map(normalize)\n    : [];\n\n  const incoming = toArray(entities.allergy).map(normalize);\n\n  mergedPrefs.allergies = [...new Set([...existing, ...incoming])];\n}\n\n// ---------- Merge dislikes (array, deduped, normalized) ----------\nif (entities.dislike) {\n  const existing = Array.isArray(mergedPrefs.dislikes)\n    ? mergedPrefs.dislikes.map(normalize)\n    : [];\n\n  const incoming = toArray(entities.dislike).map(normalize);\n\n  mergedPrefs.dislikes = [...new Set([...existing, ...incoming])];\n}\n\n// ---------- Merge conditions (array, deduped, normalized) ----------\nif (entities.condition) {\n  const existing = Array.isArray(mergedPrefs.conditions)\n    ? mergedPrefs.conditions.map(normalize)\n    : [];\n\n  const incoming = toArray(entities.condition).map(normalize);\n\n  mergedPrefs.conditions = [...new Set([...existing, ...incoming])];\n}\n\n// ---------- Identity: name (NO normalization, overwrite only if present) ----------\nconst nameUpdate =\n  typeof entities.name === \"string\" && entities.name.trim()\n    ? entities.name.trim()\n    : null;\n\n// ---------- Build Supabase update payload ----------\nconst updatePayload = {\n  id: user.id,\n  preferences: mergedPrefs\n};\n\n// Only include name if user explicitly provided it\nif (nameUpdate) {\n  updatePayload.name = nameUpdate;\n}\n\n// ---------- Output ----------\nreturn {\n  json: {\n    intent: $json.intent,\n    entities,\n    preferences: mergedPrefs,   // ✅ canonical preferences\n    name: nameUpdate || user.name || null, // for downstream convenience\n    updatePayload               // Supabase-ready payload\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2656,
+        -544
+      ],
+      "id": "55159b1a-a0ed-4c5a-9c5a-719849ba8172",
+      "name": "Unified Merge",
+      "notes": "const currentPrefs = $('HTTP Request get User').first().json.preferences || {\n  diet: null,\n  cuisine: null,\n  dislikes: [],\n  allergies: []\n};"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ea445504-68b1-46be-bdef-12ac8c8fc2f6",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4976,
+        -1136
+      ],
+      "id": "20eee33e-dd5f-4377-b468-7153fea6d7d3",
+      "name": "If JSON Error"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "whatsapp_id",
+              "keyValue": "={{ $json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -4560,
+        -832
+      ],
+      "id": "9baeb24e-528d-4892-9682-af0fa122eb24",
+      "name": "Get User from Supabase",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      },
+      "notes": "{{ $('When chat message received').item.json.from }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Normalize Supabase GET response for user lookup\n\nconst items = $input.all();\n\nif (!items.length) {\n  // No data at all from Supabase node\n  return [{ json: {} }];\n}\n\nlet data = items[0].json;\n\n// Supabase typically returns an array of rows\nif (Array.isArray(data)) {\n  if (data.length === 0) {\n    // Empty array → no match\n    return [{ json: {} }];\n  } else {\n    // Return first record\n    return [{ json: data[0] }];\n  }\n}\n\n// Already an object (some Supabase nodes do this)\nif (typeof data === 'object' && data !== null) {\n  return [{ json: data }];\n}\n\n// Default fallback\nreturn [{ json: {} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4336,
+        -832
+      ],
+      "id": "1c90956f-3d44-4dde-9862-cb1c4d7ad378",
+      "name": "Normalize User Data",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "tableId": "users",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "whatsapp_id",
+              "fieldValue": "={{ $json.whatsapp_id }}"
+            },
+            {
+              "fieldId": "is_active",
+              "fieldValue": "={{ true }}"
+            },
+            {
+              "fieldId": "plan_type",
+              "fieldValue": "mensual"
+            },
+            {
+              "fieldId": "preferences",
+              "fieldValue": "={{ { \"diet\": null, \"cuisine\": null, \"dislikes\": [], \"allergies\": [] } }}"
+            },
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ null }}"
+            },
+            {
+              "fieldId": "stripe_customer_id",
+              "fieldValue": "={{ $('Extract Metadata').item.json.stripe_customer_id }}"
+            },
+            {
+              "fieldId": "stripe_subscription_id",
+              "fieldValue": "={{ $('Extract Metadata').item.json.stripe_subscription_id }}"
+            },
+            {
+              "fieldId": "subscription_status",
+              "fieldValue": "active"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -2400,
+        544
+      ],
+      "id": "f4c684da-ab93-4a31-aa6b-75ffa2082f60",
+      "name": "Create User Record",
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "{{ $('WhatsApp Messages from Twilio').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=WITH existing_program AS (\n  SELECT id, status, profile_id\n  FROM programs\n  WHERE user_id = '{{ $json.id }}'::uuid\n    AND status IN ('personalization', 'ready', 'active')\n  ORDER BY created_at DESC\n  LIMIT 1\n),\ncreated_program AS (\n  INSERT INTO programs (user_id, profile_id, status, current_week)\n  SELECT u.id, p.id, 'personalization', 1\n  FROM users u\n  LEFT JOIN profiles p ON p.user_id = u.id\n  WHERE u.id = '{{ $json.id }}'::uuid\n    AND NOT EXISTS (SELECT 1 FROM existing_program)\n  RETURNING id, status, profile_id\n),\nselected_program AS (\n  SELECT id, status, profile_id, false AS created\n  FROM existing_program\n  UNION ALL\n  SELECT id, status, profile_id, true AS created\n  FROM created_program\n),\nseeded_weeks AS (\n  INSERT INTO weeks (program_id, week_number, status)\n  SELECT sp.id, generated_week.week_number, 'pending'\n  FROM selected_program sp\n  CROSS JOIN generate_series(1, 4) AS generated_week(week_number)\n  WHERE sp.created\n  RETURNING id\n)\nSELECT\n  sp.id AS program_id,\n  sp.status,\n  sp.profile_id,\n  sp.created,\n  COUNT(sw.id)::integer AS weeks_created\nFROM selected_program sp\nLEFT JOIN seeded_weeks sw ON true\nGROUP BY sp.id, sp.status, sp.profile_id, sp.created;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -2176,
+        448
+      ],
+      "id": "9dbeee35-44e6-4ba4-b425-938a61d2d00f",
+      "name": "Initialize 28-Day Program",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Creates one personalization program and its four pending weeks for a newly subscribed user. If an open program already exists, it returns that record and creates nothing. The checkout branch has already established subscription eligibility."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "252ecfdc-e62a-42eb-9b97-0a3c5535b75f",
+              "leftValue": "={{ $json.created }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1952,
+        448
+      ],
+      "id": "de2a4b36-a14c-43ed-a3df-a19e94b0e09a",
+      "name": "If New 28-Day Program"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT\n  p.id AS program_id,\n  w.id AS week_id,\n  u.id AS user_id,\n  u.preferences,\n  NULL::jsonb AS meals\nFROM programs p\nJOIN weeks w\n  ON w.program_id = p.id\n AND w.week_number = 1\n AND w.status = 'pending'\nJOIN users u\n  ON u.id = p.user_id\nWHERE p.id = '{{ $json.program_id }}'::uuid\n  AND NOT EXISTS (\n    SELECT 1\n    FROM meal_plans mp\n    WHERE mp.week_id = w.id\n  )\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1728,
+        448
+      ],
+      "id": "3cf40a6d-1a31-4b5a-b576-231f6d6ecf4a",
+      "name": "Get New Program Week 1 Context",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Selects only the newly created program's pending Week 1 and prevents another generation if that week already has a persisted meal plan."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Incoming Message').item.json.data.body }}",
+        "options": {
+          "systemMessage": "You are an intent and entity extraction assistant.\nYour task is to classify the intent of a user’s message and extract structured entities.\nAlways return valid JSON in this format:\n\n{\n  \"intent\": \"meal_plan\",\n  \"entities\": {\n    \"diet\": \"vegetariana\",\n    \"cuisine\": \"española\",\n    \"allergy\": \"cacahuates\",\n    \"dislike\": \"brócoli\",\n    \"condition\": \"hipotiroidismo\",\n    \"ingredient\": \"pepino\",\n    \"dish\": \"chile en nogada\",\n    \"restaurant\": \"Azul Histórico\",\n    \"neighborhood\": \"Colonia del Valle\",\n    \"city\": \"Ciudad de México\",\n    \"region\": \"México\"\n  }\n}\n\n---\n\n### Intents\n- **meal_plan** → User explicitly requests a multi-day structured meal plan (typically 7 days). \n  Use this when the message mentions words such as *plan*, *otro plan*, *nuevo plan*, *semana*, *días*, or a number of days.\n- **meal_idea** → User asks what to eat today, tomorrow, or for a specific meal (e.g., *desayuno*, *almuerzo*, *cena*, *snack*).  \n  Use this when the message includes temporal cues like *hoy*, *ahora*, *esta noche*, *mañana*.\n- **shopping_list** → User asks what to buy at the supermarket.\n- **restaurant_near** → User asks where to eat in a city, neighborhood, or region.\n- **restaurant_menu** → User asks what they can order at a specific restaurant.\n- **recipe** → User asks how to cook a dish.\n- **advice** → User asks general health, nutrition, or wellness questions.\n- **general** → Catch-all for anything else or unclear requests.\n- **unsubscribe** → The user is requesting to cancel their service.\n\nIf both timeframe and duration are mentioned, use **meal_plan**, and cap duration at 7 days.\n\n---\n\n### Entities\n- **diet** → User diet (e.g., vegetariana, vegana, keto).\n- **cuisine** → Cuisine from a region or country (e.g., Mediterránea, Japonesa).\n- **allergy** → Single food item (e.g., cacahuates, trigo).\n- **dislike** → Ingredient or dish the user doesn’t like.\n- **condition** → Any health condition, diagnosis, or ailment that may influence nutrition (e.g., hipotiroidismo, diabetes, colesterol alto, gastritis, anemia).\n- **ingredient** → Single food item (e.g., brócoli, avena).\n- **dish** → Full dish or recipe (e.g., chile en nogada, tacos de jamaica).\n- **restaurant** → Specific restaurant name (e.g., Azul Histórico, Nagaoka).\n- **neighborhood** → Small urban area (e.g., Colonia del Valle).\n- **city** → City name (e.g., Ciudad de México).\n- **region** → Larger area (e.g., Yucatán, España, Latinoamérica).\n- **duration** → Number of days for a meal plan (e.g., 7).\n- **meal_type** → Specific meal (e.g., desayuno, comida, cena, snack).\n- **timeframe** → Temporal context (e.g., hoy, mañana, esta semana, este mes).\n- **name** → User’s preferred name or nickname (e.g. Ana, Steph, Lore, Chef).\n\n---\n\n### Rules\n- Always extract the most specific entity possible.  \n  Example: “Azul Histórico” → \"restaurant\": \"Azul Histórico\", NOT \"region\".  \n  Example: “Colonia del Valle CDMX” → \"neighborhood\": \"Colonia del Valle\", \"city\": \"CDMX\".\n- If the user ONLY mentions a diet, cuisine, allergy, dislike, or condition without asking for an action, set `\"intent\": \"general\"`. Otherwise, classify the appropriate action as the intent and still extract entities.\n- If the user mentions a health condition (e.g., \"I have hypothyroidism\"), classify that information as \"condition\" even if the message's intention is different (e.g., \"advice\" or \"general\").\n- If the user says how they want to be called (e.g. “Me llamo Ana”, “Dime Lore”, “Soy Juan”, “Puedes decirme Steph”), extract it as \"name\".\n- If intent is unclear, set `\"intent\": \"general\"`.\n- If no entities are found, return `\"entities\": {}`.\n- Omit entity keys if not mentioned (do not use null).\n- Do not hallucinate — only extract entities explicitly mentioned.\n\n---\n\n### Normalization Rules\n- If the user requests more than 7 days (e.g., “plan de 14 días”, “plan de 1 mes”, “plan mensual”, “plan largo”), set `\"duration\": 7`.\n- If no duration is mentioned but the user asks for a \"plan de comidas\" or \"plan semanal\", assume `\"duration\": 7`.\n- Always return duration as a number (not text).\n\nReturn **only** valid JSON, nothing else."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -3264,
+        -544
+      ],
+      "id": "35c9450b-3df1-4ac8-954f-60bd152c3533",
+      "name": "Detect Intent and Entities"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ------------------------------------------------------------\n// Parse Assistant Response\n// Compatible with OpenAI Responses API\n// ------------------------------------------------------------\n\nlet response = null;\n\n// 1. Preferred field (many n8n versions expose this directly)\nif (typeof $json.output_text === \"string\") {\n  response = $json.output_text.trim();\n}\n\n// 2. Standard Responses API output array\nif (\n  !response &&\n  Array.isArray($json.output)\n) {\n  for (const item of $json.output) {\n    if (!item.content) continue;\n\n    for (const content of item.content) {\n\n      if (\n        content.type === \"output_text\" &&\n        typeof content.text === \"string\"\n      ) {\n        response = content.text.trim();\n        break;\n      }\n\n      if (\n        content.text &&\n        typeof content.text === \"string\"\n      ) {\n        response = content.text.trim();\n        break;\n      }\n    }\n\n    if (response) break;\n  }\n}\n\n// 3. Fallback (older wrappers)\nif (\n  !response &&\n  typeof $json.response === \"string\"\n) {\n  response = $json.response.trim();\n}\n\n// 4. Final fallback\nif (!response) {\n  response =\n    \"Lo siento, ocurrió un problema al generar la respuesta.\";\n}\n\nreturn [\n  {\n    json: {\n      assistant_response: response\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4496,
+        1184
+      ],
+      "id": "336e5804-4d56-4263-855d-ea4d4eb244f6",
+      "name": "Parse Assistant Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// -----------------------------\n// Parse Meal Plan JSON (STRICT)\n// -----------------------------\n\ntry {\n  // 1. Extract the model's JSON string\n  const rawContent =\n    $json.choices?.[0]?.message?.content ??\n    (() => { throw new Error(\"Missing assistant message content.\"); })();\n\n  let cleaned = rawContent;\n\n  // 2. If wrapped in quotes: JSON inside JSON → double-parse\n  if (\n    typeof cleaned === \"string\" &&\n    cleaned.startsWith('\"') &&\n    cleaned.endsWith('\"')\n  ) {\n    cleaned = JSON.parse(cleaned);\n  }\n\n  // 3. Parse into actual object\n  const parsed = JSON.parse(cleaned);\n\n  // 4. Validate structure\n  if (!parsed || typeof parsed !== \"object\") {\n    throw new Error(\"Response is not a JSON object.\");\n  }\n\n  const duration = parseInt(parsed.duration_days);\n  const days = parsed.days;\n\n  if (!duration || duration < 1) {\n    throw new Error(\"Missing or invalid duration_days.\");\n  }\n\n  if (!Array.isArray(days) || days.length === 0) {\n    throw new Error(\"Missing or invalid 'days' array.\");\n  }\n\n  // 5. Cap to 7 days\n  const maxDays = 7;\n  const duration_days = Math.min(duration, maxDays);\n\n  const trimmedDays = days.slice(0, duration_days);\n\n  // 6. Normalize meals\n  const normalizedDays = trimmedDays.map((d, idx) => {\n    const meals = d.meals || {};\n\n    function normalizeMeal(m) {\n\n      if (!m) return {};\n\n      return {\n\n        title: m.title || \"\",\n\n        description: m.description || \"\",\n\n        calories: m.calories ?? null,\n\n        macros: {\n\n          protein: m.macros?.protein ?? null,\n          carbs: m.macros?.carbs ?? null,\n          fat: m.macros?.fat ?? null\n\n        },\n\n        recipe: {\n\n          ingredients:\n            m.recipe?.ingredients ?? [],\n\n          steps:\n            m.recipe?.steps ?? []\n\n        }\n\n      };\n\n    }\n\n    const snacks = Array.isArray(meals.snacks)\n      ? meals.snacks.map(s => ({\n          title: s.title || \"\",\n          calories: s.calories ?? null\n        }))\n      : [];\n\n    return {\n      day: d.day || idx + 1,\n      meals: {\n        breakfast: normalizeMeal(meals.breakfast),\n        lunch: normalizeMeal(meals.lunch),\n        dinner: normalizeMeal(meals.dinner),\n        snacks\n      }\n    };\n  });\n\n  // 7. Final normalized JSON\n  const mealPlan = {\n    duration_days,\n    days: normalizedDays\n  };\n\n  return [\n    {\n      json: {\n        success: true,\n        mealPlan\n      }\n    }\n  ];\n\n} catch (error) {\n  return [\n    {\n      json: {\n        success: false,\n        message:\n          \"Hubo un problema al interpretar el plan, por favor intenta de nuevo 😊\",\n        error: error.message,\n        raw: $json\n      }\n    }\n  ];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4816,
+        -1136
+      ],
+      "id": "45db75d4-53ae-4615-ae2c-dd51b794c9be",
+      "name": "Parse JSON Meal Plan"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Version if Twilio uses {{ $json.message }}\nreturn [\n  {\n    json: {\n      message: \"Ups 😅 hubo un problema al preparar tu plan. Por favor, inténtalo otra vez en un momento 🙏\"\n    }\n  }\n];\n\n// If Twilio uses {{ $json }}\n/*\nreturn [\n  {\n    json: \"Ups 😅 hubo un problema al preparar tu plan. Por favor, inténtalo otra vez en un momento 🙏\"\n  }\n];\n*/"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5280,
+        -1312
+      ],
+      "id": "d0dc10c8-307e-423e-bf07-d04e40d3bdb9",
+      "name": "Error JSON Meal Plan"
+    },
+    {
+      "parameters": {
+        "tableId": "messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Normalize Prompt Input').item.json.user_id }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "outbound"
+            },
+            {
+              "fieldId": "assistant_response",
+              "fieldValue": "={{ $json.assistant_response }}"
+            },
+            {
+              "fieldId": "intent",
+              "fieldValue": "={{ $('Normalize Prompt Input').item.json.intent }}"
+            },
+            {
+              "fieldId": "user_message",
+              "fieldValue": "={{ $('Normalize Prompt Input').item.json.user_message }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4768,
+        1184
+      ],
+      "id": "c89be061-8c29-4646-b57b-820101c5e265",
+      "name": "Create Outbound Message",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json.user_id }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "inbound"
+            },
+            {
+              "fieldId": "user_message",
+              "fieldValue": "={{ $json.user_message }}"
+            },
+            {
+              "fieldId": "intent",
+              "fieldValue": "={{ $json.intent }}"
+            },
+            {
+              "fieldId": "transcript",
+              "fieldValue": "={{ $json.raw_message }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1056,
+        -704
+      ],
+      "id": "416dba5f-1235-44c9-8d75-a7bac7bbff3a",
+      "name": "Create Inbound Message ",
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      },
+      "notes": "1. En user_id este no funcionó: {{ $('HTTP Request get User').json.id }}\n2. No estoy seguro si en user_message es esta: {{ $('Twilio messages from WhatsApp').item.json.data.body }} o {{ $('Twilio messages from WhatsApp').first().json.data.body }}\n"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2288,
+        -2304
+      ],
+      "id": "e8770d71-0b9f-4875-bef2-f4f501c90c9d",
+      "name": "Unsubscribe Agent"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ffedebf3-103d-46f2-8b41-f3fc5d6401a9",
+              "name": "chatInput",
+              "value": "={{ $('Incoming Message').item.json.data.body }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2096,
+        -2304
+      ],
+      "id": "1330742e-94e4-4619-a79f-7c92fa60668a",
+      "name": "Unsubscribe User Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Extract assistant reply + next_action JSON\n * from an AI Agent output safely and reliably.\n */\n\nconst raw = $json.output || \"\";   // agent full output\nconst result = {\n  assistant_message: \"\",\n  next_action: \"continue\",         // default fallback\n};\n\n// ---------- 1. Extract JSON block safely ----------\nlet jsonMatch = raw.match(/\\{[\\s\\S]*?\\}/);\n\nif (jsonMatch) {\n  try {\n    const parsed = JSON.parse(jsonMatch[0]);\n\n    if (parsed.next_action === \"subscription\") {\n      result.next_action = \"subscription\";\n    } else {\n      result.next_action = \"continue\";\n    }\n  } catch (err) {\n    // malformed JSON → fallback\n    result.next_action = \"continue\";\n  }\n} else {\n  // No JSON found → fallback\n  result.next_action = \"continue\";\n}\n\n// ---------- 2. Extract assistant human message ----------\nresult.assistant_message = raw\n  .replace(/\\{[\\s\\S]*?\\}/, \"\")   // remove JSON block\n  .trim();\n\n// Safety fallback: if assistant_message becomes empty\nif (!result.assistant_message) {\n  result.assistant_message =\n    \"Gracias por tu mensaje 😊. ¿En qué puedo ayudarte?\";\n}\n\nreturn result;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2624,
+        -2304
+      ],
+      "id": "066e84e1-92ec-448a-b289-fc063cf521f1",
+      "name": "Extract Next Action Unsubscribe"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Normalize Prompt Input').item.json.user_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "last_assistant_message",
+              "fieldValue": "={{ $('Parse Assistant Response').item.json.assistant_response || \"\"}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5248,
+        1184
+      ],
+      "id": "d0514c41-087b-42af-b3e7-312e2b4ed484",
+      "name": "Update Last Assistant Message",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $('Get User from Supabase').item.json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1840,
+        -544
+      ],
+      "id": "714e1796-9e4a-4446-8f16-43a781bf1f3a",
+      "name": "Read Last Assistant Message",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- INPUT ---\nconst userMessageRaw = $('Incoming Message').first().json.data.body || \"\";\nconst userMessage = userMessageRaw.trim().toLowerCase();\n\n// --- 1. SAFE DEFAULT ---\nif (!userMessage) {\n  return {\n    isFollowUp: false,\n    userMessage,\n    reason: \"empty\"\n  };\n}\n\n// --- 2. SHORT MESSAGE CHECK ---\nconst isShort = userMessage.length <= 30;\n\n// --- 3. KEYWORDS (strong signal) ---\nconst keywordPatterns = [\n  /^ok$/i, /^oki$/i, /^okey$/i,\n  /^si$/i, /^sí$/i, /^sip$/i, /^sii+$/i,\n  /^claro$/i, /^dale$/i, /^sale$/i, /^va+$/i,\n  /^sigue$/i, /^continua$/i, /^continúa$/i,\n  /^adelante$/i, /^procede$/i,\n  /^mas info$/i, /^más info$/i,\n  /^mas detalles$/i, /^más detalles$/i,\n  /^dime mas$/i, /^dime más$/i,\n  /^y eso\\??$/i,\n  /^\\?y$/i,\n  /^\\👍$|^\\👌$|^\\🙏$|^\\🙌$|^\\😉$/\n];\n\nconst containsKeyword = keywordPatterns.some(re => re.test(userMessage));\n\n// --- 4. BLOCK OBVIOUS NEW INTENTS ---\nconst looksLikeNewIntent = /(plan|receta|lista|cena|comida|desayuno|almuerzo|ideas|compras)/i.test(userMessage);\n\n// --- 5. FINAL DECISION ---\nconst isFollowUp =\n  containsKeyword ||\n  (isShort && !looksLikeNewIntent);\n\nreturn {\n  isFollowUp,\n  userMessage,\n  reason: containsKeyword\n    ? \"keyword-match\"\n    : isShort && !looksLikeNewIntent\n      ? \"short-vague\"\n      : \"standalone\"\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2112,
+        -544
+      ],
+      "id": "4596ad53-47e1-48cf-9c04-c7bae242856c",
+      "name": "Follow Up Detector"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\n// --- SAFETY FALLBACKS ---\nconst rawMessage = data.user_message || \"\";\nconst intent = data.intent || \"unknown\";\nconst entities = data.entities || {};\nconst preferences = data.preferences || {};\nconst updateNeeded = data.updateNeeded === true;\nconst isFollowUp = data.isFollowUp === true;\nconst lastAssistantMessage = data.lastAssistantMessage || null;\nconst continuePreviousFlow = data.continuePreviousFlow === true;\n\n// --- USER ID ---\nconst user_id = $('Get User from Supabase').first().json.id || null;\n\n// --- TEXT NORMALIZATION ---\nfunction normalizeText(text) {\n  if (!text) return \"\";\n  return text\n    .toString()\n    .trim()\n    .replace(/\\s+/g, \" \")\n    .replace(/[“”„]/g, '\"')\n    .replace(/[’‘]/g, \"'\")\n    .replace(/…/g, \"...\")\n    .replace(/\\u00A0/g, \" \")\n    .normalize(\"NFC\");\n}\n\nconst user_message = normalizeText(rawMessage);\n\n// --- OUTPUT ---\nreturn {\n  user_id,\n\n  user_message,\n  raw_message: rawMessage,\n\n  intent,\n  entities,\n  preferences,\n\n  updateNeeded,\n  isFollowUp,\n  continuePreviousFlow,\n  lastAssistantMessage,\n\n  duration: entities.duration || null,\n  timeframe: entities.timeframe || null\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1296,
+        -544
+      ],
+      "id": "25659683-a7e3-4ca6-9bfe-2fb49a51b576",
+      "name": "Normalize Prompt Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f3d4cbc6-2916-493d-a7b9-1c7475876000",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "=canceled",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3072,
+        -2304
+      ],
+      "id": "da6d9691-2d78-4e2d-b540-f6f8ba0eece3",
+      "name": "If Stripe Unsubscribe "
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Normalize Prompt Input').item.json.user_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3488,
+        -2480
+      ],
+      "id": "ec5bf802-753d-4f33-9651-6972e8186d0e",
+      "name": "Delete User",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "unsubscribed_metrics",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "region",
+              "fieldValue": "={{ $('Get User from Supabase').item.json.region }}"
+            },
+            {
+              "fieldId": "allergies",
+              "fieldValue": "={{ $('Get User from Supabase').item.json.preferences.allergies }}"
+            },
+            {
+              "fieldId": "dislikes",
+              "fieldValue": "={{ $('Get User from Supabase').item.json.preferences.dislikes }}"
+            },
+            {
+              "fieldId": "conditions",
+              "fieldValue": "={{ $('Get User from Supabase').item.json.preferences.conditions }}"
+            },
+            {
+              "fieldId": "diet",
+              "fieldValue": "={{ $('Get User from Supabase').item.json.preferences.diet }}"
+            },
+            {
+              "fieldId": "cuisine",
+              "fieldValue": "={{ $('Get User from Supabase').item.json.preferences.cuisine }}"
+            },
+            {
+              "fieldId": "unsubscribed_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3280,
+        -2480
+      ],
+      "id": "be6b67ac-ceae-4975-9a7a-fef194a951e0",
+      "name": "Create Unsubscribe Metrics Row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1214dda0-1d64-40ae-b94c-bf1191ab2887",
+              "name": "whatsapp_id",
+              "value": "={{ $json.data.object.metadata.whatsapp_id }}",
+              "type": "string"
+            },
+            {
+              "id": "065d5043-3f01-48b3-b138-9d245b59398f",
+              "name": "=email",
+              "value": "={{ $json.data.object.customer_details.email }}",
+              "type": "string"
+            },
+            {
+              "id": "500d17fa-1195-4d1c-b651-64066d1ec447",
+              "name": "stripe_customer_id",
+              "value": "={{ $json.data.object.customer }}",
+              "type": "string"
+            },
+            {
+              "id": "130d9079-4b50-4567-98a1-57e51a3479cb",
+              "name": "stripe_subscription_id",
+              "value": "={{ $json.data.object.subscription }}",
+              "type": "string"
+            },
+            {
+              "id": "c81b7004-6a26-4c63-b0dd-1549c49f9d78",
+              "name": "plan_type",
+              "value": "mensual",
+              "type": "string"
+            },
+            {
+              "id": "881dec85-c38b-4832-973b-b5c7a30f9b61",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2608,
+        544
+      ],
+      "id": "5891de4a-a120-4a41-a0ee-2d0816519694",
+      "name": "Extract Metadata"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "unsubscribe",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "48fb4407-bfef-41f1-be36-3c27ab5cea7c"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0822de5c-c003-4fc4-81f5-bb17982f8ff8",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "meal_plan",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6afe5c29-7206-43f5-bdcb-82d34a9d9b1e",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "general",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -784,
+        -576
+      ],
+      "id": "5df862b8-c2b9-4860-8dfb-6eaaac18e7a7",
+      "name": "Switch Intents",
+      "notes": "Exists: The node will route the data down the \"true\" branch if the specified field in the input data is present and has any value, including an empty string (\"\")."
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- INPUT SOURCES ---\nlet unified = {};\nlet safeguard = {};\nlet followUp = {};\nlet user_message = null;\nlet lastAssistant = null;\n\ntry {\n  unified = $('Unified Merge').first().json ?? {};\n} catch (e) {}\n\ntry {\n  safeguard = $('Safeguard').first().json ?? {};\n} catch (e) {}\n\ntry {\n  followUp = $('Follow Up Detector').first().json ?? {};\n} catch (e) {}\n\ntry {\n  user_message = $('Incoming Message').first().json.data?.body ?? null;\n} catch (e) {}\n\ntry {\n  lastAssistant =\n    $('Read Last Assistant Message').first().json?.last_assistant_message ?? null;\n} catch (e) {}\n\n// --- Build canonical object ---\nreturn {\n  user_message,\n\n  intent: safeguard.intent ?? null,\n  entities: safeguard.entities ?? {},\n\n  preferences: unified.preferences ?? {},\n\n  updateNeeded: safeguard.updateNeeded === true,\n\n  isFollowUp: followUp.isFollowUp === true,\n  continuePreviousFlow: followUp.isFollowUp === true,\n\n  lastAssistantMessage: lastAssistant,\n\n  duration: safeguard.entities?.duration ?? null,\n  timeframe: safeguard.entities?.timeframe ?? null\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1568,
+        -544
+      ],
+      "id": "d67cdb29-3f37-45c3-a70f-753155d3e5ad",
+      "name": "Combined Object"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input comes from Normalize Prompt Input node\nconst intent = $json.intent;\nconst entities = $json.entities || {};\nconst prefs = $json.preferences || {};\nconst userMessage = $json.user_message || \"\";\n\n// --- Normalize duration ---\nlet duration = parseInt(entities.duration) || 7;\nif (duration > 7) duration = 7; // temporary limit\n\n// --- Build preferences text ---\nlet prefText = \"\";\n\nif (prefs.diet) \n  prefText += `La usuaria sigue una dieta ${prefs.diet}. `;\n\nif (prefs.cuisine) \n  prefText += `Prefiere cocina inspirada en ${prefs.cuisine}. `;\n\nif (Array.isArray(prefs.allergies) && prefs.allergies.length)\n  prefText += `Alergias: ${prefs.allergies.join(\", \")}. `;\n\nif (Array.isArray(prefs.dislikes) && prefs.dislikes.length)\n  prefText += `No consume: ${prefs.dislikes.join(\", \")}. `;\n\nif (Array.isArray(prefs.conditions) && prefs.conditions.length)\n  prefText += `Condiciones: ${prefs.conditions.join(\", \")}. `;\n\n// ------------------------------\n// SYSTEM MESSAGE (strict, JSON-only)\n// ------------------------------\n\nconst system_message = `\nEres la nutricionista de Dietavity.\n\nDiseñas planes de alimentación saludables inspirados en los hábitos alimentarios de países con alta esperanza de vida, especialmente:\n- Japón\n- Italia\n- España\n- Noruega\n\nLos planes deben ser:\n- sencillos\n- prácticos\n- fáciles de cocinar\n- con ingredientes comunes\n- con recetas familiares\n- equilibrados\n- variados\n- lenguaje natural y neutro para Latinoamérica\n- Usa los nombres de ingredientes y alimentos más ampliamente comprendidos en Latinoamérica\n- Evita regionalismos muy específicos de un solo país salvo que la región de la usuaria lo indique\n\nReglas estrictas:\n- Responde solo con un JSON válido.\n- No incluyas texto fuera del objeto JSON.\n- No uses comentarios, explicaciones ni emojis.\n- Usa claves exactamente como se solicita.\n- Usa números sin unidades.\n- Cumple estrictamente con el formato pedido.\n`;\n\n// ------------------------------\n// USER PROMPT (contains data + constraints)\n// ------------------------------\n\nconst prompt = `\nLa usuaria solicita un plan de comidas completo para ${duration} días.\nMensaje original: \"${userMessage}\"\n${prefText}\n\nGenera un plan de alimentación diario con:\n- Desayuno\n- Comida\n- Cena\n- 1–2 snacks\n\nRequisitos:\n- Responde **exclusivamente en formato JSON válido**.\n- Cada comida principal debe incluir:\n  - título\n  - descripción\n  - calorías\n  - macros { protein, carbs, fat }\n  - recipe { ingredients[], steps[] }\n- Los snacks solo requieren:\n  - título\n  - calorías\n- No usar suplementos ni medicamentos.\n- Evita ingredientes incluidos en alergias o “no consume”.\n- Adapta el plan a sus preferencias.\n\nFormato JSON obligatorio:\n{\n  \"duration_days\": <number>,\n  \"days\": [\n    {\n      \"day\": 1,\n      \"meals\": {\n        \"breakfast\": {\n          \"title\": \"\",\n          \"description\": \"\",\n          \"calories\": 0,\n          \"macros\": { \"protein\": 0, \"carbs\": 0, \"fat\": 0 },\n          \"recipe\": { \"ingredients\": [], \"steps\": []}\n        },\n        \"lunch\": {\n          \"title\": \"\",\n          \"description\": \"\",\n          \"calories\": 0,\n          \"macros\": { \"protein\": 0, \"carbs\": 0, \"fat\": 0 },\n          \"recipe\": { \"ingredients\": [], \"steps\": []}\n        },\n        \"dinner\": {\n          \"title\": \"\",\n          \"description\": \"\",\n          \"calories\": 0,\n          \"macros\": { \"protein\": 0, \"carbs\": 0, \"fat\": 0 },\n          \"recipe\": { \"ingredients\": [], \"steps\": []}\n        },\n        \"snacks\": [\n          { \"title\": \"\", \"calories\": 0 }\n        ]\n      }\n    }\n  ]\n}\n`;\n\nreturn {\n  json: {\n    system_message,\n    prompt,\n    duration\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4464,
+        -1136
+      ],
+      "id": "b13148e9-6c78-47c8-8e4c-5d1ca2d5cf44",
+      "name": "Build Meal Plan Prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse en español es analizar y convertir a algo que lo pueda usar el sistema, en este caso el input: objeto JSON.\n// Normalization without preference \n\nlet raw = $input.first().json.output || \"{}\";\nlet data = {};\n\n// Allowed intents\nconst validIntents = [\n  \"meal_plan\",\n  \"meal_idea\",\n  \"shopping_list\",\n  \"restaurant_near\",\n  \"restaurant_menu\",\n  \"recipe\",\n  \"advice\",\n  \"general\",\n  \"unsubscribe\"\n];\n\n// Allowed entities\nconst validEntities = [\n  \"diet\", \"cuisine\", \"allergy\", \"dislike\", \"ingredient\",\n  \"dish\", \"restaurant\", \"neighborhood\", \"city\", \"region\",\n  \"duration\", \"meal_type\", \"timeframe\", \"name\"\n];\n\nfunction normalizeEntities(entities) {\n  if (!entities || typeof entities !== \"object\") return {};\n\n  const normalized = {};\n  for (const [key, value] of Object.entries(entities)) {\n    const cleanKey = key.toLowerCase().trim();\n    if (!validEntities.includes(cleanKey)) continue;\n\n    if (typeof value === \"string\") {\n        // Preserve casing for name\n  if (cleanKey === \"name\") {\n    normalized[cleanKey] = value.trim();\n  } else {\n    let cleaned = value.trim().toLowerCase();\n    if (cleaned.includes(\",\")) {\n      normalized[cleanKey] = cleaned.split(\",\").map(v => v.trim());\n    } else {\n      normalized[cleanKey] = cleaned;\n    }\n  }\n    } else if (Array.isArray(value)) {\n      normalized[cleanKey] = value.map(v =>\n        typeof v === \"string\" ? v.trim().toLowerCase() : v\n      );\n    } else {\n      normalized[cleanKey] = value;\n    }\n  }\n  return normalized;\n}\n\ntry {\n  data = JSON.parse(raw);\n\n  // ✅ Validate intent\n  if (!data.intent || !validIntents.includes(data.intent)) {\n    data.intent = \"general\";\n  }\n\n  // ✅ Normalize entities\n  data.entities = normalizeEntities(data.entities);\n\n} catch (e) {\n  // ✅ Safe fallback\n  data = { intent: \"general\", entities: {} };\n}\n\nreturn [{ json: data }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2896,
+        -544
+      ],
+      "id": "d07aba2b-2c1f-49be-abf7-f3c9b1b77988",
+      "name": "Parse JSON Intent and Entities"
+    },
+    {
+      "parameters": {
+        "tableId": "meal_plans",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Normalize Prompt Input').item.json.user_id }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "=Plan de comidas de {{ $('Build Meal Plan Prompt').item.json.duration }} días"
+            },
+            {
+              "fieldId": "duration_days",
+              "fieldValue": "={{ $('Build Meal Plan Prompt').item.json.duration }}"
+            },
+            {
+              "fieldId": "meals",
+              "fieldValue": "={{ $('Parse JSON Meal Plan').item.json.mealPlan }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5504,
+        -1008
+      ],
+      "id": "37b08cc6-3451-46e1-a1ec-1b7200afc692",
+      "name": "Create Meal Plan",
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n{\n  model: \"gpt-5.1\",\n  response_format: { type: \"json_object\" },\n  messages: [\n    {\n      role: \"system\",\n      content: $json.system_message\n    },\n    {\n      role: \"user\",\n      content: $json.prompt\n    }\n  ]\n}\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        4640,
+        -1136
+      ],
+      "id": "40e648d5-a8cf-42e6-b07f-1678f5d84995",
+      "name": "Meal Plan Chat Completions"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n{\n  model: \"gpt-4.1-mini\",\n  response_format: { type: \"json_object\" },\n  messages: [\n    {\n      role: \"system\",\n      content: `Eres una nutricionista experta en planificación alimentaria.\n\nTu tarea es generar UNA comida inspirada en la longevidad.\n\nReglas:\n- Responde únicamente JSON válido\n- No incluyas texto extra\n- No uses markdown\n- Mantén estructura exacta\n- Responde sólo en español`\n\n    },\n    {\n      role: \"user\",\n      content: $json.prompt\n    }\n  ],\n  temperature: 0.5\n}\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        4880,
+        -512
+      ],
+      "id": "0c3aa6d7-b430-4602-bb63-82e77c09e7fc",
+      "name": "Meal Plan Swap Chat Completions",
+      "notes": "={\n  \"model\": \"gpt-4.1-mini\", \n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres una nutricionista experta en planificación alimentaria.\n\nTu tarea es proponer cambios a un plan existente y devolver únicamente un JSON con sustituciones.\n\nReglas estrictas:\n- Responde solo con un JSON válido.\n- No incluyas texto fuera del objeto JSON.\n- No uses comentarios, explicaciones ni emojis.\n\nCumple estrictamente con la estructura solicitada por el prompt del usuaria.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $('Build Meal Plan Swap Prompt').item.json.prompt }}\"\n    }\n  ],\n  \"temperature\": 0.5\n}"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    assistant_message: \"Perfecto, tu perfil ha sido actualizado 😊\"\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3808,
+        256
+      ],
+      "id": "d1770d74-27cd-4015-b9f4-67080cca13f4",
+      "name": "Build Preference Update Response"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "preferences",
+              "fieldValue": "={{ $json.preferences }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2432,
+        -1680
+      ],
+      "id": "3b629c78-b49f-41bd-920b-4da4750545a9",
+      "name": "Update User Preference Meal Plan",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "79862d73-a088-40c0-9372-3c0666359bc7",
+              "leftValue": "={{ $json.updateNeeded === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2000,
+        -1664
+      ],
+      "id": "3fdbe0da-a2c9-4b06-8e3b-4f497aaebffc",
+      "name": "If UpdateNeeded Meal Plan",
+      "notes": "This was the previous one:\n\n{{ $json.updateNeeded == true && ![\"meal_idea\", \"meal_plan\"].includes($json.intent) }}"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "789d2e6c-f2f9-4eb4-8660-4b1051400187",
+              "leftValue": "={{ $json.updateNeeded === true && $json.last_assistant_message !== \"ask_diet\" && $json.last_assistant_message !== \"ask_name\" }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3232,
+        272
+      ],
+      "id": "ec37f558-4115-4244-ac63-5680f8f34040",
+      "name": "If updateNeeded General",
+      "notes": "{{ $json.updateNeeded === true }}"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "789d2e6c-f2f9-4eb4-8660-4b1051400187",
+              "leftValue": "={{ $json.updateNeeded === true }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3408,
+        1552
+      ],
+      "id": "9dcc6148-0992-4b3b-8c83-9332111549ee",
+      "name": "If updateNeeded all Other Intents"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "preferences",
+              "fieldValue": "={{ $json.preferences }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3664,
+        1424
+      ],
+      "id": "17b24228-47cf-4fcb-b467-7bf5aebc2437",
+      "name": "Update User Preference all Other Intents",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "whatsapp_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Extract Metadata').item.json.whatsapp_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "last_assistant_message",
+              "fieldValue": "ask_name"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1744,
+        224
+      ],
+      "id": "e0a268bc-7b26-470a-b2bd-5d4c2c068eb2",
+      "name": "Update User Ask Name",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a78bf75a-e2f7-4338-8252-0f58cc309ee7",
+              "leftValue": "={{ \n$json.lastAssistantMessage === \"ask_name\" &&\nBoolean($json.entities?.name)\n}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2240,
+        -208
+      ],
+      "id": "41b9d694-1fcd-49d5-8abe-4d2394c2d2a6",
+      "name": "If Ask Name"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $json.entities.name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2720,
+        -640
+      ],
+      "id": "27fb7ad4-b864-4bcc-a3a8-0a50110423e3",
+      "name": "Update User Name",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a80cfa30-88cf-40d0-aebf-99298043ff47",
+              "leftValue": "={{ typeof $json.entities?.name === \"string\" && $json.entities.name.trim() !== \"\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2464,
+        -560
+      ],
+      "id": "03802344-f36b-4ceb-97a7-05f9bfb28af8",
+      "name": "If User Name"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "preferences",
+              "fieldValue": "={{ $json.preferences }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3472,
+        112
+      ],
+      "id": "8dbc0e30-a367-4f0a-844d-948bbce8c6e1",
+      "name": "Persist Preference General",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b9935ae1-afd4-472f-8a46-68a73aac2ff6",
+              "leftValue": "={{ \n$json.lastAssistantMessage === \"ask_diet\" &&\n(\n  $json.updateNeeded === true ||\n  /^(no|ninguna|ninguno|no tengo|ninguna dieta)$/i.test($json.user_message.trim())\n)\n}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2496,
+        80
+      ],
+      "id": "dd2f8bf3-6fbf-485f-88d5-8459170b43e7",
+      "name": "If Ask Diet",
+      "notes": "={{ \n$json.lastAssistantMessage === \"ask_diet\" &&\n(\n  typeof $json.entities?.diet === \"string\" ||\n  Boolean($json.entities?.dislike) ||\n  Boolean($json.entities?.allergy) ||\n  Boolean($json.entities?.condition) ||\n  Boolean($json.entities?.cuisine) ||\n  /^(no|ninguna|ninguno|no tengo|ninguna dieta)$/i.test($json.user_message.trim())\n)\n}}"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Read Last Assistant Message').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "last_assistant_message",
+              "fieldValue": "ask_diet"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3200,
+        -640
+      ],
+      "id": "5dcf517d-8d48-45ba-8864-216e2a990cdb",
+      "name": "Update User Ask Diet",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "promptConfig": {
+            "promptOptions": {
+              "promptId": "pmpt_6927972f6dd8819790311d28e5043f310c9228aefbc522b3"
+            }
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2288,
+        -2096
+      ],
+      "id": "f7c380c2-c4e9-4ecf-8939-1ce256c8211c",
+      "name": "OpenAI Chat Model Unsubscribe",
+      "credentials": {
+        "openAiApi": {
+          "id": "9BrcvOD7FmTqVhWK",
+          "name": "Unsubscribe Agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "events": [
+          "checkout.session.completed"
+        ],
+        "apiVersion": "2026-02-25.clover"
+      },
+      "type": "n8n-nodes-base.stripeTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2800,
+        544
+      ],
+      "id": "d42e4b8f-ec1e-45ff-b7e3-b4d71846605a",
+      "name": "Webhook Stripe Checkout",
+      "webhookId": "8f22544b-7f62-4c44-a647-217ea68ec536",
+      "credentials": {
+        "stripeApi": {
+          "id": "U1vXJ0j6ZSynmXZZ",
+          "name": "Stripe account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "com.twilio.messaging.inbound-message.received"
+        ]
+      },
+      "type": "n8n-nodes-base.twilioTrigger",
+      "typeVersion": 1,
+      "position": [
+        -4768,
+        -832
+      ],
+      "id": "40961b47-4bab-47ac-a55b-81de3e6c905c",
+      "name": "Incoming Message",
+      "webhookId": "bce2dfd3-7d1c-4217-9a6c-a350858e4726",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "={{ $('Extract Next Action Unsubscribe').item.json.assistant_message }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        3680,
+        -2480
+      ],
+      "id": "1162ea3a-7352-4aae-b070-a5a3e3d2e6a5",
+      "name": "Send Unsubscribe Message",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "Hemos recibido tu solicitud y tu subscripción será cancelada en el transcurso de las próximas 12 horas. Gracias por haber formado parte de Dietavity, esperamos verte nuevamente.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        3280,
+        -2208
+      ],
+      "id": "07a6e44a-bc06-4bf9-a323-b6ffc0578192",
+      "name": "Send Unsubscribe Delay Message",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.message }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        5504,
+        -1312
+      ],
+      "id": "a054ead7-dfb0-4e57-b499-9118ee5321d8",
+      "name": "Send Error Notification Meal Plan",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "Lo siento 😔. Tu plan no ha podido enviarse en este momento.   Por favor, inténtalo más tarde.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        5712,
+        -912
+      ],
+      "id": "e0b92df7-c087-475e-b36f-c54286e77bb7",
+      "name": "Send Error Meal Plan Link",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "={{ \n\"🌿 Tu plan de 7 días está listo:\\n\\n\" +\n\"👉 \" + $('Portal Token Link').item.json.portal_token +\n\"\\n\\nTu plan se actualizará cada 7 días 😊\" +\n\"\\n\\nCuando quieras puedes escribirme para:\\n\" +\n\"• una receta\\n\" +\n\"• cambiar un ingrediente\\n\" +\n\"• consejos de alimentación\\n\" +\n\"• recomendación de un restaurante\\n\"\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        5712,
+        -1120
+      ],
+      "id": "f55373bf-5d20-4b76-8d75-7decfffb82e2",
+      "name": "Send Meal Plan Link",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      },
+      "notes": "{{ \"🌿 En este enlace puedes descargar tu plan de 7 días personalizado:\\n\" + $json.plan_url }}"
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "={{ $('Parse Assistant Response').item.json.assistant_response }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        5008,
+        1184
+      ],
+      "id": "5de2bb26-a618-4818-9d6f-4d79bfcaddc5",
+      "name": "Send All Intents Message",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "¡Gracias! 😊 Para hacer tu primer plan personalizado: ¿sigues alguna dieta o hay alimentos que prefieres evitar?",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2976,
+        -640
+      ],
+      "id": "4ef56f3d-d354-45ee-9534-361e5300d8ba",
+      "name": "Send Ask Diet",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "¿Con qué nombre te gustaría que me refiera a ti? 😊",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2720,
+        -448
+      ],
+      "id": "c613c120-2780-463f-98db-d3bbc0399e64",
+      "name": "Send Ask Name Again",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.assistant_message }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        4000,
+        256
+      ],
+      "id": "92e70ff4-2e6f-4827-adb4-060cc64f3a68",
+      "name": "Send Update Preferences Message",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Extract Metadata').item.json.whatsapp_id }}",
+        "toWhatsapp": true,
+        "message": "🎉 ¡Bienvenida a Dietavity!   Tu suscripción está activa 💚    ¿Cómo quieres que te llame?",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1952,
+        224
+      ],
+      "id": "ba34ae4d-f64d-4fc1-8ff6-c1d8f43ffb51",
+      "name": "Send Welcome New User",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $json.whatsapp_id }}",
+        "toWhatsapp": true,
+        "message": "Lo sentimos 😔   Estamos experimentando un problema técnico y tu cuenta aún no se ha activado por completo.   Nuestro equipo lo resolverá y te avisaremos en breve.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1936,
+        768
+      ],
+      "id": "bb1810a2-1628-4919-a9af-5bd0d809c50d",
+      "name": "Send Error Creating User Message",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Very Important\n\nUpdate User Ask Diet, Persist Preferences Onboarding and Update Onboarding done nodes don't use the Normalize Prompt Input node to fetch id and other data.",
+        "height": 304,
+        "width": 336,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -4672,
+        -544
+      ],
+      "typeVersion": 1,
+      "id": "b5d17c62-8b98-4b07-996c-ffd8b9451526",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "Recibí tu mensaje 😊  Por ahora solo puedo leer texto (no audio ni imágenes).  ¿Puedes escribirme lo que necesitas?",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -3552,
+        -1152
+      ],
+      "id": "fdac44e7-1faa-4ced-9e0d-338cc0fa638e",
+      "name": "Send Message Asking for Text",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "01936e85-aff1-454e-9d99-4734d20f9e20",
+              "leftValue": "={{ \n  Number($('Incoming Message').item.json.data.numMedia) > 0 &&\n  (\n    !$('Incoming Message').item.json.data.body ||\n    $('Incoming Message').item.json.data.body.trim() === ''\n  )\n}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -4128,
+        -832
+      ],
+      "id": "b5b1a3c7-08a7-4a53-a52d-cdb149637664",
+      "name": "IF Media Without Text"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dbf35f78-2639-4310-9c36-eb0fcb3e6ff4",
+              "name": "=event",
+              "value": "unsupported_media",
+              "type": "string"
+            },
+            {
+              "id": "325b8b01-d493-454a-af74-ef51518c5ed6",
+              "name": "severity",
+              "value": "info",
+              "type": "string"
+            },
+            {
+              "id": "5e6a1a62-f648-4a74-9452-4c326d4f8af0",
+              "name": "user_id",
+              "value": "={{ $('Normalize User Data').item.json.id || null }}",
+              "type": "string"
+            },
+            {
+              "id": "4fa70d38-5891-40ef-96b2-f267170b2980",
+              "name": "error_context",
+              "value": "={{ {\n  numMedia: $('Incoming Message').item.json.data.numMedia,\n  body: $('Incoming Message').item.json.data.body,\n  from: $('Incoming Message').item.json.data.from\n} }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -3808,
+        -1152
+      ],
+      "id": "97cf98c6-eda8-43b5-8f5d-02b72213bf22",
+      "name": "Prepare Log Data Message Without Text"
+    },
+    {
+      "parameters": {
+        "tableId": "logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "event",
+              "fieldValue": "={{ $('Prepare Log Data Message Without Text').item.json.event }}"
+            },
+            {
+              "fieldId": "severity",
+              "fieldValue": "={{ $('Prepare Log Data Message Without Text').item.json.severity }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Prepare Log Data Message Without Text').item.json.user_id }}"
+            },
+            {
+              "fieldId": "error_context",
+              "fieldValue": "={{ $('Prepare Log Data Message Without Text').item.json.error_context }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -3312,
+        -1152
+      ],
+      "id": "433eaa44-c7b6-49bb-b51a-7a20ba4023e9",
+      "name": "Update Log Message Without Text",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "afd8e5f3-b00e-43e3-b056-c68caa54aa00",
+              "name": "portal_token",
+              "value": "=https://dietavity.com/p/{{ $('Get User from Supabase').item.json.portal_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5280,
+        -1008
+      ],
+      "id": "9ec3dd0a-9331-43cc-8e90-3605bbe92908",
+      "name": "Portal Token Link"
+    },
+    {
+      "parameters": {
+        "content": "## Meal Regeneration API",
+        "height": 432,
+        "width": 1152,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        4368,
+        -640
+      ],
+      "typeVersion": 1,
+      "id": "34476598-bb3f-4ff8-bc50-46dec1160e17",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/regenerate-meal",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        4480,
+        -512
+      ],
+      "id": "d3ffc4cd-9669-405a-b362-316fe7ddc6ed",
+      "name": "Meal Regeneration Webhook",
+      "webhookId": "bd9dce07-4ee6-4a77-a5f6-001e8cf9075a"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        5280,
+        -512
+      ],
+      "id": "6f384691-e13b-4807-8205-d986cf6602b3",
+      "name": "Respond to Meal Regeneration Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const {\n\n  currentMeal,\n  mealType\n\n} = $json.body;\n\n// SAFETY\n\nif (!currentMeal) {\n\n  throw new Error(\n    'currentMeal missing'\n  );\n\n}\n\n// CONTEXT\n\nconst calories =\n  currentMeal.calories || 400;\n\nconst title =\n  currentMeal.title || '';\n\nconst description =\n  currentMeal.description || '';\n\n// PROMPT\n\nconst prompt = `\n\nGenera una comida tipo: ${mealType} \nCon calorías objetivo: ${calories} \nEvita generar una comida similar a:\n${title}\n${description}\n\nPrioriza variedad en:\n- ingredientes\n- proteína principal\n- estilo de cocina\n- preparación\n\nRequisitos:\n- Inspiración mediterránea, japonesa o longevidad\n- Saludable, realista y práctica\n- Ingredientes fáciles de conseguir\n- Mantener calorías similares\n- Mantener tono claro y simple\n- Responde sólo en español\n\nDevuelve SOLO un JSON válido.\n\nFormato exacto:\n\n{\n  \"title\": \"\",\n  \"description\": \"\",\n  \"calories\": 0,\n\n  \"macros\": {\n\n    \"protein\": 0,\n    \"carbs\": 0,\n    \"fat\": 0\n    \n  },\n\n  \"recipe\": {\n\n    \"ingredients\": [],\n\n    \"steps\": []\n\n  }\n\n}\n\n`;\n\nreturn [\n\n  {\n\n    json: {\n\n      prompt\n\n    }\n\n  }\n\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4688,
+        -512
+      ],
+      "id": "108ebf64-cb68-4df0-aaa1-99ea1a8fd588",
+      "name": "Build Regeneration Prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "// EXTRACT RAW CONTENT\n\nlet raw = null;\n\n// OPENAI CHAT COMPLETIONS\n\nif ($json.choices?.[0]?.message?.content) {\n\n  raw =\n    $json.choices[0]\n      .message\n      .content;\n\n}\n\n// FALLBACKS\n\nif (!raw) {\n\n  raw =\n    $json.output ||\n    $json.text ||\n    $json.response;\n\n}\n\n// LAST FALLBACK\n\nif (!raw) {\n\n  raw =\n    JSON.stringify($json);\n\n}\n\n// EXTRACT JSON\n\nfunction extractJson(txt) {\n\n  if (\n    !txt ||\n    typeof txt !== 'string'\n  ) {\n\n    return null;\n\n  }\n\n  // REMOVE ```json fences\n\n  const fenced = txt.match(\n    /```(?:json)?\\s*([\\s\\S]*?)```/i\n  );\n\n  if (fenced) {\n\n    return fenced[1].trim();\n\n  }\n\n  // EXTRACT FIRST JSON OBJECT\n\n  const first =\n    txt.indexOf('{');\n\n  const last =\n    txt.lastIndexOf('}');\n\n  if (\n    first !== -1 &&\n    last !== -1 &&\n    last > first\n  ) {\n\n    return txt.slice(\n      first,\n      last + 1\n    );\n\n  }\n\n  return txt.trim();\n\n}\n\nconst candidate =\n  extractJson(raw);\n\n// PARSE JSON\n\nlet meal = null;\n\nlet error = null;\n\ntry {\n\n  meal =\n    JSON.parse(candidate);\n\n} catch (e1) {\n\n  try {\n\n    const relaxed =\n      candidate\n\n        .replace(\n          /\\u2018|\\u2019|\\u201C|\\u201D/g,\n          '\"'\n        )\n\n        .replace(\n          /,(\\s*[}\\]])/g,\n          '$1'\n        );\n\n    meal =\n      JSON.parse(relaxed);\n\n  } catch (e2) {\n\n    error =\n      e2.message;\n\n  }\n\n}\n\n// VALIDATION\n\nif (!meal || !meal.title) {\n\n  return [{\n    json: {\n      success: false,\n      message: \"No pudimos regenerar este platillo. Inténtalo nuevamente.\",\n      debug: candidate\n    }\n  }];\n\n}\n\nif (!meal.recipe) {\n\n  meal.recipe = {\n\n    ingredients: [],\n\n    steps: []\n\n  };\n\n}\n\nif (!meal.macros) {\n\n  meal.macros = {\n\n    protein: 0,\n\n    carbs: 0,\n\n    fat: 0\n\n  };\n\n}\n\n// SUCCESS\n\nreturn [\n\n  {\n\n    json: {\n\n      success: true,\n\n      meal\n\n    }\n\n  }\n\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5088,
+        -512
+      ],
+      "id": "e7f3727c-b581-41d9-b3a5-e0ada8c38e6c",
+      "name": "Parse Regenerated Meal JSON"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ea445504-68b1-46be-bdef-12ac8c8fc2f6",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5808,
+        -1728
+      ],
+      "id": "a9a0bcff-ab0e-42b8-b7a1-07648ec4b53e",
+      "name": "Did Parse Fail"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        4464,
+        -1744
+      ],
+      "id": "039e6513-6af2-4709-a8ce-5363af2d9a66",
+      "name": "Weekly Update Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  mp.user_id,\n  mp.created_at,\n  mp.meals,\n  u.\"name\",\n  u.whatsapp_id,\n  u.preferences\n\nFROM meal_plans mp\n\nJOIN (\n  SELECT\n    user_id,\n    MAX(created_at) AS latest_plan\n  FROM meal_plans\n  GROUP BY user_id\n) latest\nON mp.user_id = latest.user_id\nAND mp.created_at = latest.latest_plan\n\nJOIN users u\nON u.id = mp.user_id\n\nWHERE\n  DATE(mp.created_at) <= CURRENT_DATE - INTERVAL '7 days'\n\nORDER BY\n  mp.created_at ASC\n\nLIMIT 10;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4704,
+        -1744
+      ],
+      "id": "ee496019-69d2-416a-ae22-06064c147c1c",
+      "name": "Weekly Update SQL Query",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        4896,
+        -1744
+      ],
+      "id": "925f1cc6-48ec-41f2-840a-1309ff58463b",
+      "name": "Weekly Update Batch Loop"
+    },
+    {
+      "parameters": {
+        "jsCode": "const prefs =\n  $json.preferences || {};\n\nlet prefText = \"\";\n\nif (prefs.diet)\n  prefText +=\n    `La persona sigue una dieta ${prefs.diet}. `;\n\nif (prefs.cuisine)\n  prefText +=\n    `Prefiere cocina inspirada en ${prefs.cuisine}. `;\n\nif (\n  Array.isArray(prefs.allergies)\n  && prefs.allergies.length\n)\n  prefText +=\n    `Alergias: ${prefs.allergies.join(\", \")}. `;\n\nif (\n  Array.isArray(prefs.dislikes)\n  && prefs.dislikes.length\n)\n  prefText +=\n    `No consume: ${prefs.dislikes.join(\", \")}. `;\n\nconst previousMeals = [];\n\n($json.meals?.days || [])\n  .forEach(day => {\n\n    Object.values(day.meals || {})\n      .forEach(meal => {\n\n        if (meal?.title) {\n\n          previousMeals.push(meal.title);\n\n        }\n\n      });\n\n});\n\nconst system_message = `\nEres la nutricionista de Dietavity.\n\nDiseñas planes de alimentación saludables inspirados en los hábitos alimentarios de países con alta esperanza de vida, especialmente:\n- Japón\n- Italia\n- España\n- Noruega\n\nLos planes deben ser:\n- sencillos\n- prácticos\n- fáciles de cocinar\n- con ingredientes comunes\n- con recetas familiares\n- equilibrados\n- variados\n- lenguaje natural y neutro para Latinoamérica\n- Usa los nombres de ingredientes y alimentos más ampliamente comprendidos en Latinoamérica\n- Evita regionalismos muy específicos de un solo país salvo que la región de la usuaria lo indique\n\nReglas estrictas:\n- Responde solo con un JSON válido.\n- No incluyas texto fuera del objeto JSON.\n- No uses comentarios, explicaciones ni emojis.\n- Usa claves exactamente como se solicita.\n- Usa números sin unidades.\n- Cumple estrictamente con el formato pedido.\n`;\n\nconst prompt = `\nGenera un nuevo plan de alimentación semanal.\n\n${prefText}\n\nObjetivos:\n- Priorizar variedad\n- Evitar comidas repetitivas\n- Inspirarse en hábitos de longevidad\n- Mantener comidas simples y realistas\n\nEvita repetir comidas similares a:\n\n${previousMeals.join(\"\\n\")}\n\nDevuelve ÚNICAMENTE JSON válido.\n\nEl JSON debe tener EXACTAMENTE esta estructura:\n\n{\n  \"duration_days\": 7,\n  \"days\": [\n    {\n      \"day\": 1,\n      \"meals\": {\n        \"breakfast\": {},\n        \"lunch\": {},\n        \"dinner\": {},\n        \"snacks\": []\n      }\n    }\n  ]\n}\n\nDesayuno, comida y cena deben incluir:\n- title\n- description\n- calories\n- macros {\n    protein,\n    carbs,\n    fat\n  }\n- recipe {\n    ingredients[],\n    steps[]\n  }\n\nLos snacks deben ser un arreglo de textos simples.\n\nEjemplo:\n\n\"snacks\": [\n  \"1 yogur natural pequeño\",\n  \"1 manzana con canela\"\n]\n\nNo agregues texto fuera del JSON.\n`;\n\nreturn {\n  json: {\n    user_id: $json.user_id,\n    program_id: $json.program_id || null,\n    week_id: $json.week_id || null,\n    system_message,\n    prompt\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5136,
+        -1728
+      ],
+      "id": "a0b98ebf-8f0d-4cd4-94b2-c7b4ce8b5030",
+      "name": "Build Weekly Update Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n{\n  model: \"gpt-5.1\",\n  response_format: { type: \"json_object\" },\n  messages: [\n    {\n      role: \"system\",\n      content: $json.system_message\n    },\n    {\n      role: \"user\",\n      content: $json.prompt\n    }\n  ]\n}\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        5360,
+        -1728
+      ],
+      "id": "0eed9da0-c54d-4b38-9280-c03eac8c9563",
+      "name": "Generate Weekly Meal Plan"
+    },
+    {
+      "parameters": {
+        "jsCode": "// -----------------------------\n// Parse Meal Plan JSON Weekly Update (STRICT)\n// -----------------------------\n\ntry {\n  // 1. Extract the model's JSON string\n  const rawContent =\n    $json.choices?.[0]?.message?.content ??\n    (() => { throw new Error(\"Missing assistant message content.\"); })();\n\n  let cleaned = rawContent;\n\n  // 2. If wrapped in quotes: JSON inside JSON → double-parse\n  if (\n    typeof cleaned === \"string\" &&\n    cleaned.startsWith('\"') &&\n    cleaned.endsWith('\"')\n  ) {\n    cleaned = JSON.parse(cleaned);\n  }\n\n  // 3. Parse into actual object\n  const parsed = JSON.parse(cleaned);\n\n  // 4. Validate structure\n  if (!parsed || typeof parsed !== \"object\") {\n    throw new Error(\"Response is not a JSON object.\");\n  }\n\n  const duration =\n    parseInt(parsed.duration_days || 7);\n\n  const days = parsed.days;\n\n  if (duration < 1) {\n    throw new Error(\"Invalid duration_days.\");\n  }\n\n  if (!Array.isArray(days) || days.length === 0) {\n    throw new Error(\"Missing or invalid 'days' array.\");\n  }\n\n  // 5. Cap to 7 days\n  const maxDays = 7;\n  const duration_days = Math.min(duration, maxDays);\n\n  const trimmedDays = days.slice(0, duration_days);\n\n  // 6. Normalize meals\n  const normalizedDays = trimmedDays.map((d, idx) => {\n    const meals = d.meals || {};\n\n    function normalizeMeal(m) {\n\n      if (!m) return {};\n\n      return {\n\n        title: m.title || \"\",\n\n        description: m.description || \"\",\n\n        calories: m.calories ?? null,\n\n        macros: {\n\n          protein: m.macros?.protein ?? null,\n          carbs: m.macros?.carbs ?? null,\n          fat: m.macros?.fat ?? null\n\n        },\n\n        recipe: {\n\n          ingredients:\n            m.recipe?.ingredients ?? [],\n\n          steps:\n            m.recipe?.steps ?? []\n\n        }\n\n      };\n\n    }\n\n    const snacks = Array.isArray(meals.snacks)\n      ? meals.snacks\n      : [];\n\n    return {\n      day: d.day || idx + 1,\n      meals: {\n        breakfast: normalizeMeal(meals.breakfast),\n        lunch: normalizeMeal(meals.lunch),\n        dinner: normalizeMeal(meals.dinner),\n        snacks\n      }\n    };\n  });\n\n  // 7. Final normalized JSON\n  const mealPlan = {\n    duration_days,\n    days: normalizedDays\n  };\n\n  return [\n    {\n      json: {\n\n        success: true,\n\n        user_id:\n            $('Build Weekly Update Prompt')\n                .first()\n                .json\n                .user_id,\n        \n        mealPlan\n\n      }\n    }\n  ];\n\n} catch (error) {\n  return [\n    {\n      json: {\n        success: false,\n        message:\n          \"Hubo un problema al interpretar el plan, por favor intenta de nuevo 😊\",\n        error: error.message,\n        raw: $json\n      }\n    }\n  ];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5616,
+        -1728
+      ],
+      "id": "b8edba76-d415-4433-8633-c6d4a836ed31",
+      "name": "Parse Meal Plan JSON Weekly Update"
+    },
+    {
+      "parameters": {
+        "jsCode": "const generationContext = $('Build Weekly Update Prompt').first().json;\n\nreturn [{\n  json: {\n    ...$json,\n    program_id: generationContext.program_id || null,\n    week_id: generationContext.week_id || null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6000,
+        -1616
+      ],
+      "id": "e6098d08-dcc9-46f4-a645-6247d67532ed",
+      "name": "Attach Program Week Context",
+      "notes": "Carries optional program/week identifiers through the shared weekly-generation path. Scheduled weekly updates keep both values null."
+    },
+    {
+      "parameters": {
+        "tableId": "logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "event",
+              "fieldValue": "weekly_update_parse_error"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.error }}"
+            },
+            {
+              "fieldId": "error_context",
+              "fieldValue": "={{ JSON.stringify($json.raw) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        6112,
+        -2000
+      ],
+      "id": "fa423fc5-aea4-44d2-9c6e-fad4ea489014",
+      "name": "Insert Into Logs",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0b965e25-fb13-4c99-906f-1ab090f3066c",
+              "name": "user_id",
+              "value": "={{ $('Parse Meal Plan JSON Weekly Update').item.json.user_id }}",
+              "type": "string"
+            },
+            {
+              "id": "06c9575e-df0f-4c37-8dcf-36d396f4d2a5",
+              "name": "title",
+              "value": "={{ \"Plan semanal \" + new Date().toLocaleDateString(\"es-MX\") }}",
+              "type": "string"
+            },
+            {
+              "id": "f72ac75d-6a01-441c-9db4-d9e20eabbb58",
+              "name": "meals",
+              "value": "={{ $('Parse Meal Plan JSON Weekly Update').item.json.mealPlan }}",
+              "type": "object"
+            },
+            {
+              "id": "8c870c87-1a4a-45d3-8d5a-bd8d0e4192da",
+              "name": "program_id",
+              "value": "={{ $('Attach Program Week Context').item.json.program_id }}",
+              "type": "string"
+            },
+            {
+              "id": "9acee559-a23f-44b8-a44f-b3de3f1f9cd0",
+              "name": "week_id",
+              "value": "={{ $('Attach Program Week Context').item.json.week_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "ignoreConversionErrors": true
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        6112,
+        -1616
+      ],
+      "id": "a62e413e-3e58-46cf-916d-cb032e0a7b85",
+      "name": "Prepare Weekly Meal Plan Insert"
+    },
+    {
+      "parameters": {
+        "tableId": "meal_plans",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json.user_id }}"
+            },
+            {
+              "fieldId": "meals",
+              "fieldValue": "={{ $json.meals }}"
+            },
+            {
+              "fieldId": "week_id",
+              "fieldValue": "={{ $json.week_id || null }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        6336,
+        -1616
+      ],
+      "id": "9afd1983-e489-438a-b88a-1afc509567ed",
+      "name": "Insert Weekly Update Meal Plan",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "51a5f1d8-2930-49ea-b28c-40f2c24b66d4",
+              "leftValue": "={{ Boolean($json.week_id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        6560,
+        -1616
+      ],
+      "id": "6abbd3cd-366f-4281-8110-b22d42d044a3",
+      "name": "If Meal Plan Belongs to Program Week"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=WITH activated_week AS (\n  UPDATE weeks\n  SET\n    status = 'active',\n    activated_at = COALESCE(activated_at, NOW()),\n    updated_at = NOW()\n  WHERE id = '{{ $json.week_id }}'::uuid\n    AND week_number = 1\n    AND status = 'pending'\n  RETURNING program_id\n)\nUPDATE programs p\nSET\n  status = 'active',\n  start_date = COALESCE(p.start_date, CURRENT_DATE),\n  current_week = 1\nFROM activated_week aw\nWHERE p.id = aw.program_id\nRETURNING p.id AS program_id, p.status, p.start_date, p.current_week;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        6784,
+        -1728
+      ],
+      "id": "fe998b4c-3cfe-4c56-b4d2-1b7490a68548",
+      "name": "Activate New Program Week 1",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Runs only after a Week 1 meal plan has been persisted. It activates Week 1 and the parent program; Weeks 2–4 are not queried or updated."
+    },
+    {
+      "parameters": {
+        "content": "## Weekly Update",
+        "height": 736,
+        "width": 2256,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        4336,
+        -2080
+      ],
+      "typeVersion": 1,
+      "id": "15ac0f3e-da41-4b46-a7bd-e862b1fa4bc0",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://api.stripe.com/v1/subscriptions/{{ $('Get User from Supabase').item.json.stripe_subscription_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.STRIPE_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2848,
+        -2304
+      ],
+      "id": "015ac57b-2432-4b13-a7dd-9065a471e87e",
+      "name": "Stripe Cancel a Subscription"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -3264,
+        -368
+      ],
+      "id": "4d253231-f947-490f-8374-ba703e48cd87",
+      "name": "Detect Intent Agent",
+      "credentials": {
+        "openAiApi": {
+          "id": "GUuGphMiuSuatuyd",
+          "name": "Detect Intent Agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fc4a5086-d9c0-4fad-ae52-7752c7d0f235",
+              "name": "message",
+              "value": "=¡Perfecto! 😊 Puedes activar tu suscripción a Dietavity aquí:\n\n👉 {{ $('LIVE Stripe Checkout Session').item.json.url }}\n\n⏰ Este enlace estará disponible durante las próximas 24 horas.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -192,
+        1408
+      ],
+      "id": "5dd873ec-da1e-4c37-b1af-c5d1ebcda932",
+      "name": "Message with Stripe Payment URL"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ (\n  $('Incoming Message').item.json.data.from ?? ''\n)\n  .replace(/^whatsapp:/, '')\n  .replace(/\\s+/g, '')\n}}",
+        "tableName": "onboarding_chat_memory"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1392,
+        1920
+      ],
+      "id": "8ce88a71-5702-411a-bc45-f7e64a8516eb",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Set Session Id').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "={{ $json.prompt }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1296,
+        1600
+      ],
+      "id": "5e83bc7c-9874-42ed-b4c5-dd317e01c71b",
+      "name": "Onboarding Manager",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e730f126-aeda-4f12-96aa-77af9e24f06c",
+              "name": "chatInput",
+              "value": "={{ $('Incoming Message').item.json.data.body }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2832,
+        2032
+      ],
+      "id": "7310a0ab-8ce3-40d5-8b91-c6b8ffe7d386",
+      "name": "Set Session Id"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ab16bada-8bc2-4435-8077-288fc11fb19a",
+              "name": "metadata",
+              "value": "={{ ({\n  whatsapp_id: (\n    $('Incoming Message').item.json.data.from ?? ''\n  )\n    .toString()\n    .replace(/^whatsapp:/, '')\n    .replace(/\\s+/g, '')\n}) }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -592,
+        1408
+      ],
+      "id": "67d7516e-3db6-4833-955b-6c9149795f4f",
+      "name": "Add whatsapp_id",
+      "notes": "Former field name: metadata[whatsapp_id]\n------- \n{{ ({\n  whatsapp_id: $('Mockup Mobile Number').item.json.whatsapp_id\n    .replace(/^whatsapp:/, '')\n    .replace(/\\s+/g, '')\n}) }}\n----\n{{ ({\n  whatsapp_id:\n    $('Incoming Message').item.json.data.from\n    .toString()\n    .replace(/^whatsapp:/, '')\n    .replace(/\\s+/g, '')\n}) }}"
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.message }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        16,
+        1408
+      ],
+      "id": "6b2b2b72-0e6f-44f5-a658-4f95dbf58974",
+      "name": "Respond to Chat Subscription",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/checkout/sessions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.STRIPE_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "mode",
+              "value": "subscription"
+            },
+            {
+              "name": "success_url",
+              "value": "https://dietavity.com/pago-exitoso"
+            },
+            {
+              "name": "cancel_url",
+              "value": "https://dietavity.com/pago-cancelado"
+            },
+            {
+              "name": "line_items[0][price]",
+              "value": "price_1TecHZCVZMBOTTlaMpBBtUon"
+            },
+            {
+              "name": "line_items[0][quantity]",
+              "value": "1"
+            },
+            {
+              "name": "payment_method_types[0]",
+              "value": "card"
+            },
+            {
+              "name": "automatic_tax[enabled]",
+              "value": "true"
+            },
+            {
+              "name": "allow_promotion_codes",
+              "value": "true"
+            },
+            {
+              "name": "metadata[whatsapp_id]",
+              "value": "={{ $json.metadata.whatsapp_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -400,
+        1408
+      ],
+      "id": "9426e883-0d3b-48ed-9a42-32e4cf54cadf",
+      "name": "LIVE Stripe Checkout Session"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "onboarding_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "keyValue": "={{ (\n  $('Incoming Message').item.json.data.from ?? ''\n)\n  .replace(/^whatsapp:/, '')\n  .replace(/\\s+/g, '')\n}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -2624,
+        2032
+      ],
+      "id": "6b431f4a-05f7-4288-b7b5-61d52554ec16",
+      "name": "Get Onboarding Session",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "onboarding_sessions",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ (\n  $('Incoming Message').item.json.data.from ?? ''\n)\n  .replace(/^whatsapp:/, '')\n  .replace(/\\s+/g, '')\n}}"
+            },
+            {
+              "fieldId": "onboarding_state",
+              "fieldValue": "lead"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -912,
+        2592
+      ],
+      "id": "53359bbc-7156-4a73-8cbb-05e58f8279fd",
+      "name": "Create Onboarding Session",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9d873eed-149f-4aa3-b5f2-f7be36038af6",
+              "leftValue": "={{ Boolean($json.session_id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2400,
+        2032
+      ],
+      "id": "471f4dfc-d83b-4817-968f-be0e3f3697ac",
+      "name": "If Existing Onboarding Session"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "onboarding_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ ($('Incoming Message').item.json.data.from ?? '').replace(/^whatsapp:/, '').replace(/\\s+/g, '') }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "onboarding_state",
+              "fieldValue": "payment_pending"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        224,
+        1408
+      ],
+      "id": "a546f416-8dc4-468c-8bfa-331ce24dc55a",
+      "name": "Set Payment Pending",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const userMessage =\n  $('Set Session Id').item.json.chatInput?.trim() || '';\n\nconst prompt = `\n# Rol e Identidad\nEres la nutricionista de Dietavity. Te inspiras en los hábitos de bienestar y nutrición de países con alta longevidad (Japón, Italia, España y Noruega), pero también utilizas recomendaciones generales de alimentación saludable cuando sea apropiado.\nTu personalidad es cálida, clara, empática y cercana.\n# Información de Dietavity\nDietavity es un sistema de nutrición basado en hábitos duraderos y sencillos, inspirados en países con alta longevidad.\n- Incluye:\n - App Web: Planes de alimentación de 7 días, sencillos, actualizados automáticamente cada semana. El plan inicia el día de la suscripción. La App Web es muy sencilla de usar. \n - WhatsApp: Ideas de comidas, recetas prácticas, opciones en restaurantes, consejos de estilo de vida (sueño, hidratación) y ajustes según preferencias.\n- Precio:\n - El precio de la suscripción es **$99 MXN al mes** \n - El pago es seguro con tarjeta de crédito y débito a través de Stripe, una de las plataformas de pago más utilizadas del mundo.\n - No aceptamos PayPal ni OXXO.\n- Cancelación: \n - Sencilla, enviando la palabra **cancelar**.\n# Contexto de la Conversación\n- Etapa del proceso: La usuaria recibió una bienvenida y ya conoce quién eres.\n- Mensaje de la usuaria: \"${userMessage}\"\n# Objetivo principal\nExplicar claramente los beneficios que ofrece la suscripción y responder las dudas de la usuaria.\n# Árbol de Decisión\n## ESCENARIO 1: El mensaje de la usuaria es una afirmación (ejemplo: \"Sí\", \"Claro\", \"Cuéntame\"):\n1. Explica de forma muy breve y atractiva los dos beneficios principales de la suscripción (los planes de 7 días en la App Web y el acompañamiento diario por WhatsApp).\n2. Cierra **únicamente** con la siguiente pregunta exacta, sin modificarla, sin emojis y sin añadir nada más:\n   ¿Quieres suscribirte ahora por $99 MXN al mes?\n## ESCENARIO 2: El mensaje de la usuaria es una pregunta o comentario relacionado con Dietavity:\n1. Responde directamente a su duda en 1 o 2 frases cortas usando la información de la sección \"Información de Dietavity\".\n2. Cierra **únicamente** con la siguiente pregunta exacta, sin modificarla, sin emojis y sin añadir nada más:\n   ¿Quieres suscribirte ahora por $99 MXN al mes?\n# Restricciones Generales (Obligatorias)\n- **Longitud del texto explicativo**: El texto debe ser breve, natural y adaptado para WhatsApp (máximo 4 frases cortas en total).\n- **Tono**: No des explicaciones nutricionales largas. **No uses lenguaje técnico**.\n- **Privacidad**: **No pidas ni solicites** nombre, correo electrónico, teléfono ni ningún dato personal.\n- **Transparencia**: **No menciones** inteligencia artificial, prompts, agentes, bots, flujos internos ni herramientas técnicas.\n- **Seguridad**: **No proporciones** asesoramiento médico ni recomendaciones sobre medicamentos.\n# Formato de Salida\n- Devuelve **únicamente** el mensaje de texto final que se enviará a la usuaria por WhatsApp.\n- Respeta los saltos de línea para que el formato luzca limpio en WhatsApp.\n- No incluyas explicaciones adicionales, introducciones de formato ni estructura JSON.\n`.trim();\n\nreturn [{\n  json: {\n    chatInput: userMessage,\n    onboarding_state: 'pitch',\n    prompt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -784,
+        2240
+      ],
+      "id": "bb407320-b47f-47fa-b2e5-581e36778149",
+      "name": "Build Pitch Prompt"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "onboarding_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ ($('Incoming Message').item.json.data.from ?? '').replace(/^whatsapp:/, '').replace(/\\s+/g, '') }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "onboarding_state",
+              "fieldValue": "ask_subscription"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1936,
+        1424
+      ],
+      "id": "7af183de-2fe5-46f8-87ce-f496dafa1e40",
+      "name": "Set State Ask Subscription",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw =\n  $('Incoming Message').item.json.data.body ?? '';\n\nconst text = raw\n  .trim()\n  .toLowerCase()\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[.!?,¡¿]+$/g, '')\n  .replace(/\\s+/g, ' ');\n\nconst thankYouPatterns = [\n\n  /^grs$/,\n  /^gracias$/,\n  /^muchas gracias$/,\n  /^mil gracias$/,\n  /^gracias por todo$/,\n  /^gracias por la informacion$/,\n  /^gracias por la información$/,\n  /^perfecto gracias$/,\n  /^vale gracias$/,\n  /^te lo agradezco$/,\n  /^muy amable$/,\n  /^excelente gracias$/,\n\n];\n\nconst isThankYou =\n  thankYouPatterns.some(pattern => pattern.test(text));\n\nreturn [{\n  json: {\n    chatInput: raw.trim(),\n    isThankYou\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1072,
+        1344
+      ],
+      "id": "23aa1f82-9431-46a0-9a9e-e52a5d3ef2d6",
+      "name": "Detect Thank You"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "787194fb-3406-4792-bf07-49854823cca4",
+              "leftValue": "={{ $json.isThankYou }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -752,
+        1104
+      ],
+      "id": "d84991d1-f6b5-4185-9211-0485fe156a0d",
+      "name": "If Thank You"
+    },
+    {
+      "parameters": {
+        "jsCode": "const userMessage =\n  $('Set Session Id').item.json.chatInput?.trim() || '';\n\nconst prompt = `\n# Rol e Identidad\nEres la nutricionista de Dietavity. Te inspiras en los hábitos de bienestar y nutrición de países con alta longevidad (Japón, Italia, España y Noruega), pero también utilizas recomendaciones generales de alimentación saludable cuando sea apropiado.\nTu personalidad es cálida, clara, empática y cercana.\n# Contexto de la Conversación\n- Etapa del proceso: La usuaria ya recibió el enlace para pagar su suscripción.\n- Mensaje de la usuaria: \"${userMessage}\"\n# Objetivo principal\nResponder de forma muy breve, amable y natural.\n# Árbol de Decisión\n## ESCENARIO ÚNICO:  La usuaria envió un mensaje breve de agradecimiento o cierre.\n1. Responde con amabilidad en una sola frase.\n2. No hagas preguntas.\n*Ejemplo:* \"¡Gracias a ti! 😊\".\n\n# Restricciones Generales (Obligatorias)\n- **Uso de Emojis**: Utiliza emojis 1-2 emojis por mensaje.\n- **Longitud del texto explicativo**: El texto debe ser breve, natural y adaptado para WhatsApp.\n- **Privacidad**: **No pidas ni solicites** nombre, correo electrónico, teléfono ni ningún dato personal.\n- **Transparencia**: **No menciones** inteligencia artificial, prompts, agentes, bots, flujos internos ni herramientas técnicas.\n- **Seguridad**: **No proporciones** asesoramiento médico ni recomendaciones sobre medicamentos.\n# Formato de Salida\n- Devuelve **únicamente** el mensaje de texto final que se enviará a la usuaria por WhatsApp.\n- Respeta los saltos de línea para que el formato luzca limpio en WhatsApp.\n- No incluyas explicaciones adicionales, introducciones de formato ni estructura JSON.\n`.trim();\n\nreturn [{\n  json: {\n    chatInput: userMessage,\n    prompt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        832
+      ],
+      "id": "182e23a2-fdaf-49c7-bd2d-a57c66e185c7",
+      "name": "Build Short Closing Prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "const userMessage =\n  $('Set Session Id').item.json.chatInput?.trim() || '';\n\nconst prompt = `\n# Rol e Identidad\nEres la nutricionista de Dietavity. Te inspiras en los hábitos de bienestar y nutrición de países con alta longevidad (Japón, Italia, España y Noruega), pero también utilizas recomendaciones generales de alimentación saludable cuando sea apropiado.\nTu personalidad es cálida, clara, empática y cercana.\n# Contexto de la Conversación\n- Etapa del proceso: La usuaria ya te conoce, no reinicies el proceso de venta.\n-La usuaria ya recibió previamente un enlace para pagar su suscripción a Dietavity.\n- Mensaje de la usuaria: \"${userMessage}\"\n# Objetivo principal\nResponder directamente el mensaje de la usuaria.\n# Árbol de Decisión\n## ESCENARIO 1: La usuaria indica que ya realizó el pago (ej. \"ya pagué\", \"listo\", \"ya quedó\"):\n1. Agradécele de forma breve y amable.\n2. Indica que su suscripción se activará automáticamente en cuanto el sistema confirme el pago.\n3. **Restricción estricta**: NO confirmes que el pago ya pasó y NO inventes información sobre el estado actual de Stripe.\n## ESCENARIO 2: La usuaria pregunta cuándo recibirá su plan o cómo entrar a la App Web:\n1. Responde que el acceso a la App Web se le enviará automáticamente por WhatsApp una vez confirmado el pago.\n2. Explica que su primer plan de alimentación estará esperándola directamente dentro de la App Web.\n## ESCENARIO 3: La usuaria pregunta por otras formas de pago o dice que no tiene tarjeta:\n1. Explica que actualmente solo aceptamos pagos seguros con tarjeta de crédito o débito a través de Stripe.\n2. Lamenta que por ahora no contemos con otros métodos (como PayPal u OXXO).\n3. Despídete de forma breve, cálida y amable.\n## ESCENARIO 4: La usuaria menciona que tuvo un problema o error al pagar:\n1. Lamenta brevemente el inconveniente.\n2. Indica que puede esperar unos minutos e intentar nuevamente utilizando el mismo enlace que recibió.\n3. **Restricción estricta**: No intentes adivinar ni supongas la causa técnica del problema.\n## ESCENARIO 5: La usuaria solicita que le envíes el enlace de pago nuevamente:\n1. Dile amablemente que un asesor de nuestro equipo se pondrá en contacto con ella a través de este chat lo antes posible para enviarle su enlace y ayudarla personalmente.\n## ESCENARIO 6: La usuaria pregunta sobre cómo cancelar la suscripción:\n1. Responde que puede cancelar en cualquier momento de forma muy sencilla escribiendo la palabra \"cancelar\".\n2. Termina con una frase de cierre breve y amable.\n## ESCENARIO 7: El mensaje de la usuaria es un comentario suelto, saludo o duda general no contemplada:\n1. Responde de forma muy breve (1 frase) manteniendo la calidez.\n2. Recuerda amablemente que el enlace de pago sigue disponible si decide completar su inscripción.\n# Restricciones Generales (Obligatorias)\n- **Uso de Emojis**: Utiliza un máximo de 1 o 2 emojis amigables por mensaje completo para mantener el tono humano y cercano (ej. 😊, ✨, 👍). No satures el texto.\n- **Longitud**: El mensaje debe ser breve, directo, natural y adaptado para WhatsApp (máximo 3 o 4 frases cortas en total).\n- **Tono**: Sé servicial y empática. **No uses lenguaje técnico**.\n- **Privacidad**: **No pidas ni solicita** nombre, correo electrónico, teléfono ni ningún dato personal.\n- **Transparencia**: **No menciones** inteligencia artificial, prompts, agentes, bots, flujos internos ni herramientas técnicas.\n- **Seguridad**: **No proporciones** asesoramiento médico ni recomendaciones sobre medicamentos.\n# Formato de Salida\n- Devuelve **únicamente** el mensaje de texto final que se enviará a la usuaria por WhatsApp.\n- Respeta los saltos de línea para que el formato luzca limpio en WhatsApp.\n- No incluyas explicaciones adicionales, introducciones de formato ni estructura JSON.\n`.trim();\n\nreturn [{\n  json: {\n    chatInput: userMessage,\n    onboarding_state: 'payment_pending',\n    prompt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        1216
+      ],
+      "id": "a6071772-d53b-4323-b538-d5e8a41faab9",
+      "name": "Build Payment Pending Response Prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "const userMessage =\n  $('Set Session Id').item.json.chatInput?.trim() || '';\n\nconst prompt = `\n# Rol e Identidad\nEres la nutricionista de Dietavity. Te inspiras en los hábitos de bienestar y nutrición de países con alta longevidad (Japón, Italia, España y Noruega), pero también utilizas recomendaciones generales de alimentación saludable cuando sea apropiado.\nTu personalidad es cálida, clara, empática y cercana.\n# Información de Dietavity\nDietavity es un sistema de nutrición basado en hábitos duraderos y sencillos, inspirados en países con alta longevidad.\n- Incluye:\n - App Web: Planes de alimentación de 7 días, sencillos, actualizados automáticamente cada semana. El plan inicia el día de la suscripción. La App Web es muy sencilla de usar. \n - WhatsApp: Ideas de comidas, recetas prácticas, opciones en restaurantes, consejos de estilo de vida (sueño, hidratación) y ajustes según preferencias.\n- Precio:\n - El precio de la suscripción es **$99 MXN al mes** \n - El pago es seguro con tarjeta de crédito y débito a través de Stripe, una de las plataformas de pago más utilizadas del mundo.\n - No aceptamos PayPal ni OXXO.\n- Cancelación: \n - Sencilla, enviando la palabra **cancelar**.\n# Contexto de la Conversación\nEtapa del proceso: La usuaria ya conoce Dietavity, no reinicies el proceso de venta.\n- La usuaria ya recibió la pregunta: \"¿Quieres suscribirte ahora por $99 MXN al mes?\" \n- Pero no respondió con una afirmación directa.\n- Mensaje de la usuaria: \"${userMessage}\"\n# Objetivo principal\nResponder al mensaje de la usuaria sin reiniciar el proceso de venta.\n# Árbol de Decisión\n## ESCENARIO 1: La usuaria rechazó claramente la suscripción:\n1. Responde con una despedida breve y amable.\n2. No intentes convencerla nuevamente.\n3. No ofrezcas el enlace para suscripción.\n## ESCENARIO 2: La usuaria rechazó la suscripción pero manifiesta la posibilidad de suscribirse más adelante.\n1. Responde dejando la puerta abierta para que la usuaria regrese.\n2. Despidete breve y amablemente.\n3. No intentes convencerla nuevamente.\n4. No ofrezcas el enlace para suscripción.\n## ESCENARIO 3: El mensaje de la usuaria es una pregunta, comentario o expresa una duda no relacionada con Dietavity:\n1. Responde brevemente.\n2. Termina el mensaje con una despedida amable.\n3. No ofrezcas el enlace para suscripción.\n*Ejemplo:* \"¡Entendido! Si tienes alguna otra duda sobre alimentación o decides unirte a Dietavity más adelante, aquí estaré. ¡Que tengas un excelente día!\"\n# Restricciones Generales (Obligatorias)\n- **Longitud del texto**: El texto debe ser breve, natural y adaptado para WhatsApp.\n- **Tono**: No des explicaciones nutricionales largas. **No uses lenguaje técnico**.\n- **Privacidad**: **No pidas ni solicites** nombre, correo electrónico, teléfono ni ningún dato personal.\n- **Transparencia**: **No menciones** inteligencia artificial, prompts, agentes, bots, flujos internos ni herramientas técnicas.\n- **Seguridad**: **No proporciones** asesoramiento médico ni recomendaciones sobre medicamentos.\n# Formato de Salida\n- Devuelve **únicamente** el mensaje de texto final que se enviará a la usuaria por WhatsApp.\n- Respeta los saltos de línea para que el formato luzca limpio en WhatsApp.\n- No incluyas explicaciones adicionales, introducciones de formato ni estructura JSON.\n`.trim();\n\nreturn [{\n  json: {\n    chatInput: userMessage,\n    prompt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        1680
+      ],
+      "id": "c667ab99-a43c-48b6-affc-fcae366d03b4",
+      "name": "Build Subscription Decision Response Prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "const userMessage =\n  $('Set Session Id').item.json.chatInput?.trim() || '';\n\nconst prompt = `\n# Rol e Identidad\nEres la nutricionista de Dietavity. Te inspiras en los hábitos de bienestar y nutrición de países con alta longevidad (Japón, Italia, España y Noruega), pero también utilizas recomendaciones generales de alimentación saludable cuando sea apropiado.\nTu personalidad es cálida, clara, empática y cercana.\n# Información de Dietavity\nDietavity es un sistema de nutrición basado en hábitos duraderos y sencillos, inspirados en países con alta longevidad.\n- Incluye:\n - App Web: Planes de alimentación de 7 días, sencillos, actualizados automáticamente cada semana. El plan inicia el día de la suscripción. La App Web es muy sencilla de usar. \n - WhatsApp: Ideas de comidas, recetas prácticas, opciones en restaurantes, consejos de estilo de vida (sueño, hidratación) y ajustes según preferencias.\n- Precio:\n - El precio de la suscripción es **$99 MXN al mes** \n - El pago es seguro con tarjeta de crédito y débito a través de Stripe, una de las plataformas de pago más utilizadas del mundo.\n - No aceptamos PayPal ni OXXO.\n- Cancelación: \n - Sencilla, enviando la palabra **cancelar**.\n# Contexto de la Conversación\n- Etapa del proceso: Esta es la PRIMERA interacción de esta usuaria contigo.\n- Mensaje de la usuaria: \"${userMessage}\"\n# Objetivo principal\nDar una bienvenida cálida, explicar en una o dos frases lo que ofrecemos en Dietavity y generar un plan de alimentación de 1 día.\n# Árbol de Decisión\n## ESCENARIO 1: La usuaria saluda, pide información o pregunta sobre el funcionamiento de Dietavity:\n1. Da una bienvenida cálida usando un emoji inicial (ej. 👋 o ✨) y explica en una frase qué es Dietavity (Ver ejemplo).\n2. Genera un plan de alimentación de 1 día (desayuno, comida, cena y un snack).\n   - Usa comidas sencillas y fáciles de encontrar en México y Latinoamérica.\n   - Evita ingredientes raros o complicados.\n   - **Formato estricto**: Mantén cada comida en una sola línea de texto, sin recetas, cantidades ni pasos. Antepone únicamente el emoji funcional correspondiente:\n     🌅 Desayuno: [comida]\n     ☀️ Comida: [comida]\n     🌙 Cena: [comida]\n     🍎 Snack: [comida]\n3. Cierra con una pregunta corta para saber si quiere conocer más sobre Dietavity.\n*Ejemplo de introducción:* \"¡Hola! 👋 En Dietavity te digo exactamente qué comer cada día para sentirte mejor, basado en hábitos de países como Japón e Italia. Mira este ejemplo de plan de un día:\"\n## ESCENARIO 2: La usuaria pregunta por precio, métodos de pago o cancelación:\n1. Da la bienvenida y responde directamente su duda usando los datos de la sección \"Información de Dietavity\".\n2. Explica brevemente en una 1 frase que ofrecemos planes de 7 días basados en países de alta longevidad.\n3. Muestra un ejemplo rápido de alimentación (1 o 2 comidas en una sola línea).\n4. Cierra preguntando si quiere conocer más sobre Dietavity.\n## ESCENARIO 3: La usuaria hace una pregunta no relacionada con Dietavity:\n1. Da la bienvenida.\n2. Responde brevemente a su duda en 1 o 2 frases.\n3. Cierra preguntando si le gustaría conocer más sobre Dietavity.\n# Restricciones Generales (Obligatorias)\n- **Uso de Emojis**: Utiliza emojis únicamente como viñetas organizadoras o saludos iniciales. Máximo 4-5 emojis por mensaje completo. No satures el texto.\n- **Longitud del texto explicativo**: El texto introductorio y de cierre debe ser breve, natural y adaptado para WhatsApp (máximo 4 frases en total, excluyendo el menú de comida).\n- **Tono**: No des explicaciones nutricionales largas. **No uses lenguaje técnico**.\n- **Privacidad**: **No pidas ni solicites** nombre, correo electrónico, teléfono ni ningún dato personal.\n- **Transparencia**: **No menciones** inteligencia artificial, prompts, agentes, bots, flujos internos ni herramientas técnicas.\n- **Seguridad**: **No proporciones** asesoramiento médico ni recomendaciones sobre medicamentos.\n# Formato de Salida\n- Devuelve **únicamente** el mensaje de texto final que se enviará a la usuaria por WhatsApp.\n- Respeta los saltos de línea para que el formato luzca limpio en WhatsApp.\n- No incluyas explicaciones adicionales, introducciones de formato ni estructura JSON.\n`.trim();\n\nreturn [{\n  json: {\n    chatInput: userMessage,\n    onboarding_state: 'lead',\n    prompt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -672,
+        2592
+      ],
+      "id": "208a6050-8c0a-4859-b1fd-e074bdcda667",
+      "name": "Build Welcome Prompt"
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $('Incoming Message').item.json.data.from.replace(\"whatsapp:\", \"\").replace(/\\s+/g, \"\").trim() }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        1616
+      ],
+      "id": "2cb04e4d-1f02-40dd-a511-5d4a2752a3da",
+      "name": "Respond to Chat",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "reasoningEffort": "low"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1296,
+        1808
+      ],
+      "id": "050b059f-2ef7-4c16-971b-1493d3cd02d7",
+      "name": "Onboarding Agent",
+      "credentials": {
+        "openAiApi": {
+          "id": "cNVYcOYj3kngOsrM",
+          "name": "Onboarding Agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d85f423d-1146-4e72-a256-aad9ee49b804",
+              "name": "output",
+              "value": "={{ $('If CTA Sent and not Ask Subscription').item.json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2144,
+        1424
+      ],
+      "id": "9a189dee-3171-46e4-8e80-26aa87a9e198",
+      "name": "Set Message to Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw =\n  $('Incoming Message').item.json.data.body ?? '';\n\nconst text = raw\n  .trim()\n  .toLowerCase()\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[.!?,¡¿]+$/g, '')\n  .replace(/\\s+/g, ' ');\n\nconst hasQuestion =\n  raw.includes('?') ||\n  raw.includes('¿');\n\nconst negativePatterns = [\n\n  /^no$/,\n  /^no gracias$/,\n  /^gracias pero no$/,\n  /^ahora no$/,\n  /^por ahora no$/,\n  /^no por ahora$/,\n  /^tal vez despues$/,\n  /^tal vez después$/,\n  /^quiz[aá] despues$/,\n  /^quiz[aá] después$/,\n  /^en otro momento$/,\n  /^no me interesa$/,\n  /^prefiero que no$/,\n  /^no quiero$/,\n  /^paso$/,\n  /^dejemoslo asi$/,\n  /^dejémoslo así$/,\n  /^no,? gracias$/,\n\n];\n\nconst isNegative =\n  !hasQuestion &&\n  negativePatterns.some(pattern => pattern.test(text));\n\nreturn [{\n  json: {\n    chatInput: raw.trim(),\n    isNegative\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1360,
+        1888
+      ],
+      "id": "a80ecfd6-7ace-4361-a747-a5db51d99565",
+      "name": "Detect Negative"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw =\n  $('Incoming Message').item.json.data.body ?? '';\n\nconst text = raw\n  .trim()\n  .toLowerCase()\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .replace(/[.!?,¡¿]+$/g, '')\n  .replace(/\\s+/g, ' ');\n\nconst isAffirmative =\n\n  // sí, sii, siii...\n  /^si+$/.test(text) ||\n\n  // sip, sipi, sipii\n  /^sipi*$/.test(text) ||\n\n  [\n\n    /^claro$/,\n    /^por supuesto$/,\n    /^ok$/,\n    /^okay$/,\n    /^vale$/,\n    /^va$/,\n    /^perfecto$/,\n    /^excelente$/,\n    /^genial$/,\n    /^quiero$/,\n    /^quiero suscribirme$/,\n    /^me interesa$/,\n    /^adelante$/,\n    /^vamos$/,\n    /^hagamoslo$/,\n    /^acepto$/,\n    /^confirmo$/,\n    /^comenzar$/,\n    /^empezar$/,\n    /^activar$/,\n    /^listo$/,\n    /^dale$/,\n    /^sale$/,\n\n  ].some(pattern => pattern.test(text));\n\nreturn [{\n  json: {\n    chatInput: raw.trim(),\n    isAffirmative\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        1520
+      ],
+      "id": "33723da1-3bbf-40f3-b8d5-5d6c618bd211",
+      "name": "Detect Affirmative"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "161c9bad-03e9-452d-bc38-a1856bb74cb0",
+              "leftValue": "={{ $json.isAffirmative }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -848,
+        1520
+      ],
+      "id": "13ac29df-e73a-4900-ad32-6a5b1d8ddaa8",
+      "name": "Is Affirmative"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "161c9bad-03e9-452d-bc38-a1856bb74cb0",
+              "leftValue": "={{ $json.isNegative }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1104,
+        2112
+      ],
+      "id": "1d8d8f61-5e4d-4f40-8e86-4aafc967aa11",
+      "name": "If Negative"
+    },
+    {
+      "parameters": {
+        "jsCode": "const userMessage =\n  $('Set Session Id').item.json.chatInput?.trim() || '';\n\nconst prompt = `\n# Rol e Identidad\nEres la nutricionista de Dietavity. Te inspiras en los hábitos de bienestar y nutrición de países con alta longevidad (Japón, Italia, España y Noruega), pero también utilizas recomendaciones generales de alimentación saludable cuando sea apropiado.\nTu personalidad es cálida, clara, empática y cercana.\n# Contexto de la Conversación\n- Etapa del proceso: Diste la bienvenida a una nueva usuaria y preguntaste si quería conocer más sobre Dietavity.\n- La usuaria respondió negativamente.\n- Mensaje de la usuaria: \"${userMessage}\"\n\n# Objetivo principal\nDespedirte amablemente y dejar la puerta abierta para futuras conversaciones.\n\n# Árbol de Decisión\n## ESCENARIO ÚNICO: La usuaria no tiene interés en saber más de Dietavity. \n1. Despídete amablemente en una o dos frases.\n2. No intentes convencerla ni tampoco hagas más preguntas.\n*Ejemplo de despedida:* \"¡No hay problema! 😊 Cuando quieras conocer más o necesites ayuda para mejorar tu alimentación, aquí estaré. ¡Que tengas un excelente día!\"\n\n# Restricciones Generales (Obligatorias)\n- **Uso de Emojis**: Máximo 1 emoji por mensaje completo.\n- **Longitud del texto explicativo**: El texto debe ser breve, natural y adaptado para WhatsApp.\n- **Tono**: No des explicaciones nutricionales largas. **No uses lenguaje técnico**.\n- **Privacidad**: **No pidas ni solicites** nombre, correo electrónico, teléfono ni ningún dato personal.\n- **Transparencia**: **No menciones** inteligencia artificial, prompts, agentes, bots, flujos internos ni herramientas técnicas.\n- **Seguridad**: **No proporciones** asesoramiento médico ni recomendaciones sobre medicamentos.\n\n# Formato de Salida\n- Devuelve **únicamente** el mensaje de texto final que se enviará a la usuaria por WhatsApp.\n- Respeta los saltos de línea para que el formato luzca limpio en WhatsApp.\n- No incluyas explicaciones adicionales, introducciones de formato ni estructura JSON.\n`.trim();\n\nreturn [{\n  json: {\n    chatInput: userMessage,\n    prompt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        1984
+      ],
+      "id": "9b1e709c-887a-47d8-a7f6-914effbe95f9",
+      "name": "Build Welcome Farewell Prompt"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "687edd34-932b-4339-980f-fef0e665e811",
+              "leftValue": "={{ ($('Onboarding Manager').item.json.output ?? '').includes('¿Quieres suscribirte ahora por $99 MXN al mes?') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "656b43a0-e919-40ba-ab46-28a20829caee",
+              "leftValue": "{{ $('Get Onboarding Session').item.json.onboarding_state !== 'ask_subscription' }}",
+              "rightValue": "ask_subscription",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1664,
+        1600
+      ],
+      "id": "21ec9da6-b05e-4d91-be1c-120c36f8ddc6",
+      "name": "If CTA Sent and not Ask Subscription"
+    },
+    {
+      "parameters": {
+        "content": "#Change Production URL !!!\n\nThe path is:\n\n/regenerate-meal\n",
+        "height": 864,
+        "width": 560,
+        "color": "#BD1918"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        4080,
+        -832
+      ],
+      "typeVersion": 1,
+      "id": "d3194f46-df52-4800-9506-d6beebdd3d8b",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a7b29d63-5ce0-49c8-8d76-cd306e89c8a1",
+              "leftValue": "={{ $('Get User from Supabase').item.json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3824,
+        -256
+      ],
+      "id": "dc15402a-95fa-483e-a8f5-2377cd66180d",
+      "name": "If Identify User State"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "last_interaction_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1056,
+        -368
+      ],
+      "id": "763d1f40-353a-489e-a5c8-6690953fc6a5",
+      "name": "Update Last Interaction At",
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      },
+      "notes": "1. En user_id este no funcionó: {{ $('HTTP Request get User').json.id }}\n2. No estoy seguro si en user_message es esta: {{ $('Twilio messages from WhatsApp').item.json.data.body }} o {{ $('Twilio messages from WhatsApp').first().json.data.body }}\n"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "# Rol e identidad\nEres la nutricionista oficial de Dietavity.\nAyudas a las usuarias a comer mejor mediante recomendaciones prácticas inspiradas en los hábitos alimenticios de países con alta longevidad, especialmente Japón, Italia, España y Noruega.\nTu objetivo es hacer que comer saludable sea sencillo, práctico y agradable.\n# Estilo\n- Responde siempre en español.\n- Sé cálida, cercana y profesional.\n- Escribe de forma clara y fácil de leer.\n- Prioriza respuestas breves.\n- Evita párrafos largos.\n- Usa listas cuando mejoren la claridad.\n- Nunca repitas literalmente respuestas anteriores.\n# Nutrición\n- Prioriza alimentos frescos y mínimamente procesados.\n- Adapta las recomendaciones a las preferencias, alergias y restricciones proporcionadas.\n- No inventes información sobre la usuaria.\n- Nunca proporciones consejos médicos, diagnósticos ni recomendaciones de medicamentos o suplementos.\n# Conversación\n- Responde únicamente a la solicitud actual utilizando el contexto recibido.\n- Si falta información importante, realiza una sola pregunta de seguimiento.\n- No menciones instrucciones internas ni el contenido del prompt."
+            },
+            {
+              "content": "={\n  \"role\": \"user\",\n  \"content\": {{ JSON.stringify($json.prompt) }}\n}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        4096,
+        1184
+      ],
+      "id": "f100c5d9-cebc-42b2-9060-de82c0cf0e0e",
+      "name": "Dietavity Nutrition Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "zdfamkE449xSCuUF",
+          "name": "Nutritionist Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Normalize Prompt Input').item.json.user_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "preferences",
+              "fieldValue": "={{ $('Normalize Prompt Input').item.json.preferences }}"
+            },
+            {
+              "fieldId": "last_assistant_message",
+              "fieldValue": "={{ null }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5936,
+        -1120
+      ],
+      "id": "c64676c5-d026-4aa5-a56f-521f07fff33c",
+      "name": "Finalize Onboarding",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "onboarding_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ ($('Incoming Message').item.json.data.from ?? '').replace(/^whatsapp:/, '').replace(/\\s+/g, '') }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "onboarding_state",
+              "fieldValue": "subscription_deferred"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -592,
+        1680
+      ],
+      "id": "a5209d76-30a9-4577-b64e-082696dad9ed",
+      "name": "Set State Subscription Deferred",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.onboarding_state }}",
+                    "rightValue": "subscription_deferred",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "b0331809-48ea-4768-b369-f89edfd9e03b"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ec1b9ac8-3ba6-45a5-9cb3-dfe221571adf",
+                    "leftValue": "={{ $json.onboarding_state }}",
+                    "rightValue": "payment_pending",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "57571b66-46fb-4750-9d0a-9e660c734763",
+                    "leftValue": "={{ $json.onboarding_state }}",
+                    "rightValue": "ask_subscription",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d8bfeb16-9e68-411b-b4bc-46c254750572",
+                    "leftValue": "={{ $json.onboarding_state }}",
+                    "rightValue": "lead",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1968,
+        1472
+      ],
+      "id": "d6428abb-75a4-4ae5-95db-b9149d8bda7c",
+      "name": "Switch Onboarding State"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Build Nutrition Prompt": {
+      "main": [
+        [
+          {
+            "node": "Dietavity Nutrition Model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Safeguard": {
+      "main": [
+        [
+          {
+            "node": "Follow Up Detector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unified Merge": {
+      "main": [
+        [
+          {
+            "node": "Safeguard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If JSON Error": {
+      "main": [
+        [
+          {
+            "node": "Error JSON Meal Plan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Portal Token Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User from Supabase": {
+      "main": [
+        [
+          {
+            "node": "Normalize User Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize User Data": {
+      "main": [
+        [
+          {
+            "node": "IF Media Without Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create User Record": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome New User",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Initialize 28-Day Program",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error Creating User Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize 28-Day Program": {
+      "main": [
+        [
+          {
+            "node": "If New 28-Day Program",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If New 28-Day Program": {
+      "main": [
+        [
+          {
+            "node": "Get New Program Week 1 Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get New Program Week 1 Context": {
+      "main": [
+        [
+          {
+            "node": "Build Weekly Update Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Intent and Entities": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON Intent and Entities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Assistant Response": {
+      "main": [
+        [
+          {
+            "node": "Create Outbound Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON Meal Plan": {
+      "main": [
+        [
+          {
+            "node": "If JSON Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error JSON Meal Plan": {
+      "main": [
+        [
+          {
+            "node": "Send Error Notification Meal Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Outbound Message": {
+      "main": [
+        [
+          {
+            "node": "Send All Intents Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Inbound Message ": {
+      "main": [
+        []
+      ]
+    },
+    "Unsubscribe Agent": {
+      "main": [
+        [
+          {
+            "node": "Extract Next Action Unsubscribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsubscribe User Message": {
+      "main": [
+        [
+          {
+            "node": "Unsubscribe Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Next Action Unsubscribe": {
+      "main": [
+        [
+          {
+            "node": "Stripe Cancel a Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Last Assistant Message": {
+      "main": [
+        [
+          {
+            "node": "Combined Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow Up Detector": {
+      "main": [
+        [
+          {
+            "node": "Read Last Assistant Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Prompt Input": {
+      "main": [
+        [
+          {
+            "node": "Create Inbound Message ",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch Intents",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Last Interaction At",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Stripe Unsubscribe ": {
+      "main": [
+        [
+          {
+            "node": "Create Unsubscribe Metrics Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Unsubscribe Delay Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete User": {
+      "main": [
+        [
+          {
+            "node": "Send Unsubscribe Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Unsubscribe Metrics Row": {
+      "main": [
+        [
+          {
+            "node": "Delete User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Metadata": {
+      "main": [
+        [
+          {
+            "node": "Create User Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Intents": {
+      "main": [
+        [
+          {
+            "node": "Unsubscribe User Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If UpdateNeeded Meal Plan",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Meal Plan Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Ask Name",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Nutrition Prompt",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If updateNeeded all Other Intents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combined Object": {
+      "main": [
+        [
+          {
+            "node": "Normalize Prompt Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Meal Plan Prompt": {
+      "main": [
+        [
+          {
+            "node": "Meal Plan Chat Completions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON Intent and Entities": {
+      "main": [
+        [
+          {
+            "node": "Unified Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Meal Plan": {
+      "main": [
+        [
+          {
+            "node": "Send Meal Plan Link",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error Meal Plan Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meal Plan Chat Completions": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON Meal Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meal Plan Swap Chat Completions": {
+      "main": [
+        [
+          {
+            "node": "Parse Regenerated Meal JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Preference Update Response": {
+      "main": [
+        [
+          {
+            "node": "Send Update Preferences Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update User Preference Meal Plan": {
+      "main": [
+        []
+      ]
+    },
+    "If UpdateNeeded Meal Plan": {
+      "main": [
+        [
+          {
+            "node": "Update User Preference Meal Plan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If updateNeeded General": {
+      "main": [
+        [
+          {
+            "node": "Persist Preference General",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Preference Update Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Nutrition Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If updateNeeded all Other Intents": {
+      "main": [
+        [
+          {
+            "node": "Update User Preference all Other Intents",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Update User Preference all Other Intents": {
+      "main": [
+        []
+      ]
+    },
+    "If Ask Name": {
+      "main": [
+        [
+          {
+            "node": "If User Name",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Ask Diet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update User Name": {
+      "main": [
+        [
+          {
+            "node": "Send Ask Diet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If User Name": {
+      "main": [
+        [
+          {
+            "node": "Update User Name",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Ask Name Again",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Preference General": {
+      "main": [
+        []
+      ]
+    },
+    "If Ask Diet": {
+      "main": [
+        [
+          {
+            "node": "Build Meal Plan Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If updateNeeded General",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model Unsubscribe": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Unsubscribe Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Stripe Checkout": {
+      "main": [
+        [
+          {
+            "node": "Extract Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incoming Message": {
+      "main": [
+        [
+          {
+            "node": "Get User from Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Meal Plan Link": {
+      "main": [
+        [
+          {
+            "node": "Finalize Onboarding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send All Intents Message": {
+      "main": [
+        [
+          {
+            "node": "Update Last Assistant Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Ask Diet": {
+      "main": [
+        [
+          {
+            "node": "Update User Ask Diet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome New User": {
+      "main": [
+        [
+          {
+            "node": "Update User Ask Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Media Without Text": {
+      "main": [
+        [
+          {
+            "node": "Prepare Log Data Message Without Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Identify User State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Message Asking for Text": {
+      "main": [
+        [
+          {
+            "node": "Update Log Message Without Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Log Data Message Without Text": {
+      "main": [
+        [
+          {
+            "node": "Send Message Asking for Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Portal Token Link": {
+      "main": [
+        [
+          {
+            "node": "Create Meal Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meal Regeneration Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Regeneration Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Regeneration Prompt": {
+      "main": [
+        [
+          {
+            "node": "Meal Plan Swap Chat Completions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Regenerated Meal JSON": {
+      "main": [
+        [
+          {
+            "node": "Respond to Meal Regeneration Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did Parse Fail": {
+      "main": [
+        [
+          {
+            "node": "Insert Into Logs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Attach Program Week Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Update Trigger": {
+      "main": [
+        [
+          {
+            "node": "Weekly Update SQL Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Update SQL Query": {
+      "main": [
+        [
+          {
+            "node": "Weekly Update Batch Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Update Batch Loop": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Build Weekly Update Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Weekly Update Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Weekly Meal Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Weekly Meal Plan": {
+      "main": [
+        [
+          {
+            "node": "Parse Meal Plan JSON Weekly Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Meal Plan JSON Weekly Update": {
+      "main": [
+        [
+          {
+            "node": "Did Parse Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Into Logs": {
+      "main": [
+        [
+          {
+            "node": "Weekly Update Batch Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Weekly Meal Plan Insert": {
+      "main": [
+        [
+          {
+            "node": "Insert Weekly Update Meal Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Program Week Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Weekly Meal Plan Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Weekly Update Meal Plan": {
+      "main": [
+        [
+          {
+            "node": "If Meal Plan Belongs to Program Week",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Meal Plan Belongs to Program Week": {
+      "main": [
+        [
+          {
+            "node": "Activate New Program Week 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Weekly Update Batch Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe Cancel a Subscription": {
+      "main": [
+        [
+          {
+            "node": "If Stripe Unsubscribe ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Intent Agent": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Detect Intent and Entities",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message with Stripe Payment URL": {
+      "main": [
+        [
+          {
+            "node": "Respond to Chat Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Onboarding Manager",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Onboarding Manager": {
+      "main": [
+        [
+          {
+            "node": "If CTA Sent and not Ask Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Session Id": {
+      "main": [
+        [
+          {
+            "node": "Get Onboarding Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add whatsapp_id": {
+      "main": [
+        [
+          {
+            "node": "LIVE Stripe Checkout Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Chat Subscription": {
+      "main": [
+        [
+          {
+            "node": "Set Payment Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LIVE Stripe Checkout Session": {
+      "main": [
+        [
+          {
+            "node": "Message with Stripe Payment URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Onboarding Session": {
+      "main": [
+        [
+          {
+            "node": "If Existing Onboarding Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Onboarding Session": {
+      "main": [
+        [
+          {
+            "node": "Build Welcome Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Existing Onboarding Session": {
+      "main": [
+        [
+          {
+            "node": "Switch Onboarding State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Onboarding Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Pitch Prompt": {
+      "main": [
+        [
+          {
+            "node": "Onboarding Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set State Ask Subscription": {
+      "main": [
+        [
+          {
+            "node": "Set Message to Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Thank You": {
+      "main": [
+        [
+          {
+            "node": "If Thank You",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Thank You": {
+      "main": [
+        [
+          {
+            "node": "Build Short Closing Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Payment Pending Response Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Short Closing Prompt": {
+      "main": [
+        [
+          {
+            "node": "Onboarding Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Payment Pending Response Prompt": {
+      "main": [
+        [
+          {
+            "node": "Onboarding Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Subscription Decision Response Prompt": {
+      "main": [
+        [
+          {
+            "node": "Onboarding Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Welcome Prompt": {
+      "main": [
+        [
+          {
+            "node": "Onboarding Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Onboarding Agent": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Onboarding Manager",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Message to Output": {
+      "main": [
+        [
+          {
+            "node": "Respond to Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Negative": {
+      "main": [
+        [
+          {
+            "node": "If Negative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Affirmative": {
+      "main": [
+        [
+          {
+            "node": "Is Affirmative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Affirmative": {
+      "main": [
+        [
+          {
+            "node": "Add whatsapp_id",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set State Subscription Deferred",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Negative": {
+      "main": [
+        [
+          {
+            "node": "Build Welcome Farewell Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Pitch Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Welcome Farewell Prompt": {
+      "main": [
+        [
+          {
+            "node": "Onboarding Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If CTA Sent and not Ask Subscription": {
+      "main": [
+        [
+          {
+            "node": "Set State Ask Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Identify User State": {
+      "main": [
+        [
+          {
+            "node": "Detect Intent and Entities",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Session Id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dietavity Nutrition Model": {
+      "main": [
+        [
+          {
+            "node": "Parse Assistant Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set State Subscription Deferred": {
+      "main": [
+        [
+          {
+            "node": "Build Subscription Decision Response Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Onboarding State": {
+      "main": [
+        [
+          {
+            "node": "Build Short Closing Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Detect Thank You",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Detect Affirmative",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Detect Negative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "America/Mexico_City",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "sa10JQEAbxNYvCGG",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed"
+  },
+  "versionId": "78d72ea1-14ed-43b4-bbbb-87e8514ad686",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2edd72e6d5781df09a60b65fd523f4841afca081863c21ef852a5bbcd21fdca1"
+  },
+  "nodeGroups": [],
+  "id": "3QzgFC2kYGBiLJyl",
+  "tags": []
+}

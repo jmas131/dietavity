@@ -1,0 +1,27 @@
+{
+  "canonical_changed_nodes": [
+    "Apply Deterministic Commercial Policy",
+    "Build Constrained Sales Response",
+    "Validate Sales Response Contract"
+  ],
+  "canonical_graph_unchanged": true,
+  "commercial_policy_source_unchanged": true,
+  "recovery_poller_unchanged": true,
+  "canonical_artifact_sha256": "a5ec6fb66e980e520280e58839a4374dc4fd6ae0c61967b464f924c90e11e515",
+  "artifacts": [
+    {
+      "name": "Dietavity Sales Engine (Ticket 10).json",
+      "active": false
+    },
+    {
+      "name": "Dietavity Sales Conversation Test Harness (Ticket 41A).json",
+      "active": false
+    },
+    {
+      "name": "Dietavity Autonomous Conversation Harness (Ticket 48).json",
+      "active": false
+    }
+  ],
+  "migrations_added": 0,
+  "production_operations_performed": 0
+}

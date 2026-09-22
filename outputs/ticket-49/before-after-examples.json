@@ -1,0 +1,256 @@
+[
+  {
+    "case": "A",
+    "source": "Sanitized semantic equivalent; original run 37748 transcript was not supplied",
+    "customer_message": "¿Es en línea o presencial? ¿Quién crea el plan y cómo lo personalizan? ¿Hay prueba o promoción?",
+    "generated_response": "El servicio es digital, por portal y WhatsApp. El programa se arma con inteligencia artificial, no lo elabora individualmente un nutriólogo humano. La personalización considera estilo de alimentación, alergias y alimentos a evitar después del pago. No tengo una prueba o promoción confirmada.",
+    "before": "Dietavity es un servicio digital 😊 El programa se consulta en nuestro portal y el apoyo durante el programa es por WhatsApp.",
+    "after": {
+      "buyer_signal": "question",
+      "material_question": true,
+      "topic": "business_location",
+      "goal": null,
+      "strategy": "answer_question",
+      "pending_action": "respond",
+      "conversation_stage": "evaluating",
+      "checkout_authorized": false,
+      "checkout_authorization_type": null,
+      "reminder_scheduled_for": null,
+      "next_last_question_type": null,
+      "allow_purchase_cta": false,
+      "max_questions": 1,
+      "events": [
+        "meaningful_engagement"
+      ],
+      "offer_version": "28d-149-v1",
+      "interpretation_valid": true,
+      "session_id": "ticket49:reproduction",
+      "output": "1. Dietavity es un servicio digital 😊 El programa se consulta en nuestro portal y el apoyo durante el programa es por WhatsApp.\n\n2. Dietavity usa inteligencia artificial y principios generales de alimentación. Un nutriólogo humano no elabora individualmente cada programa; no ofrecemos atención médica.\n\n3. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n4. No tengo una prueba gratuita, promoción o descuento confirmado para ofrecerte.",
+      "fallback_identity": "multi_topic:canonical_facts",
+      "explicit_current_questions_present": true,
+      "explicit_current_question_topics": [
+        "business_location",
+        "credentials",
+        "personalization",
+        "trial_promotion"
+      ],
+      "multi_topic_turn": true,
+      "generated_answer_coverage": {
+        "covered_topics": [
+          "business_location",
+          "credentials",
+          "personalization",
+          "trial_promotion"
+        ],
+        "missing_topics": [],
+        "covered_count": 4,
+        "requested_count": 4
+      },
+      "final_answer_coverage": {
+        "covered_topics": [
+          "business_location",
+          "credentials",
+          "personalization",
+          "trial_promotion"
+        ],
+        "missing_topics": [],
+        "covered_count": 4,
+        "requested_count": 4
+      },
+      "coverage_warnings": []
+    }
+  },
+  {
+    "case": "B",
+    "source": "Sanitized semantic equivalent; original run 37748 transcript was not supplied",
+    "customer_message": "¿Lo hace un nutriólogo humano o IA? ¿Respetan alergias y preferencias? ¿Hay prueba o promoción, qué métodos de pago aceptan, hacen reembolso y qué apoyo dan por WhatsApp?",
+    "generated_response": "Usamos inteligencia artificial; un nutriólogo humano no elabora cada programa. Se consideran alergias y alimentos a evitar. No tengo promociones confirmadas. Puedes pagar con tarjeta, OXXO o Apple Pay. No tengo una política pública de reembolso aprobada. Por WhatsApp puedes pedir recetas e ideas. Ajustamos las porciones para ti.",
+    "before": "No pude responder esa pregunta con certeza. Escríbenos a soporte@dietavity.com para confirmarla.",
+    "after": {
+      "buyer_signal": "question",
+      "material_question": true,
+      "topic": "credentials",
+      "goal": null,
+      "strategy": "answer_question",
+      "pending_action": "respond",
+      "conversation_stage": "evaluating",
+      "checkout_authorized": false,
+      "checkout_authorization_type": null,
+      "reminder_scheduled_for": null,
+      "next_last_question_type": null,
+      "allow_purchase_cta": false,
+      "max_questions": 1,
+      "events": [
+        "meaningful_engagement"
+      ],
+      "offer_version": "28d-149-v1",
+      "interpretation_valid": true,
+      "session_id": "ticket49:reproduction",
+      "output": "1. Dietavity usa inteligencia artificial y principios generales de alimentación. Un nutriólogo humano no elabora individualmente cada programa; no ofrecemos atención médica.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. No tengo una prueba gratuita, promoción o descuento confirmado para ofrecerte.\n\n4. Sí, aceptamos pagos en OXXO. También puedes pagar con tarjeta de crédito, tarjeta de débito y Apple Pay. Para OXXO, se selecciona esa opción en el pago seguro y se siguen las indicaciones que aparecen ahí.\n\n5. No hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\n6. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.",
+      "fallback_identity": "multi_topic:canonical_facts",
+      "explicit_current_questions_present": true,
+      "explicit_current_question_topics": [
+        "credentials",
+        "personalization",
+        "trial_promotion",
+        "payment_methods",
+        "refund",
+        "WhatsApp_assistance"
+      ],
+      "multi_topic_turn": true,
+      "generated_answer_coverage": {
+        "covered_topics": [
+          "credentials",
+          "personalization",
+          "trial_promotion",
+          "payment_methods",
+          "refund",
+          "WhatsApp_assistance"
+        ],
+        "missing_topics": [],
+        "covered_count": 6,
+        "requested_count": 6
+      },
+      "final_answer_coverage": {
+        "covered_topics": [
+          "credentials",
+          "personalization",
+          "trial_promotion",
+          "payment_methods",
+          "refund",
+          "WhatsApp_assistance"
+        ],
+        "missing_topics": [],
+        "covered_count": 6,
+        "requested_count": 6
+      },
+      "coverage_warnings": []
+    }
+  },
+  {
+    "case": "C",
+    "source": "Sanitized semantic equivalent; original run 37748 transcript was not supplied",
+    "customer_message": "Contesta punto por punto: 1) ¿Qué incluye? 2) ¿Quién arma el menú? 3) ¿Cómo lo personalizan para alergias? 4) ¿Hay una prueba?",
+    "generated_response": "1) ¿Qué incluye? Incluye desayuno, comida, cena y snack durante 28 días. 2) ¿Quién lo arma? Usamos inteligencia artificial; no lo elabora individualmente un nutriólogo humano. 3) ¿Personalización? Considera estilo de alimentación, alergias y alimentos a evitar. 4) ¿Prueba? No tengo una prueba gratuita o promoción confirmada.",
+    "before": "Incluye 28 días personalizados con desayuno, comida, cena y snack, acceso por el portal Dietavity y ayuda bajo demanda por WhatsApp durante el programa. Después del pago completas tu personalización.",
+    "after": {
+      "buyer_signal": "question",
+      "material_question": true,
+      "topic": "what_is_included",
+      "goal": null,
+      "strategy": "answer_question",
+      "pending_action": "respond",
+      "conversation_stage": "evaluating",
+      "checkout_authorized": false,
+      "checkout_authorization_type": null,
+      "reminder_scheduled_for": null,
+      "next_last_question_type": null,
+      "allow_purchase_cta": false,
+      "max_questions": 1,
+      "events": [
+        "meaningful_engagement"
+      ],
+      "offer_version": "28d-149-v1",
+      "interpretation_valid": true,
+      "session_id": "ticket49:reproduction",
+      "output": "1. Incluye desayuno, comida, cena y snack durante 28 días, acceso al portal y apoyo bajo demanda por WhatsApp.\n\n2. Dietavity usa inteligencia artificial y principios generales de alimentación. Un nutriólogo humano no elabora individualmente cada programa; no ofrecemos atención médica.\n\n3. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n4. No tengo una prueba gratuita, promoción o descuento confirmado para ofrecerte.",
+      "fallback_identity": "multi_topic:canonical_facts",
+      "explicit_current_questions_present": true,
+      "explicit_current_question_topics": [
+        "what_is_included",
+        "credentials",
+        "personalization",
+        "trial_promotion"
+      ],
+      "multi_topic_turn": true,
+      "generated_answer_coverage": {
+        "covered_topics": [
+          "what_is_included",
+          "credentials",
+          "personalization",
+          "trial_promotion"
+        ],
+        "missing_topics": [],
+        "covered_count": 4,
+        "requested_count": 4
+      },
+      "final_answer_coverage": {
+        "covered_topics": [
+          "what_is_included",
+          "credentials",
+          "personalization",
+          "trial_promotion"
+        ],
+        "missing_topics": [],
+        "covered_count": 4,
+        "requested_count": 4
+      },
+      "coverage_warnings": []
+    }
+  },
+  {
+    "case": "D",
+    "source": "Sanitized semantic equivalent; original run 37748 transcript was not supplied",
+    "customer_message": "¿En qué se basa la personalización? También dime cuánto cuesta, qué pasa con el reembolso y si hay una prueba gratis.",
+    "generated_response": "Respetamos tu estilo de alimentación, alergias y alimentos a evitar. Cuesta $149 MXN en un solo pago. Soporte debe confirmar cualquier reembolso; no hay una política pública aprobada para citar. No tengo una prueba o promoción confirmada. Ajustamos las porciones clínicamente.",
+    "before": "Nos basamos en tu estilo de alimentación, alergias y alimentos a evitar; las condiciones médicas declaradas se consideran como contexto de seguridad, sin ofrecer tratamiento. Compartes esta información después del pago y con tu consentimiento.",
+    "after": {
+      "buyer_signal": "question",
+      "material_question": true,
+      "topic": "personalization",
+      "goal": null,
+      "strategy": "answer_question",
+      "pending_action": "respond",
+      "conversation_stage": "evaluating",
+      "checkout_authorized": false,
+      "checkout_authorization_type": null,
+      "reminder_scheduled_for": null,
+      "next_last_question_type": null,
+      "allow_purchase_cta": false,
+      "max_questions": 1,
+      "events": [
+        "meaningful_engagement"
+      ],
+      "offer_version": "28d-149-v1",
+      "interpretation_valid": true,
+      "session_id": "ticket49:reproduction",
+      "output": "1. Después del pago completas tu personalización y consultas tu programa de 28 días en el portal Dietavity.\n\n2. La personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\n3. El programa personalizado de 28 días cuesta $149 MXN en un solo pago.\n\n4. No hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\n5. No tengo una prueba gratuita, promoción o descuento confirmado para ofrecerte.",
+      "fallback_identity": "multi_topic:canonical_facts",
+      "explicit_current_questions_present": true,
+      "explicit_current_question_topics": [
+        "how_it_works",
+        "personalization",
+        "price",
+        "refund",
+        "trial_promotion"
+      ],
+      "multi_topic_turn": true,
+      "generated_answer_coverage": {
+        "covered_topics": [
+          "personalization",
+          "price",
+          "refund",
+          "trial_promotion"
+        ],
+        "missing_topics": [
+          "how_it_works"
+        ],
+        "covered_count": 4,
+        "requested_count": 5
+      },
+      "final_answer_coverage": {
+        "covered_topics": [
+          "how_it_works",
+          "personalization",
+          "price",
+          "refund",
+          "trial_promotion"
+        ],
+        "missing_topics": [],
+        "covered_count": 5,
+        "requested_count": 5
+      },
+      "coverage_warnings": []
+    }
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "status": "PENDING_ISOLATED_AUTONOMOUS_RUN",
+  "harness": "inactive-f-h-a-harness.json",
+  "active": false,
+  "required_order": [
+    "F",
+    "H",
+    "A"
+  ],
+  "full_eight_scenario_batch": "NOT_RUN: permitted only after fresh F, H and A pass",
+  "recorded_replay_is_autonomous_acceptance": false,
+  "production_deployment": "NOT_AUTHORIZED"
+}

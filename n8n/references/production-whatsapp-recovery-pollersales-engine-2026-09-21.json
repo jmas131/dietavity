@@ -1,0 +1,106 @@
+{
+  "name": "Dietavity WhatsApp Recovery Poller",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        128,
+        80
+      ],
+      "id": "d049acaa-c13b-49f9-b17a-dc707ab31bf8",
+      "name": "Resume Verified WhatsApp Requests",
+      "notes": "Ticket 28A wake-up only. The canonical messages ledger remains the queue and Claim Next Session Inbound preserves Ticket 17 ordering."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT message.session_id\nFROM public.messages AS message\nJOIN public.users AS app_user ON app_user.whatsapp_id = message.session_id\nWHERE message.direction = 'inbound'\n  AND message.processing_order IS NOT NULL\n  AND message.processing_completed_at IS NULL\n  AND message.metadata->>'identity_verification_purpose' = 'link_whatsapp'\n  AND message.metadata->>'identity_verification_state' = 'verified'\nORDER BY message.session_id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        352,
+        80
+      ],
+      "id": "07ab0e00-51f4-4708-8ddc-fda176ce02e1",
+      "name": "Find Verified WhatsApp Sessions",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": "9oRFrbGVuK91LaAD",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        576,
+        80
+      ],
+      "id": "2d88b51e-52af-4c0e-bac8-c9c0aa9298d2",
+      "name": "Execute Dietavity Sales Engine",
+      "notes": "Pass the complete session batch unchanged. Verify the target workflow ID after import; both workflows must have the same owner."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Resume Verified WhatsApp Requests": {
+      "main": [
+        [
+          {
+            "node": "Find Verified WhatsApp Sessions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Verified WhatsApp Sessions": {
+      "main": [
+        [
+          {
+            "node": "Execute Dietavity Sales Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "sa10JQEAbxNYvCGG",
+    "timezone": "America/Mexico_City",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "a2fd7e91-7fe6-4d75-91a3-7c4bf8738143",
+  "meta": {
+    "instanceId": "2edd72e6d5781df09a60b65fd523f4841afca081863c21ef852a5bbcd21fdca1"
+  },
+  "nodeGroups": [],
+  "id": "bRwE1e4WQz17BV6S",
+  "tags": []
+}

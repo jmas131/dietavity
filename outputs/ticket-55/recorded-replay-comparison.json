@@ -1,0 +1,522 @@
+{
+  "validation_mode": "RECORDED_DRAFT_REPLAY_WITH_EXPLICIT_TASK_ANNOTATIONS_NOT_AUTONOMOUS_ACCEPTANCE",
+  "source": {
+    "filename": "three-scenario-test-output-ticket-54.json",
+    "sha256": "60562037be4f27a6f27c95a0ff7aa1a883e732af48f597fc52227ba77ff0e32a"
+  },
+  "current_artifact_sha256": "3bfa4c0eb6e310f748d2946061cf502d0e4f1032b7730c87593f36848ff99a81",
+  "summary": {
+    "recorded_turns": 27,
+    "baseline_exact_matches": 27,
+    "annotated_task_turns": 3,
+    "completed_tasks": 3,
+    "current_execution_failures": 0,
+    "current_assertion_failures": 2
+  },
+  "reports": [
+    {
+      "scenario": "F",
+      "run_id": "39474",
+      "recorded_judge_status": "PASS",
+      "turns": [
+        {
+          "turn": 1,
+          "customer_message": "Hola, busco organizar mejor mis comidas",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "¡Hola! En Dietavity te ayudamos a organizar tus comidas para que no tengas que decidir cada día qué comer: te decimos qué comer durante 28 días con comidas fáciles, familiares y saludables, pensadas para tus objetivos y preferencias. Nuestra propuesta hace práctico el día a día (recetas sencillas y con ingredientes comunes) y personaliza el plan según lo que quieras lograr.\n\n¿Cuál es tu objetivo principal al organizar mejor tus comidas: comer más sano, controlar peso, ahorrar tiempo, mejorar energía u otro?",
+          "recorded_response": "Gracias por compartirlo. En Dietavity podemos orientar tu programa de 28 días hacia ese objetivo con comidas prácticas y variadas.\n¿Quieres que te muestre un ejemplo ilustrativo de cómo podría verse uno de tus días?",
+          "baseline_exact_match": true,
+          "baseline_response": "Gracias por compartirlo. En Dietavity podemos orientar tu programa de 28 días hacia ese objetivo con comidas prácticas y variadas.\n¿Quieres que te muestre un ejemplo ilustrativo de cómo podría verse uno de tus días?",
+          "current_response": "Gracias por compartirlo. En Dietavity podemos orientar tu programa de 28 días hacia ese objetivo con comidas prácticas y variadas.\n¿Quieres que te muestre un ejemplo ilustrativo de cómo podría verse uno de tus días?",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 2,
+          "customer_message": "Sí, muéstrame un ejemplo por favor; prefiero comidas que pueda preparar en 30 min o menos y con opciones de batch cooking, ¿eso es posible?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Perfecto — sí, es posible. Abajo tienes un ejemplo ilustrativo (no personalizado) de un día con recetas que se pueden preparar en 30 min o menos y con opciones para batch cooking.\n\nDesayuno\n- Avena nocturna con yogur natural, plátano en rodajas, 1 cda de semillas de chía y nuez picada. (Preparación: 5 min la noche antes)\n\nComida\n- Bowl de pollo asado con arroz integral, frijoles negros, pico de gallo y hojas verdes. (Si asas 2 pechugas y coces 2 tazas de arroz a la vez, rinde para 3–4 comidas; ensamblas en 10–15 min)\n\nCena\n- Tacos de pescado al sartén con col rallada, salsa de yogurt-lima y tortillas de maíz. (Sofríe filetes 6–8 min; todo listo en ~20 min)\n\nSnack\n- Palitos de zanahoria y pepino con hummus casero o comprado (hummus en 5–10 min si lo haces en batch)\n\nConsejos rápidos de batch cooking\n- Cocina una fuente de proteína (pollo, pescado al horno o frijoles) y un cereal (arroz, quinoa) el fin de semana para combinar durante la semana.\n- Pica verduras y guarda en recipientes herméticos 3–4 días.\n- Prepara salsas y aderezos básicos (yogurt-lima, vinagreta) para dar sabor sin cocinar cada día.\n\n¿Quieres que el ejemplo incluya instrucciones paso a paso y porciones para batch cooking?",
+          "recorded_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «prefiero comidas que pueda preparar en 30 min o menos y con opciones de batch cooking, eso es posible»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «prefiero comidas que pueda preparar en 30 min o menos y con opciones de batch cooking, eso es posible»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 3,
+          "customer_message": "Perfecto, suena bien. ¿Cuántas recetas de batch cooking incluye el programa y cuánto tiempo estiman dedicar por sesión?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "En Dietavity incluimos recetas pensadas para facilitar el batch cooking, pero la cantidad exacta y la duración de cada sesión pueden variar según el diseño final de tu programa y tus preferencias (se completan después de la compra).\n\nComo referencia práctica, en nuestros programas solemos:\n- Ofrecer opciones para hacer entre 1 y 3 sesiones de batch cooking por semana (dependiendo de cuánto quieras cocinar de una vez).\n- Estimar que cada sesión toma típicamente entre 45 y 90 minutos, según cuántas preparaciones hagas y el nivel de detalle de las recetas. Muchas recetas están diseñadas para que parte del trabajo pueda hacerse en paralelo y así optimizar el tiempo.\n\nEstas cifras son orientativas; al personalizar tu plan podrás indicar cuánto tiempo quieres dedicar por sesión y ajustaremos las combinaciones de recetas a ese límite. ¿Quieres que te muestre un ejemplo de cómo se organizarían 2 sesiones de batch cooking en una semana?",
+          "recorded_response": "Sobre «Cuántas recetas de batch cooking incluye el programa»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «cuánto tiempo estiman dedicar por sesión»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sobre «Cuántas recetas de batch cooking incluye el programa»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «cuánto tiempo estiman dedicar por sesión»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "En Dietavity incluimos recetas pensadas para facilitar el batch cooking, pero la cantidad exacta y la duración de cada sesión pueden variar según el diseño final de tu programa y tus preferencias (se completan después de la compra).Como referencia práctica, en nuestros programas solemos:\n- Ofrecer opciones para hacer entre 1 y 3 sesiones de batch cooking por semana (dependiendo de cuánto quieras cocinar de una vez).\n- Estimar que cada sesión toma típicamente entre 45 y 90 minutos, según cuántas preparaciones hagas y el nivel de detalle de las recetas. Muchas recetas están diseñadas para que parte del trabajo pueda hacerse en paralelo y así optimizar el tiempo.Estas cifras son orientativas; al personalizar tu plan podrás indicar cuánto tiempo quieres dedicar por sesión y ajustaremos las combinaciones de recetas a ese límite.\nSobre «Cuántas recetas de batch cooking incluye el programa»: No tengo información confirmada para responder ese detalle del servicio.\nSobre «cuánto tiempo estiman dedicar por sesión»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 4,
+          "customer_message": "Hola, busco organizar mejor mis comidas",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "En Dietavity te decimos qué comer cada día durante 28 días: comidas fáciles, familiares y prácticas que quitan la carga de decidir a diario y se adaptan a tus preferencias y objetivos.\n\n¿Cuál es tu objetivo principal al organizar mejor tus comidas (por ejemplo: ahorrar tiempo, controlar peso, tener más energía)?",
+          "recorded_response": "Gracias por compartirlo. En Dietavity podemos orientar tu programa de 28 días hacia ese objetivo con comidas prácticas y variadas.\n¿Quieres que te muestre un ejemplo ilustrativo de cómo podría verse uno de tus días?",
+          "baseline_exact_match": true,
+          "baseline_response": "Gracias por compartirlo. En Dietavity podemos orientar tu programa de 28 días hacia ese objetivo con comidas prácticas y variadas.\n¿Quieres que te muestre un ejemplo ilustrativo de cómo podría verse uno de tus días?",
+          "current_response": "Gracias por compartirlo. En Dietavity podemos orientar tu programa de 28 días hacia ese objetivo con comidas prácticas y variadas.\n¿Quieres que te muestre un ejemplo ilustrativo de cómo podría verse uno de tus días?",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 5,
+          "customer_message": "¿Cuántas recetas de batch cooking incluye el programa y cuánto tiempo estiman por sesión para que yo pueda planear mi semana?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "No hay un número fijo confirmado publicado: la inclusión concreta de recetas de batch cooking y su frecuencia se ajustan a la personalización que completes después de la compra.\n\nComo orientación ilustrativa (no personalizada): muchos programas sugeridos ofrecen alrededor de 1–2 sesiones de batch cooking por semana, con 3–5 recetas por sesión que cubren varias comidas; cada sesión suele estimarse entre 60 y 90 minutos, según recetas y utensilios. \n\n¿Quieres que te muestre un ejemplo ilustrativo de cómo serían esas sesiones para planear tu semana?",
+          "recorded_response": "Sobre «Cuántas recetas de batch cooking incluye el programa»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «cuánto tiempo estiman por sesión para que yo pueda planear mi semana»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sobre «Cuántas recetas de batch cooking incluye el programa»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «cuánto tiempo estiman por sesión para que yo pueda planear mi semana»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Sobre «Cuántas recetas de batch cooking incluye el programa»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «cuánto tiempo estiman por sesión para que yo pueda planear mi semana»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 6,
+          "customer_message": "¿Me puedes decir dónde ver esos detalles o con quién hablo para confirmar cuántas recetas de batch cooking y el tiempo estimado por sesión?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "En Dietavity el servicio es 100% digital: el programa de 28 días se entrega en nuestro portal y durante el programa puedes pedir ayuda y aclarar dudas por WhatsApp.\n\nSobre las dudas concretas de batch cooking (cuántas recetas incluye y tiempo estimado por sesión): esos detalles se confirman durante la personalización del programa, que se completa después del pago verificado. Si quieres hablar con alguien antes de comprar, contacta al equipo de soporte desde el chat de la página de Dietavity o desde el número de WhatsApp que aparece en el sitio; ahí te dirán si pueden darte ejemplos ilustrativos y orientaciones generales.\n\n¿Quieres que te indique cómo encontrar el chat o el WhatsApp en la página?",
+          "recorded_response": "Puedes consultar a soporte en soporte@dietavity.com. No tengo un teléfono ni un contacto personal confirmado para compartir.\n\nSobre «Me puedes decir dónde ver esos detalles o con quién hablo para confirmar cuántas recetas de batch cooking y el tiempo estimado por sesión»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Puedes consultar a soporte en soporte@dietavity.com. No tengo un teléfono ni un contacto personal confirmado para compartir.\n\nSobre «Me puedes decir dónde ver esos detalles o con quién hablo para confirmar cuántas recetas de batch cooking y el tiempo estimado por sesión»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Puedes consultar a soporte en soporte@dietavity.com. No tengo un teléfono ni un contacto personal confirmado para compartir.\n\nSobre «Me puedes decir dónde ver esos detalles o con quién hablo para confirmar cuántas recetas de batch cooking y el tiempo estimado por sesión»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 7,
+          "customer_message": "¿El soporte suele responder rápido y por lo general te confirman número de recetas y tiempo por sesión? Y otra cosa: ¿el programa incluye lista de compras para batch cooking?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Breve y claro:\n\n- Respuesta por WhatsApp: el programa ofrece apoyo por WhatsApp durante los 28 días y puedes pedir ayuda bajo demanda (recetas, ideas, orientación práctica y para restaurantes). No garantizamos ni prometemos un tiempo de respuesta fijo ni un SLA; los tiempos pueden variar según carga de soporte.  \n- Confirmación de número de recetas y tiempo por sesión: esos detalles dependen de la personalización del programa (objetivos, preferencias y logística) y no suelen confirmarse antes de completar la personalización. Durante el programa, por WhatsApp el equipo puede aclarar cuántas recetas de batch cooking proponemos y estimar el tiempo por sesión según tu caso, pero no hay un número estándar que confirmemos previamente.  \n- Lista de compras para batch cooking: no puedo confirmar aquí si hay una lista automática incluida antes de la compra; lo que sí ofrecemos es ayuda por WhatsApp para convertir tu plan en sesiones de batch cooking y preparar una lista de compras práctica y organizada para las preparaciones que elijas.\n\n¿Quieres que te explique cómo funciona el apoyo por WhatsApp paso a paso durante el programa?",
+          "recorded_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nNo tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\nSobre «El soporte suele responder rápido y por lo general te confirman número de recetas y tiempo por sesión»: No tengo información confirmada para responder ese detalle del servicio.\n\nEn el portal puedes consultar la lista del súper del plan semanal, formada a partir de los ingredientes de sus comidas y agrupada por categorías.\n\nSobre «otra cosa: el programa incluye lista de compras para batch cooking»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nNo tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\nSobre «El soporte suele responder rápido y por lo general te confirman número de recetas y tiempo por sesión»: No tengo información confirmada para responder ese detalle del servicio.\n\nEn el portal puedes consultar la lista del súper del plan semanal, formada a partir de los ingredientes de sus comidas y agrupada por categorías.\n\nSobre «otra cosa: el programa incluye lista de compras para batch cooking»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nNo tengo un plazo de respuesta ni un horario de atención confirmado para prometerte.\n\nSobre «El soporte suele responder rápido y por lo general te confirman número de recetas y tiempo por sesión»: No tengo información confirmada para responder ese detalle del servicio.\n\nEn el portal puedes consultar la lista del súper del plan semanal, formada a partir de los ingredientes de sus comidas y agrupada por categorías.\n\nSobre «otra cosa: el programa incluye lista de compras para batch cooking»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 8,
+          "customer_message": "¿La lista del súper viene con cantidades y con indicación para batch cooking para 1 sesión semanal, o eso lo confirmo con soporte?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "En el portal del programa sí aparece la lista del súper semanal, agrupada por categorías a partir de los ingredientes de las comidas. Sin embargo, no tengo confirmación de si esa lista incluye cantidades precisas ni indicaciones específicas para batch cooking pensadas para 1 sesión semanal; ese detalle debes confirmarlo con soporte.\n\nDurante el programa puedes pedir por WhatsApp orientación bajo demanda (recetas, ideas y cómo organizar batch cooking), así que si compras podrás solicitar esa ayuda mientras dure el plan. ¿Quieres que te comparta el correo de soporte para que lo consultes directamente?",
+          "recorded_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «La lista del súper viene con cantidades y con indicación para batch cooking para 1 sesión semanal, o eso lo confirmo con soporte»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «La lista del súper viene con cantidades y con indicación para batch cooking para 1 sesión semanal, o eso lo confirmo con soporte»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "En el portal del programa sí aparece la lista del súper semanal, agrupada por categorías a partir de los ingredientes de las comidas. Sin embargo, no tengo confirmación de si esa lista incluye cantidades precisas ni indicaciones específicas para batch cooking pensadas para 1 sesión semanal; ese detalle debes confirmarlo con soporte.Durante el programa puedes pedir por WhatsApp orientación bajo demanda (recetas, ideas y cómo organizar batch cooking), así que si compras podrás solicitar esa ayuda mientras dure el plan.\nSobre «La lista del súper viene con cantidades y con indicación para batch cooking para 1 sesión semanal, o eso lo confirmo con soporte»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 9,
+          "customer_message": "Ok, ¿me recomiendas escribir a soporte para confirmar eso? ¿Qué exactamente les pregunto para que me confirmen si la lista trae cantidades y un plan para 1 sesión de batch cooking semanal?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Sí — te conviene escribir a soporte para que te lo confirmen oficialmente. Te sugiero copiar y pegar este mensaje (o enviarlo por correo a soporte@dietavity.com):\n\nHola, quisiera confirmar dos detalles sobre el programa de 28 días antes de comprar:\n1) ¿La lista de súper que entregan incluye cantidades (por ingrediente) ajustadas al plan de 28 días?  \n2) ¿La lista y el plan incluyen indicaciones específicas para organizar 1 sesión de batch cooking semanal (qué cocinar en esa sesión, porciones, y cómo guardar/recalentar)?  \nSi la respuesta es sí, ¿podrían decirme en qué formato lo entregan (lista separada por semana, por receta, archivo descargable, etc.)?\n\nGracias.\n\nRecuerda: el apoyo por WhatsApp está disponible durante el programa, pero no tenemos un plazo de respuesta garantizado por soporte.",
+          "recorded_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Ok, me recomiendas escribir a soporte para confirmar eso»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «Qué exactamente les pregunto para que me confirmen si la lista trae cantidades y un plan para 1 sesión de batch cooking semanal»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Ok, me recomiendas escribir a soporte para confirmar eso»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «Qué exactamente les pregunto para que me confirmen si la lista trae cantidades y un plan para 1 sesión de batch cooking semanal»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Sí — te conviene escribir a soporte para que te lo confirmen oficialmente. Te sugiero copiar y pegar este mensaje (o enviarlo por correo a soporte@dietavity.com):\nHola, quisiera confirmar dos detalles sobre el programa de 28 días antes de comprar:\n2) Si la respuesta es sí, Gracias.\nSobre «Ok, me recomiendas escribir a soporte para confirmar eso»: No tengo información confirmada para responder ese detalle del servicio.\nSobre «Qué exactamente les pregunto para que me confirmen si la lista trae cantidades y un plan para 1 sesión de batch cooking semanal»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": [
+            {
+              "name": "current_clause_coverage",
+              "status": "FAIL",
+              "turn": 9
+            }
+          ]
+        },
+        {
+          "turn": 10,
+          "customer_message": "Sí, conviene escribir; puedes mandarles: “Hola, ¿la lista de la semana incluye cantidades detalladas por receta y un plan para 1 sesión de batch cooking (tiempos estimados y porciones)? Gracias.” ¿Quieres que lo adapte a WhatsApp o email?",
+          "semantic_boundary": "LOCALLY_ANNOTATED_NEW_TASK_FIELD_NOT_FRESH_MODEL_OUTPUT",
+          "task_annotation": {
+            "operation": "draft",
+            "request": "Sí, conviene escribir; puedes mandarles: “Hola, ¿la lista de la semana incluye cantidades detalladas por receta y un plan para 1 sesión de batch cooking (tiempos estimados y porciones)? Gracias.” ¿Quieres que lo adapte a WhatsApp o email?"
+          },
+          "generated_draft": "Hola, ¿la lista de la semana incluye cantidades detalladas por receta y un plan para 1 sesión de batch cooking (tiempos estimados y porciones)? Gracias.",
+          "recorded_response": "Sobre «puedes mandarles: “Hola, la lista de la semana incluye cantidades detalladas por receta y un plan para 1 sesión de batch cooking (tiempos estimados y porciones)»: No tengo información confirmada para responder ese detalle del servicio.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nPuedes consultar a soporte en soporte@dietavity.com. No tengo un teléfono ni un contacto personal confirmado para compartir.\n\nSobre «” Quieres que lo adapte a WhatsApp o email»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sobre «puedes mandarles: “Hola, la lista de la semana incluye cantidades detalladas por receta y un plan para 1 sesión de batch cooking (tiempos estimados y porciones)»: No tengo información confirmada para responder ese detalle del servicio.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nPuedes consultar a soporte en soporte@dietavity.com. No tengo un teléfono ni un contacto personal confirmado para compartir.\n\nSobre «” Quieres que lo adapte a WhatsApp o email»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Borrador:\nHola, ¿la lista de la semana incluye cantidades detalladas por receta y un plan para 1 sesión de batch cooking (tiempos estimados y porciones)? Gracias.",
+          "current_task_coverage": {
+            "requested": true,
+            "operation": "draft",
+            "completed": true
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 11,
+          "customer_message": "Sí, mejor WhatsApp para que sea breve y directo. ¿Me lo redactas en ese tono para copiar y pegar?",
+          "semantic_boundary": "LOCALLY_ANNOTATED_NEW_TASK_FIELD_NOT_FRESH_MODEL_OUTPUT",
+          "task_annotation": {
+            "operation": "draft",
+            "request": "Sí, mejor WhatsApp para que sea breve y directo. ¿Me lo redactas en ese tono para copiar y pegar?"
+          },
+          "generated_draft": "Hola, ¿la lista de la semana incluye cantidades detalladas por receta y además un plan para 1 sesión de batch cooking con tiempos estimados y porciones? Gracias.",
+          "recorded_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Sí, mejor WhatsApp para que sea breve y directo»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «Me lo redactas en ese tono para copiar y pegar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Sí, mejor WhatsApp para que sea breve y directo»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «Me lo redactas en ese tono para copiar y pegar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Borrador:\nHola, ¿la lista de la semana incluye cantidades detalladas por receta y además un plan para 1 sesión de batch cooking con tiempos estimados y porciones? Gracias.",
+          "current_task_coverage": {
+            "requested": true,
+            "operation": "draft",
+            "completed": true
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 12,
+          "customer_message": "Sí, pásame el mensaje corto para WhatsApp que pueda copiar y pegar, por favor.",
+          "semantic_boundary": "LOCALLY_ANNOTATED_NEW_TASK_FIELD_NOT_FRESH_MODEL_OUTPUT",
+          "task_annotation": {
+            "operation": "draft",
+            "request": "Sí, pásame el mensaje corto para WhatsApp que pueda copiar y pegar, por favor."
+          },
+          "generated_draft": "Hola, ¿la lista semanal incluye cantidades por receta y un plan para 1 sesión de batch cooking (tiempos estimados y porciones)? Gracias.",
+          "recorded_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Sí, pásame el mensaje corto para WhatsApp que pueda copiar y pegar, por favor»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Sí, pásame el mensaje corto para WhatsApp que pueda copiar y pegar, por favor»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Borrador:\nHola, ¿la lista semanal incluye cantidades por receta y un plan para 1 sesión de batch cooking (tiempos estimados y porciones)? Gracias.",
+          "current_task_coverage": {
+            "requested": true,
+            "operation": "draft",
+            "completed": true
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        }
+      ]
+    },
+    {
+      "scenario": "H",
+      "run_id": "39480",
+      "recorded_judge_status": "PASS",
+      "turns": [
+        {
+          "turn": 1,
+          "customer_message": "¡Hola! Quiero saber más.",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "¡Hola! En Dietavity te ayudamos a organizar qué comer cada día durante 28 días. Para empezar, ¿cuál es la principal dificultad que quieres resolver con tus comidas en los próximos 28 días?",
+          "recorded_response": "¡Hola! 😊 Claro. Dietavity te ayuda a organizar comidas sencillas y personalizadas durante 28 días, especialmente cuando estás comiendo menos. ¿Qué te gustaría saber?",
+          "baseline_exact_match": true,
+          "baseline_response": "¡Hola! 😊 Claro. Dietavity te ayuda a organizar comidas sencillas y personalizadas durante 28 días, especialmente cuando estás comiendo menos. ¿Qué te gustaría saber?",
+          "current_response": "¡Hola! 😊 Claro. Dietavity te ayuda a organizar comidas sencillas y personalizadas durante 28 días, especialmente cuando estás comiendo menos. ¿Qué te gustaría saber?",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 2,
+          "customer_message": "¿Qué incluye exactamente el programa y cuánto cuesta?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "En Dietavity te decimos qué comer cada día durante 28 días. Esto es lo que incluye exactamente:\n\n- Un plan de 28 días con 4 comidas diarias: desayuno, comida, cena y un snack.  \n- Recetas e instrucciones prácticas para cada comida, pensadas para ser fáciles y con ingredientes familiares y accesibles en México/Latinoamérica.  \n- Acceso digital al programa en nuestro portal (entrega en el portal).  \n- Apoyo por WhatsApp durante el programa para resolver dudas, pedir ideas de sustitución o ayuda práctica con las recetas.\n\nPrecio: $149 MXN — pago único, no es suscripción ni renovación automática.\n\nDespués del pago verificado te pediremos completar la personalización (datos como mes/año de nacimiento, estatura, peso, estilo de alimentación, alergias, alimentos a evitar, condiciones médicas y notas opcionales) para ajustar el plan a tus restricciones y preferencias.\n\n¿Quieres que te explique cómo se accede al portal y cuándo puedes empezar?",
+          "recorded_response": "1. Incluye desayuno, comida, cena y snack durante 28 días, acceso al portal y apoyo bajo demanda por WhatsApp.\n\n2. El programa personalizado de 28 días cuesta $149 MXN en un solo pago.",
+          "baseline_exact_match": true,
+          "baseline_response": "1. Incluye desayuno, comida, cena y snack durante 28 días, acceso al portal y apoyo bajo demanda por WhatsApp.\n\n2. El programa personalizado de 28 días cuesta $149 MXN en un solo pago.",
+          "current_response": "1. Incluye desayuno, comida, cena y snack durante 28 días, acceso al portal y apoyo bajo demanda por WhatsApp.\n\n2. El programa personalizado de 28 días cuesta $149 MXN en un solo pago.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 3,
+          "customer_message": "Gracias. ¿El plan se adapta para quien usa GLP‑1 (por ejemplo porciones más pequeñas/menos hambre)? ¿El apoyo por WhatsApp es con nutriólogo o pueden derivarme al médico que me recetó si tengo dudas sobre cambiar la dosis?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Sí. Podemos adaptar el programa para personas que usan GLP‑1: durante la personalización tomamos en cuenta que haya menos apetito y diseñamos comidas diarias más fáciles de comer, porciones prácticas y opciones para asegurar variedad y fuentes de proteína más accesibles. Esto no significa que ajustemos medicamentos ni que hagamos recomendaciones clínicas sobre dosis; la personalización es alimentaria y basada en la información que proporciones después de la compra.\n\nEl apoyo por WhatsApp es ayuda práctica de Dietavity (recetas, ideas para comidas pequeñas, opciones para restaurantes y orientación cotidiana). No sustituye la atención médica: si tienes dudas sobre cambiar la dosis o sobre el tratamiento con GLP‑1 debes consultar al profesional que te lo recetó. Podemos, si lo deseas durante el programa, orientarte sobre qué comer cuando hay poco apetito o darte sugerencias para mantener variedad y proteína, pero no podemos autorizar cambios de medicación ni derivarte directamente al médico prescriptor. \n\n¿Quieres ejemplos breves de desayunos, comidas y snacks pensados para apetito reducido?",
+          "recorded_response": "Eso puede depender de tu tratamiento y no sería seguro que Dietavity te indicara cambios en tu medicamento. Lo adecuado es consultarlo con el profesional que te lo prescribió.\n\nDietavity ofrece apoyo práctico para organizar las comidas de adultos que ya usan GLP-1 bajo supervisión médica. Es el mismo programa de alimentación de 28 días; no es tratamiento médico ni ajusta medicamentos.\n\nSobre «El plan se adapta para quien usa GLP‑1 (por ejemplo porciones más pequeñas/menos hambre)»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Eso puede depender de tu tratamiento y no sería seguro que Dietavity te indicara cambios en tu medicamento. Lo adecuado es consultarlo con el profesional que te lo prescribió.\n\nDietavity ofrece apoyo práctico para organizar las comidas de adultos que ya usan GLP-1 bajo supervisión médica. Es el mismo programa de alimentación de 28 días; no es tratamiento médico ni ajusta medicamentos.\n\nSobre «El plan se adapta para quien usa GLP‑1 (por ejemplo porciones más pequeñas/menos hambre)»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Eso puede depender de tu tratamiento y no sería seguro que Dietavity te indicara cambios en tu medicamento. Lo adecuado es consultarlo con el profesional que te lo prescribió.\n\nDietavity ofrece apoyo práctico para organizar las comidas de adultos que ya usan GLP-1 bajo supervisión médica. Es el mismo programa de alimentación de 28 días; no es tratamiento médico ni ajusta medicamentos.\n\nSobre «El plan se adapta para quien usa GLP‑1 (por ejemplo porciones más pequeñas/menos hambre)»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        }
+      ]
+    },
+    {
+      "scenario": "A",
+      "run_id": "39483",
+      "recorded_judge_status": "judge_output_failure",
+      "turns": [
+        {
+          "turn": 1,
+          "customer_message": "¡Hola! Quiero saber más.",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "¡Hola! ¿Cuál es tu principal objetivo o dificultad con la alimentación en este momento?",
+          "recorded_response": "¡Hola! 😊 Claro. Dietavity te ayuda a organizar comidas sencillas y personalizadas durante 28 días, especialmente cuando estás comiendo menos. ¿Qué te gustaría saber?",
+          "baseline_exact_match": true,
+          "baseline_response": "¡Hola! 😊 Claro. Dietavity te ayuda a organizar comidas sencillas y personalizadas durante 28 días, especialmente cuando estás comiendo menos. ¿Qué te gustaría saber?",
+          "current_response": "¡Hola! 😊 Claro. Dietavity te ayuda a organizar comidas sencillas y personalizadas durante 28 días, especialmente cuando estás comiendo menos. ¿Qué te gustaría saber?",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 2,
+          "customer_message": "Gracias. ¿Qué incluye exactamente el plan de 28 días y se puede ajustar por preferencias o alergias alimentarias?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Claro. En Dietavity el plan de 28 días incluye, de forma digital en tu portal:\n\n- Un menú diario para 28 días con desayuno, comida, cena y un snack cada día.  \n- Recetas prácticas y familiares, lista de ingredientes y pasos sencillos para preparar cada comida.  \n- Sugerencias de sustituciones cuando un ingrediente no está disponible.  \n- Acceso al programa en el portal y apoyo por WhatsApp durante el programa para dudas, recetas extra y orientación práctica (no entregamos comida preparada ni atención presencial).  \n\nSobre ajustes: sí, el programa se personaliza para respetar preferencias y alergias. La personalización valida cuatro categorías canónicas: estilo de alimentación, alergias, alimentos a evitar y condiciones médicas relevantes (estas últimas son usadas como contexto de seguridad, no como tratamiento médico). Esa personalización se completa después del pago y con tu consentimiento; no solicitamos ni ajustamos detalles clínicos ni medicación.\n\n¿Quieres que te explique cómo funciona la personalización paso a paso después de la compra?",
+          "recorded_response": "Incluye desayuno, comida, cena y snack durante 28 días, acceso al portal y apoyo bajo demanda por WhatsApp.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nSobre «Qué incluye exactamente el plan de 28 días y se puede ajustar por preferencias o alergias alimentarias»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Incluye desayuno, comida, cena y snack durante 28 días, acceso al portal y apoyo bajo demanda por WhatsApp.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nSobre «Qué incluye exactamente el plan de 28 días y se puede ajustar por preferencias o alergias alimentarias»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Claro.\n- Un menú diario para 28 días con desayuno, comida, cena y un snack cada día.- Recetas prácticas y familiares, lista de ingredientes y pasos sencillos para preparar cada comida.- Sugerencias de sustituciones cuando un ingrediente no está disponible.- Acceso al programa en el portal y apoyo por WhatsApp durante el programa para dudas, recetas extra y orientación práctica (no entregamos comida preparada ni atención presencial).\nSobre ajustes: sí, el programa se personaliza para respetar preferencias y alergias. La personalización valida cuatro categorías canónicas: estilo de alimentación, alergias, alimentos a evitar y condiciones médicas relevantes (estas últimas son usadas como contexto de seguridad, no como tratamiento médico). Esa personalización se completa después del pago y con tu consentimiento; no solicitamos ni ajustamos detalles clínicos ni medicación.\nSobre «Qué incluye exactamente el plan de 28 días y se puede ajustar por preferencias o alergias alimentarias»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": [
+            {
+              "name": "no_known_unsupported_claims",
+              "status": "FAIL",
+              "turn": 2
+            }
+          ]
+        },
+        {
+          "turn": 3,
+          "customer_message": "¿Puedo ver un ejemplo de menú semanal y la lista de preguntas que piden para personalizar antes de pagar? ¿Cuánto cuesta el plan de 28 días?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Aquí tienes lo que pediste:\n\nEjemplo ilustrativo (no personalizado) — 1 día de muestra\n- Desayuno: avena cocida con leche, plátano en rodajas y un puñado de nueces.\n- Snack: yogurt natural con semillas de chía y frutos rojos.\n- Comida: filete de pescado al horno con arroz integral y ensalada de nopal, tomate y cebolla.\n- Cena: tlayuda pequeña con frijoles, aguacate, pico de gallo y ensalada de hojas verdes.\n\nLista de preguntas que pedimos para PERSONALIZAR (se completan después del pago y con tu consentimiento)\n- Mes y año de nacimiento.\n- Estatura.\n- Peso.\n- Estilo de alimentación (por ejemplo: omnívoro, vegetariano, etc.).\n- Alergias alimentarias.\n- Alimentos que prefieres evitar.\n- Condiciones médicas relevantes (como contexto de seguridad).\n- Notas opcionales (comentarios que quieras añadir).\n\nPrecio del plan de 28 días\n- $149 MXN (pago único).\n\n¿Te gustaría que te explique exactamente qué incluye el programa?",
+          "recorded_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nSobre «Puedo ver un ejemplo de menú semanal y la lista de preguntas que piden para personalizar antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\n\nEl programa personalizado de 28 días cuesta $149 MXN en un solo pago.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nLa personalización respeta tu estilo de alimentación, alergias y alimentos a evitar. Las condiciones médicas declaradas son contexto de seguridad, no tratamiento. Compartes esos datos después del pago y con tu consentimiento.\n\nSobre «Puedo ver un ejemplo de menú semanal y la lista de preguntas que piden para personalizar antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\n\nEl programa personalizado de 28 días cuesta $149 MXN en un solo pago.",
+          "current_response": "Aquí tienes lo que pediste:\n\nEjemplo ilustrativo (no personalizado) — 1 día de muestra\n- Desayuno: avena cocida con leche, plátano en rodajas y un puñado de nueces.\n- Snack: yogurt natural con semillas de chía y frutos rojos.\n- Comida: filete de pescado al horno con arroz integral y ensalada de nopal, tomate y cebolla.\n- Cena: tlayuda pequeña con frijoles, aguacate, pico de gallo y ensalada de hojas verdes.Lista de preguntas que pedimos para PERSONALIZAR (se completan después del pago y con tu consentimiento)\n- Mes y año de nacimiento.\n- Estatura.\n- Peso.\n- Estilo de alimentación (por ejemplo: omnívoro, vegetariano, etc.).\n- Alergias alimentarias.\n- Alimentos que prefieres evitar.\n- Condiciones médicas relevantes (como contexto de seguridad).\n- Notas opcionales (comentarios que quieras añadir).Precio del plan de 28 días\n- $149 MXN (pago único).\n\nSobre «Puedo ver un ejemplo de menú semanal y la lista de preguntas que piden para personalizar antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 4,
+          "customer_message": "¿Me puedes enviar un ejemplo de menú semanal completo y la lista de preguntas que piden antes de pagar? ¿Ese precio de $149 MXN es el total y qué métodos de pago aceptan?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Te envio un ejemplo ilustrativo (no es personalizado) de un menú semanal con desayuno, comida, cena y snack:\n\nDía 1\n- Desayuno: Avena cocida con manzana picada, canela y un puñado de nueces.\n- Comida: Filete de pescado al horno con arroz integral y ensalada de pepino y jitomate.\n- Cena: Tacos de frijoles negros con aguacate, lechuga y salsa.\n- Snack: Yogur natural con fruta.\n\nDía 2\n- Desayuno: Omelette de espinacas y champiñones, una tortilla de maíz.\n- Comida: Ensalada de lentejas con pimientos, cebolla, cilantro y limón; una porción pequeña de queso panela.\n- Cena: Sopa de verduras con trozos de pollo.\n- Snack: Palitos de zanahoria con hummus.\n\nDía 3\n- Desayuno: Pan integral tostado con aguacate y rebanadas de jitomate.\n- Comida: Caldo de camarón con verduras; arroz pequeño.\n- Cena: Ensalada tibia de calabaza asada, quinoa y semillas de calabaza.\n- Snack: Una naranja.\n\nDía 4\n- Desayuno: Parfait de yogur natural, granola casera y frutos rojos.\n- Comida: Tostadas horneadas de pollo deshebrado y ensalada.\n- Cena: Ensalada de garbanzos con pepino, jitomate y aceite de oliva.\n- Snack: Un puñado de almendras.\n\nDía 5\n- Desayuno: Avena nocturna con plátano y semillas de chía.\n- Comida: Pescado en salsa verde, ensalada de nopal y frijoles de la olla.\n- Cena: Tortilla de verduras (brócoli, zanahoria) con salsa.\n- Snack: Rodajas de pepino con limón y chile en polvo.\n\nDía 6\n- Desayuno: Smoothie de espinaca, plátano y leche (o bebida vegetal) + una rebanada de pan integral.\n- Comida: Bowl de arroz integral, frijoles, aguacate, pico de gallo y proteína a elección.\n- Cena: Tacos de pescado a la plancha con col morada.\n- Snack: Una manzana con mantequilla de cacahuate (opcional).\n\nDía 7\n- Desayuno: Chilaquiles ligeros con salsa roja, queso rallado y cebolla.\n- Comida: Estofado de res magra con verduras y una porción moderada de papa.\n- Cena: Ensalada fresca con atún, jitomate, lechuga y aceitunas.\n- Snack: Yogur natural o fruta de temporada.\n\nLista de preguntas que pedimos antes/después del pago\n- Antes del pago: no solicitamos datos de personalización. La personalización se completa después del pago verificado.\n- Después del pago (datos que te pediremos para personalizar): mes y año de nacimiento, estatura, peso, estilo de alimentación, alergias, alimentos a evitar, condiciones médicas relevantes y notas opcionales. (Estas cuatro categorías —estilo de alimentación, alergias, alimentos a evitar y condiciones médicas— son las que usamos para adaptar el programa.)\n\nPrecio y métodos de pago\n- El precio es $149 MXN en un solo pago (no es suscripción).\n- Métodos aceptados: tarjeta de crédito, tarjeta de débito, OXXO (seleccionado dentro del Checkout seguro; sigue las indicaciones que aparecen ahí) y Apple Pay.\n\n¿Quieres que aclare alguna parte del ejemplo o de las preguntas que solicitamos después del pago?",
+          "recorded_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «Me puedes enviar un ejemplo de menú semanal completo y la lista de preguntas que piden antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «Ese precio de $149 MXN es el total»: No tengo información confirmada para responder ese detalle del servicio.\n\nLos métodos de pago confirmados son tarjeta de crédito, tarjeta de débito, OXXO y Apple Pay.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «Me puedes enviar un ejemplo de menú semanal completo y la lista de preguntas que piden antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «Ese precio de $149 MXN es el total»: No tengo información confirmada para responder ese detalle del servicio.\n\nLos métodos de pago confirmados son tarjeta de crédito, tarjeta de débito, OXXO y Apple Pay.",
+          "current_response": "Te envio un ejemplo ilustrativo (no es personalizado) de un menú semanal con desayuno, comida, cena y snack:\nDía 1\n- Desayuno: Avena cocida con manzana picada, canela y un puñado de nueces.\n- Comida: Filete de pescado al horno con arroz integral y ensalada de pepino y jitomate.\n- Cena: Tacos de frijoles negros con aguacate, lechuga y salsa.\n- Snack: Yogur natural con fruta.Día 2\n- Desayuno: Omelette de espinacas y champiñones, una tortilla de maíz.\n- Comida: Ensalada de lentejas con pimientos, cebolla, cilantro y limón; una porción pequeña de queso panela.\n- Cena: Sopa de verduras con trozos de pollo.\n- Snack: Palitos de zanahoria con hummus.Día 3\n- Desayuno: Pan integral tostado con aguacate y rebanadas de jitomate.\n- Comida: Caldo de camarón con verduras; arroz pequeño.\n- Cena: Ensalada tibia de calabaza asada, quinoa y semillas de calabaza.\n- Snack: Una naranja.Día 4\n- Desayuno: Parfait de yogur natural, granola casera y frutos rojos.\n- Comida: Tostadas horneadas de pollo deshebrado y ensalada.\n- Cena: Ensalada de garbanzos con pepino, jitomate y aceite de oliva.\n- Snack: Un puñado de almendras.Día 5\n- Desayuno: Avena nocturna con plátano y semillas de chía.\n- Comida: Pescado en salsa verde, ensalada de nopal y frijoles de la olla.\n- Cena: Tortilla de verduras (brócoli, zanahoria) con salsa.\n- Snack: Rodajas de pepino con limón y chile en polvo.Día 6\n- Desayuno: Smoothie de espinaca, plátano y leche (o bebida vegetal) + una rebanada de pan integral.\n- Comida: Bowl de arroz integral, frijoles, aguacate, pico de gallo y proteína a elección.\n- Cena: Tacos de pescado a la plancha con col morada.\n- Snack: Una manzana con mantequilla de cacahuate (opcional).Día 7\n- Desayuno: Chilaquiles ligeros con salsa roja, queso rallado y cebolla.\n- Comida: Estofado de res magra con verduras y una porción moderada de papa.\n- Cena: Ensalada fresca con atún, jitomate, lechuga y aceitunas.\n- Snack: Yogur natural o fruta de temporada.Lista de preguntas que pedimos antes/después del pago\n- Antes del pago: no solicitamos datos de personalización. La personalización se completa después del pago verificado.\n- Después del pago (datos que te pediremos para personalizar): mes y año de nacimiento, estatura, peso, estilo de alimentación, alergias, alimentos a evitar, condiciones médicas relevantes y notas opcionales.\nPrecio y métodos de pago\n- El precio es $149 MXN en un solo pago (no es suscripción).\n- Métodos aceptados: tarjeta de crédito, tarjeta de débito, OXXO (seleccionado dentro del Checkout seguro; sigue las indicaciones que aparecen ahí) y Apple Pay.\nSobre «Me puedes enviar un ejemplo de menú semanal completo y la lista de preguntas que piden antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\nSobre «Ese precio de $149 MXN es el total»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 5,
+          "customer_message": "¿Los $149 MXN son el precio total con todo incluido y tienen política de reembolso si no me convence? Además, ¿me pueden mostrar un ejemplo de menú semanal completo antes de pagar?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Sí: el programa personalizado de 28 días cuesta $149 MXN en un solo pago (no es suscripción). Incluye desayuno, comida, cena y snack durante 28 días, acceso al portal y apoyo bajo demanda por WhatsApp.  \n\nSobre reembolsos: la política pública de reembolso no está definida aquí; no puedo afirmar que haya o no reembolso ni dar condiciones. Si necesitas confirmar un caso concreto, soporte debe revisarlo y te confirmará la opción disponible.\n\nA continuación tienes un ejemplo ilustrativo y no personalizado de un menú semanal (desayuno / comida / cena / snack). Es solo para que veas el estilo; tu programa real se genera después de la compra y la personalización.\n\nDía 1\n- Desayuno: Avena con plátano y semillas de chía  \n- Comida: Filete de pescado a la plancha, arroz integral y ensalada de nopal  \n- Cena: Tacos de frijoles bayos con verduras asadas  \n- Snack: Yogur natural con fresas\n\nDía 2\n- Desayuno: Omelette de espinacas y tomate, tostada integral  \n- Comida: Ensalada de lentejas con pepino, jitomate y cilantro  \n- Cena: Sopa de verduras y quesadilla de champiñones  \n- Snack: Manzana con un puñado de almendras\n\nDía 3\n- Desayuno: Licuado de avena, leche y frutas rojas  \n- Comida: Pechuga de pollo a la plancha, quinoa y brócoli al vapor  \n- Cena: Ensalada de atún con aguacate y tortillas integrales  \n- Snack: Palitos de zanahoria con hummus\n\nDía 4\n- Desayuno: Pan integral con aguacate y huevo pochado  \n- Comida: Tacos de pescado empapelado con ensalada de col  \n- Cena: Crema de calabaza y ensalada de nopales  \n- Snack: Pera\n\nDía 5\n- Desayuno: Parfait de yogur, granola integral y mango  \n- Comida: Ensalada de garbanzos con pimiento y cebolla morada  \n- Cena: Fajitas de pollo con verduras y tortilla integral  \n- Snack: Un puñado de nueces\n\nDía 6\n- Desayuno: Chilaquiles ligeros con salsa verde y queso fresco (porción moderada)  \n- Comida: Filete de pescado al vapor con ensalada de espinacas y tomate  \n- Cena: Bowl de arroz integral, frijoles negros, pico de gallo y aguacate  \n- Snack: Yogur natural\n\nDía 7\n- Desayuno: Avena con manzana rallada y canela  \n- Comida: Caldo de pollo con verduras y tostadas integrales  \n- Cena: Ensalada tibia de quinoa con calabacín y garbanzos  \n- Snack: Mandarina\n\n¿Qué incluye?",
+          "recorded_response": "Sobre «Los $149 MXN son el precio total con todo incluido»: No tengo información confirmada para responder ese detalle del servicio.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «tienen política de reembolso si no me convence»: No tengo información confirmada para responder ese detalle del servicio.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «me pueden mostrar un ejemplo de menú semanal completo antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sobre «Los $149 MXN son el precio total con todo incluido»: No tengo información confirmada para responder ese detalle del servicio.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «tienen política de reembolso si no me convence»: No tengo información confirmada para responder ese detalle del servicio.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «me pueden mostrar un ejemplo de menú semanal completo antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Sí: el programa personalizado de 28 días cuesta $149 MXN en un solo pago (no es suscripción).\nSobre reembolsos: la política pública de reembolso no está definida aquí; no puedo afirmar que haya o no reembolso ni dar condiciones.A continuación tienes un ejemplo ilustrativo y no personalizado de un menú semanal (desayuno / comida / cena / snack). Es solo para que veas el estilo; tu programa real se genera después de la compra y la personalización.Día 1\n- Desayuno: Avena con plátano y semillas de chía\n- Comida: Filete de pescado a la plancha, arroz integral y ensalada de nopal\n- Cena: Tacos de frijoles bayos con verduras asadas\n- Snack: Yogur natural con fresas\nDía 2\n- Desayuno: Omelette de espinacas y tomate, tostada integral\n- Comida: Ensalada de lentejas con pepino, jitomate y cilantro\n- Cena: Sopa de verduras y quesadilla de champiñones\n- Snack: Manzana con un puñado de almendras\nDía 3\n- Desayuno: Licuado de avena, leche y frutas rojas\n- Comida: Pechuga de pollo a la plancha, quinoa y brócoli al vapor\n- Cena: Ensalada de atún con aguacate y tortillas integrales\n- Snack: Palitos de zanahoria con hummus\nDía 4\n- Desayuno: Pan integral con aguacate y huevo pochado\n- Comida: Tacos de pescado empapelado con ensalada de col\n- Cena: Crema de calabaza y ensalada de nopales\n- Snack: Pera\nDía 5\n- Desayuno: Parfait de yogur, granola integral y mango\n- Comida: Ensalada de garbanzos con pimiento y cebolla morada\n- Cena: Fajitas de pollo con verduras y tortilla integral\n- Snack: Un puñado de nueces\nDía 6\n- Desayuno: Chilaquiles ligeros con salsa verde y queso fresco (porción moderada)\n- Comida: Filete de pescado al vapor con ensalada de espinacas y tomate\n- Cena: Bowl de arroz integral, frijoles negros, pico de gallo y aguacate\n- Snack: Yogur natural\nDía 7\n- Desayuno: Avena con manzana rallada y canela\n- Comida: Caldo de pollo con verduras y tostadas integrales\n- Cena: Ensalada tibia de quinoa con calabacín y garbanzos\n- Snack: Mandarina\nSobre «Los $149 MXN son el precio total con todo incluido»: No tengo información confirmada para responder ese detalle del servicio.\nSobre «tienen política de reembolso si no me convence»: No tengo información confirmada para responder ese detalle del servicio.\nSobre «me pueden mostrar un ejemplo de menú semanal completo antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 6,
+          "customer_message": "¿Me pueden enviar un ejemplo de menú semanal completo y confirmar si los $149 MXN son el precio total (todo incluido) y si hay opción de reembolso si no me convence?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Aquí tienes un ejemplo ilustrativo (no personalizado) de un menú semanal: cada día muestra desayuno / comida / cena / snack.\n\n- Lunes: Avena con plátano y nueces / Ensalada de pollo con arroz integral y verduras / Tacos de frijoles negros con salsa y ensalada / Yogur natural con frutas.\n- Martes: Licuado de yogur, avena y berries / Pescado a la plancha con quinoa y calabacitas / Sopa de verduras con tortilla horneada / Manzana con un puñado de almendras.\n- Miércoles: Pan integral con aguacate y huevo / Bowl de lentejas con vegetales asados / Ensalada de atún con frijoles y jitomate / Zanahorias baby con hummus.\n- Jueves: Hot cakes integrales con fruta / Pollo en salsa de tomate con arroz y espinacas / Quesadillas de flor de calabaza y queso panela + ensalada / Una pera.\n- Viernes: Yogur natural con granola casera y mango / Tostadas de tinga de pollo con aguacate y ensalada / Pescado al horno con verduras / Puñado de nueces y una mandarina.\n- Sábado: Omelette de espinacas y champiñones con pan integral / Ensalada de garbanzos con pepino y cilantro / Enchiladas de pollo estilo casero con salsa ligera / Gelatina de fruta o fruta fresca.\n- Domingo: Chilaquiles ligeros con salsa roja moderada y huevo / Pavo o pollo al limón con camote y brócoli / Sopa de verduras con una porción pequeña de tortilla / Yogur con semillas de chía.\n\nConfirmaciones sobre precio y reembolso:\n- El programa de 28 días cuesta $149 MXN en un solo pago (no es suscripción ni renovación automática).  \n- No hay una política pública de reembolso que pueda confirmar aquí; si necesitas revisar un caso concreto, el equipo de soporte debe evaluarlo y te informará.\n\nEste ejemplo es solo ilustrativo y no es un plan personalizado. ¿Quieres que te explique exactamente qué incluye el programa de 28 días?",
+          "recorded_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «Me pueden enviar un ejemplo de menú semanal completo»: No tengo información confirmada para responder ese detalle del servicio.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «confirmar si los $149 MXN son el precio total (todo incluido) y si hay opción de reembolso si no me convence»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «Me pueden enviar un ejemplo de menú semanal completo»: No tengo información confirmada para responder ese detalle del servicio.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «confirmar si los $149 MXN son el precio total (todo incluido) y si hay opción de reembolso si no me convence»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Aquí tienes un ejemplo ilustrativo (no personalizado) de un menú semanal: cada día muestra desayuno / comida / cena / snack.- Lunes: Avena con plátano y nueces / Ensalada de pollo con arroz integral y verduras / Tacos de frijoles negros con salsa y ensalada / Yogur natural con frutas.\n- Martes: Licuado de yogur, avena y berries / Pescado a la plancha con quinoa y calabacitas / Sopa de verduras con tortilla horneada / Manzana con un puñado de almendras.\n- Miércoles: Pan integral con aguacate y huevo / Bowl de lentejas con vegetales asados / Ensalada de atún con frijoles y jitomate / Zanahorias baby con hummus.\n- Jueves: Hot cakes integrales con fruta / Pollo en salsa de tomate con arroz y espinacas / Quesadillas de flor de calabaza y queso panela + ensalada / Una pera.\n- Viernes: Yogur natural con granola casera y mango / Tostadas de tinga de pollo con aguacate y ensalada / Pescado al horno con verduras / Puñado de nueces y una mandarina.\n- Sábado: Omelette de espinacas y champiñones con pan integral / Ensalada de garbanzos con pepino y cilantro / Enchiladas de pollo estilo casero con salsa ligera / Gelatina de fruta o fruta fresca.\n- Domingo: Chilaquiles ligeros con salsa roja moderada y huevo / Pavo o pollo al limón con camote y brócoli / Sopa de verduras con una porción pequeña de tortilla / Yogur con semillas de chía.Confirmaciones sobre precio y reembolso:\n- El programa de 28 días cuesta $149 MXN en un solo pago (no es suscripción ni renovación automática).- No hay una política pública de reembolso que pueda confirmar aquí; si necesitas revisar un caso concreto, el equipo de soporte debe evaluarlo y te informará.Este ejemplo es solo ilustrativo y no es un plan personalizado.\n\nSobre «Me pueden enviar un ejemplo de menú semanal completo»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «confirmar si los $149 MXN son el precio total (todo incluido) y si hay opción de reembolso si no me convence»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 7,
+          "customer_message": "Ok, entiendo. ¿Me pueden enviar un ejemplo de menú semanal completo antes de pagar y confirmar si los $149 MXN cubren todo y si hay opción de reembolso? Si no pueden confirmar, ¿dónde puedo ver esos detalles?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Aquí tienes un ejemplo ilustrativo de un menú semanal completo (desayuno, comida, cena y snack). Es solo un ejemplo no personalizado; tu programa real se genera después de la compra y la personalización.\n\nLunes\n- Desayuno: Avena cocida con leche o agua, plátano en rodajas y un puñado de nueces.\n- Comida: Filete de pollo a la plancha, arroz integral y ensalada de nopales con jitomate y cebolla.\n- Cena: Ensalada de atún (atún en agua, lechuga, pepino, jitomate, aguacate) con una rebanada de pan integral.\n- Snack: Yogur natural con una cucharada de semillas de chía.\n\nMartes\n- Desayuno: Yogur natural con granola casera y fresas.\n- Comida: Lentejas guisadas con verduras (zanahoria, papa, calabacita) y una tortilla de maíz.\n- Cena: Tostada de frijoles refritos, lechuga, pico de gallo y queso fresco.\n- Snack: Manzana y un puñado de almendras.\n\nMiércoles\n- Desayuno: Omelette de dos claras y una yema con espinacas y tomate; 1 rebanada de pan integral.\n- Comida: Pescado al horno con limón, quinoa y ensalada de espinacas con jícama.\n- Cena: Sopa de verduras ligera y quesadilla de flor de calabaza con queso panela.\n- Snack: Palitos de zanahoria con hummus.\n\nJueves\n- Desayuno: Chilaquiles ligeros con salsa verde, pollo desmenuzado y queso rallado (porción moderada).\n- Comida: Ensalada de garbanzos con jitomate, pepino, cebolla morada y cilantro; aderezo de limón y aceite de oliva.\n- Cena: Tacos de pescado a la plancha con col rallada y salsa de yogur.\n- Snack: Pera y unas semillas de girasol.\n\nViernes\n- Desayuno: Batido de espinaca, plátano, leche vegetal y una cucharada de avena.\n- Comida: Pechuga de pavo asada, puré de camote y brócoli al vapor.\n- Cena: Sopa de tortilla con guarnición moderada (evitar exceso de tortilla frita).\n- Snack: Yogur griego con miel y canela.\n\nSábado\n- Desayuno: Mollete con frijoles, jitomate asado y queso bajo en grasa; fruta de temporada.\n- Comida: Ensalada tibia de arroz integral con verduras salteadas y trozos de salmón a la plancha.\n- Cena: Tostadas de tinga de pollo sobre tortilla horneada, con lechuga y aguacate.\n- Snack: Un puñado de nueces mixtas.\n\nDomingo\n- Desayuno: Hot cakes integrales (porción moderada) con miel y frutos rojos.\n- Comida: Albóndigas de res magra en salsa de tomate, calabacitas al vapor y arroz integral.\n- Cena: Ensalada de quinoa con pepino, tomate cherry, queso panela y limón.\n- Snack: Rodajas de pepino con limón y chile en polvo (si toleras).\n\nSobre el precio y reembolso:\n- El precio del programa es $149 MXN por el programa de 28 días (pago único).  \n- No hay una política pública de reembolso que podamos confirmar aquí; si necesitas revisar un caso de reembolso o dudas sobre facturación, soporte puede revisar tu situación en soporte@dietavity.com.  \n- Para cualquier detalle oficial sobre facturas o políticas, soporte podrá confirmarlo.\n\n¿Quieres que te envíe este ejemplo en un formato más compacto o prefieres que lo adapte con opciones sin cierto ingrediente (por ejemplo, sin lácteos)?",
+          "recorded_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «Me pueden enviar un ejemplo de menú semanal completo antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «confirmar si los $149 MXN cubren todo y si hay opción de reembolso»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nSobre «Me pueden enviar un ejemplo de menú semanal completo antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «confirmar si los $149 MXN cubren todo y si hay opción de reembolso»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Aquí tienes un ejemplo ilustrativo de un menú semanal completo (desayuno, comida, cena y snack). Es solo un ejemplo no personalizado; tu programa real se genera después de la compra y la personalización.Lunes\n- Desayuno: Avena cocida con leche o agua, plátano en rodajas y un puñado de nueces.\n- Comida: Filete de pollo a la plancha, arroz integral y ensalada de nopales con jitomate y cebolla.\n- Cena: Ensalada de atún (atún en agua, lechuga, pepino, jitomate, aguacate) con una rebanada de pan integral.\n- Snack: Yogur natural con una cucharada de semillas de chía.Martes\n- Desayuno: Yogur natural con granola casera y fresas.\n- Comida: Lentejas guisadas con verduras (zanahoria, papa, calabacita) y una tortilla de maíz.\n- Cena: Tostada de frijoles refritos, lechuga, pico de gallo y queso fresco.\n- Snack: Manzana y un puñado de almendras.Miércoles\n- Desayuno: Omelette de dos claras y una yema con espinacas y tomate; 1 rebanada de pan integral.\n- Comida: Pescado al horno con limón, quinoa y ensalada de espinacas con jícama.\n- Cena: Sopa de verduras ligera y quesadilla de flor de calabaza con queso panela.\n- Snack: Palitos de zanahoria con hummus.Jueves\n- Desayuno: Chilaquiles ligeros con salsa verde, pollo desmenuzado y queso rallado (porción moderada).\n- Comida: Ensalada de garbanzos con jitomate, pepino, cebolla morada y cilantro; aderezo de limón y aceite de oliva.\n- Cena: Tacos de pescado a la plancha con col rallada y salsa de yogur.\n- Snack: Pera y unas semillas de girasol.Viernes\n- Desayuno: Batido de espinaca, plátano, leche vegetal y una cucharada de avena.\n- Comida: Pechuga de pavo asada, puré de camote y brócoli al vapor.\n- Cena: Sopa de tortilla con guarnición moderada (evitar exceso de tortilla frita).\n- Snack: Yogur griego con miel y canela.Sábado\n- Desayuno: Mollete con frijoles, jitomate asado y queso bajo en grasa; fruta de temporada.\n- Comida: Ensalada tibia de arroz integral con verduras salteadas y trozos de salmón a la plancha.\n- Cena: Tostadas de tinga de pollo sobre tortilla horneada, con lechuga y aguacate.\n- Snack: Un puñado de nueces mixtas.Domingo\n- Desayuno: Hot cakes integrales (porción moderada) con miel y frutos rojos.\n- Comida: Albóndigas de res magra en salsa de tomate, calabacitas al vapor y arroz integral.\n- Cena: Ensalada de quinoa con pepino, tomate cherry, queso panela y limón.\n- Snack: Rodajas de pepino con limón y chile en polvo (si toleras).Sobre el precio y reembolso:\n- El precio del programa es $149 MXN por el programa de 28 días (pago único).- No hay una política pública de reembolso que podamos confirmar aquí; si necesitas revisar un caso de reembolso o dudas sobre facturación, soporte puede revisar tu situación en soporte@dietavity.com.\nSobre «Me pueden enviar un ejemplo de menú semanal completo antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\nSobre «confirmar si los $149 MXN cubren todo y si hay opción de reembolso»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 8,
+          "customer_message": "¿Entonces dónde puedo ver el ejemplo de menú semanal, la confirmación de que $149 MXN es todo incluido y la política de reembolso? ¿Puedo hablar con soporte antes de pagar para resolver esto?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Puedes: 1) ver abajo un ejemplo ilustrativo de una semana (no personalizado), 2) confirmar que el plan es un pago único de $149 MXN y 3) saber cómo revisar el reembolso con soporte.\n\nEjemplo ilustrativo (no es un menú personalizado; tu programa se genera después de comprar y completar la personalización):\n- Lunes: Desayuno: avena con plátano y semillas. Comida: pollo a la plancha con arroz integral y ensalada. Cena: tortillas de maíz con frijoles, pico y verduras asadas. Snack: yogur natural con frutos rojos.  \n- Martes: Desayuno: smoothie de espinaca, manzana y avena. Comida: ensalada de garbanzos con jitomate, pepino y aguacate. Cena: filete de pescado al horno con verduras. Snack: zanahorias baby con hummus.  \n- Miércoles: Desayuno: yogurt con granola y mango. Comida: sopa de lentejas con verduras y tortilla integral. Cena: sándwich integral de pavo y verduras. Snack: una pieza de fruta.  \n- Jueves: Desayuno: huevos revueltos con espinacas y jitomate. Comida: tazón de quinoa con frijoles, maíz y aguacate. Cena: calabacitas salteadas con queso panela y arroz. Snack: un puñado de nueces.  \n- Viernes: Desayuno: pan integral con aguacate y limón. Comida: pescado a la veracruzana con ensalada. Cena: tacos de nopales y champiñones. Snack: palitos de apio con crema de cacahuate.  \n- Sábado: Desayuno: chilaquiles ligeros con salsa roja y pollo deshebrado (porción moderada). Comida: ensalada de atún con verduras y frijolitos. Cena: crepas integrales rellenas de verduras. Snack: fruta y semillas.  \n- Domingo: Desayuno: bowl de fruta con yogur y avena. Comida: guiso de pollo con verduras y arroz integral. Cena: plato de verduras al horno y queso fresco. Snack: rebanadas de pepino con limón y chile en polvo.\n\nConfirmaciones prácticas:\n- Precio: el plan canonico es un pago único de $149 MXN (no es suscripción ni renovación automática).  \n- Reembolso: no hay una política pública de reembolso que podamos confirmar aquí. Soporte revisa casos concretos, pero no puedo adelantar ni prometer condiciones de reembolso.\n\nContacto y apoyo antes de pagar:\n- Puedes escribir a soporte para resolver dudas antes de comprar: soporte@dietavity.com.  \n- Nota sobre WhatsApp: el apoyo por WhatsApp está disponible durante el programa para consultas bajo demanda; no sustituye soporte pre-venta y no implica atención presencial ni entrega de comida preparada.\n\n¿Quieres que te confirme ahora el correo de soporte o prefieres que te pase otro dato de contacto?",
+          "recorded_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «Entonces dónde puedo ver el ejemplo de menú semanal, la confirmación de que $149 MXN es todo incluido y la política de reembolso»: No tengo información confirmada para responder ese detalle del servicio.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Puedo hablar con soporte antes de pagar para resolver esto»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Sí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «Entonces dónde puedo ver el ejemplo de menú semanal, la confirmación de que $149 MXN es todo incluido y la política de reembolso»: No tengo información confirmada para responder ese detalle del servicio.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Puedo hablar con soporte antes de pagar para resolver esto»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Puedes: 1) ver abajo un ejemplo ilustrativo de una semana (no personalizado), 2) confirmar que el plan es un pago único de $149 MXN y 3) saber cómo revisar el reembolso con soporte.Ejemplo ilustrativo (no es un menú personalizado; tu programa se genera después de comprar y completar la personalización):\n- Lunes: Desayuno: avena con plátano y semillas. Comida: pollo a la plancha con arroz integral y ensalada. Cena: tortillas de maíz con frijoles, pico y verduras asadas. Snack: yogur natural con frutos rojos.- Martes: Desayuno: smoothie de espinaca, manzana y avena. Comida: ensalada de garbanzos con jitomate, pepino y aguacate. Cena: filete de pescado al horno con verduras. Snack: zanahorias baby con hummus.- Miércoles: Desayuno: yogurt con granola y mango. Comida: sopa de lentejas con verduras y tortilla integral. Cena: sándwich integral de pavo y verduras. Snack: una pieza de fruta.- Jueves: Desayuno: huevos revueltos con espinacas y jitomate. Comida: tazón de quinoa con frijoles, maíz y aguacate. Cena: calabacitas salteadas con queso panela y arroz. Snack: un puñado de nueces.- Viernes: Desayuno: pan integral con aguacate y limón. Comida: pescado a la veracruzana con ensalada. Cena: tacos de nopales y champiñones. Snack: palitos de apio con crema de cacahuate.- Sábado: Desayuno: chilaquiles ligeros con salsa roja y pollo deshebrado (porción moderada). Comida: ensalada de atún con verduras y frijolitos. Cena: crepas integrales rellenas de verduras. Snack: fruta y semillas.- Domingo: Desayuno: bowl de fruta con yogur y avena. Comida: guiso de pollo con verduras y arroz integral. Cena: plato de verduras al horno y queso fresco. Snack: rebanadas de pepino con limón y chile en polvo.Confirmaciones prácticas:\n- Precio: el plan canonico es un pago único de $149 MXN (no es suscripción ni renovación automática).- Reembolso: no hay una política pública de reembolso que podamos confirmar aquí. Soporte revisa casos concretos, pero no puedo adelantar ni prometer condiciones de reembolso.Contacto y apoyo antes de pagar:\n- Puedes escribir a soporte para resolver dudas antes de comprar: soporte@dietavity.com.- Nota sobre WhatsApp: el apoyo por WhatsApp está disponible durante el programa para consultas bajo demanda; no sustituye soporte pre-venta y no implica atención presencial ni entrega de comida preparada.\nSobre «Entonces dónde puedo ver el ejemplo de menú semanal, la confirmación de que $149 MXN es todo incluido y la política de reembolso»: No tengo información confirmada para responder ese detalle del servicio.\nSobre «Puedo hablar con soporte antes de pagar para resolver esto»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 9,
+          "customer_message": "¿Me pasas el enlace o contacto de soporte (WhatsApp o email) para ver el menú semanal de ejemplo y la política de reembolso antes de pagar?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Puedes escribir a soporte@dietavity.com para que revisen tu caso y preguntas; ellos pueden confirmar detalles pero no prometen condiciones específicas.\n\nAntes de pagar, podemos compartir un ejemplo ilustrativo (no personalizado). Por ejemplo:\n- Desayuno: avena cocida con plátano y nueces.\n- Comida: filete de pescado a la plancha, arroz integral y ensalada de nopal.\n- Cena: bowl de frijoles, verduras salteadas y tortillas de maíz.\n- Snack: yogur natural con fruta.\n\nEl programa completo y personalizado de 28 días se genera después de la compra y personalización; no puedo entregar un menú semanal finalizado ni un enlace de muestra personalizado antes de eso.\n\nSobre reembolsos: no hay una política pública confirmada que pueda citar; soporte puede revisar tu solicitud en soporte@dietavity.com sin prometer condiciones.  \n\n¿Quieres que te pase el ejemplo ilustrativo de otro día o que redacte el correo para soporte por ti?",
+          "recorded_response": "Puedes consultar a soporte en soporte@dietavity.com. No tengo un teléfono ni un contacto personal confirmado para compartir.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «Me pasas el enlace o contacto de soporte (WhatsApp o email) para ver el menú semanal de ejemplo y la política de reembolso antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Puedes consultar a soporte en soporte@dietavity.com. No tengo un teléfono ni un contacto personal confirmado para compartir.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «Me pasas el enlace o contacto de soporte (WhatsApp o email) para ver el menú semanal de ejemplo y la política de reembolso antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Puedes consultar a soporte en soporte@dietavity.com. No tengo un teléfono ni un contacto personal confirmado para compartir.\n\nDurante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «Me pasas el enlace o contacto de soporte (WhatsApp o email) para ver el menú semanal de ejemplo y la política de reembolso antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 10,
+          "customer_message": "¿Puedo hablar por WhatsApp con soporte antes de pagar? Si sí, ¿me pasas el número o enlace?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Te confirmo: antes de pagar no hay un número de WhatsApp público para soporte. Puedes escribir a soporte@dietavity.com para consultas previas; soporte puede revisar dudas sobre ejemplos, precios o casos de reembolso, pero no puedo confirmar políticas de reembolso aquí.\n\nDurante el programa sí ofrecemos apoyo por WhatsApp bajo demanda (recetas, ideas prácticas y orientación para restaurantes), pero ese canal se activa una vez que tu compra y personalización están completas.",
+          "recorded_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Puedo hablar por WhatsApp con soporte antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «Si sí, me pasas el número o enlace»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Puedo hablar por WhatsApp con soporte antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «Si sí, me pasas el número o enlace»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Puedo hablar por WhatsApp con soporte antes de pagar»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «Si sí, me pasas el número o enlace»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 11,
+          "customer_message": "Ok, gracias. ¿Puedo escribir a soporte@dietavity.com antes de pagar para pedir el ejemplo de menú semanal, la política de reembolso y confirmar el precio total, o tienen un número de WhatsApp para hablar antes de comprar?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Sí. Puedes escribir a soporte@dietavity.com antes de pagar para pedir el ejemplo de menú, consultar la política de reembolso y confirmar el precio total; soporte podrá revisar tu solicitud pero no garantiza condiciones ni respuestas automáticas.\n\nNo contamos con un número de WhatsApp confirmado para atención previa a la compra. Sí ofrecemos apoyo por WhatsApp durante el programa una vez contratado (recetas, ideas, orientación práctica), pero ese canal no está confirmado como atención pre-compra.",
+          "recorded_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Puedo escribir a soporte@dietavity»: No tengo información confirmada para responder ese detalle del servicio.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «com antes de pagar para pedir el ejemplo de menú semanal, la política de reembolso»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «confirmar el precio total, o tienen un número de WhatsApp para hablar antes de comprar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Puedo escribir a soporte@dietavity»: No tengo información confirmada para responder ese detalle del servicio.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «com antes de pagar para pedir el ejemplo de menú semanal, la política de reembolso»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «confirmar el precio total, o tienen un número de WhatsApp para hablar antes de comprar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Puedo escribir a soporte@dietavity»: No tengo información confirmada para responder ese detalle del servicio.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «com antes de pagar para pedir el ejemplo de menú semanal, la política de reembolso»: No tengo información confirmada para responder ese detalle del servicio.\n\nSobre «confirmar el precio total, o tienen un número de WhatsApp para hablar antes de comprar»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        },
+        {
+          "turn": 12,
+          "customer_message": "¿Entonces puedo escribir a soporte@dietavity.com antes de pagar para pedir el menú semanal de ejemplo, la política de reembolso y confirmar el precio? Si tienen WhatsApp o enlace para hablar antes de comprar, ¿me lo pasas?",
+          "semantic_boundary": "RECORDED_INTERPRETATION",
+          "task_annotation": null,
+          "generated_draft": "Sí. Puedes escribir a soporte@dietavity.com antes de pagar para preguntar sobre el ejemplo de menú semanal, la política de reembolso y cualquier duda sobre el precio; soporte puede revisar tu solicitud pero no puede prometer condiciones que no estén confirmadas previamente.\n\nTe aclaro además:\n- El precio del programa es $149 MXN en un solo pago (no es suscripción).  \n- No podemos confirmar una política pública de reembolso aquí; soporte puede evaluar tu caso si escribes.  \n- El apoyo por WhatsApp está disponible durante el programa para consultas bajo demanda, pero no tengo un número o enlace confirmado para contacto previo a la compra.  \n- Podemos compartir un ejemplo ilustrativo (no personalizado) antes de pagar; el programa personalizado se genera solo después de la compra y la personalización.\n\n¿Quieres que te envíe ahora un ejemplo ilustrativo de desayuno, comida, cena y snack para que veas el estilo de comidas?",
+          "recorded_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Entonces puedo escribir a soporte@dietavity»: No tengo información confirmada para responder ese detalle del servicio.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «com antes de pagar para pedir el menú semanal de ejemplo, la política de reembolso»: No tengo información confirmada para responder ese detalle del servicio.\n\nEl programa personalizado de 28 días cuesta $149 MXN en un solo pago.\n\nSobre «Si tienen WhatsApp o enlace para hablar antes de comprar, me lo pasas»: No tengo información confirmada para responder ese detalle del servicio.",
+          "baseline_exact_match": true,
+          "baseline_response": "Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\nSobre «Entonces puedo escribir a soporte@dietavity»: No tengo información confirmada para responder ese detalle del servicio.\n\nSí. Este es un ejemplo ilustrativo de un día: desayuno de avena con fruta; comida de pollo con arroz y verduras; cena de tacos de frijoles con verduras; snack de fruta. No es un plan personalizado; tu programa se genera después de completar tu compra y personalización.\n\nNo hay una política pública de reembolso aprobada que pueda confirmar. Soporte puede revisar tu caso en soporte@dietavity.com sin prometer condiciones.\n\nSobre «com antes de pagar para pedir el menú semanal de ejemplo, la política de reembolso»: No tengo información confirmada para responder ese detalle del servicio.\n\nEl programa personalizado de 28 días cuesta $149 MXN en un solo pago.\n\nSobre «Si tienen WhatsApp o enlace para hablar antes de comprar, me lo pasas»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_response": "Sí.Te aclaro además:\n- El precio del programa es $149 MXN en un solo pago (no es suscripción).- No podemos confirmar una política pública de reembolso aquí; soporte puede evaluar tu caso si escribes.- Podemos compartir un ejemplo ilustrativo (no personalizado) antes de pagar; el programa personalizado se genera solo después de la compra y la personalización.\nSobre «Entonces puedo escribir a soporte@dietavity»: No tengo información confirmada para responder ese detalle del servicio.\nSobre «com antes de pagar para pedir el menú semanal de ejemplo, la política de reembolso»: No tengo información confirmada para responder ese detalle del servicio.\nSobre «Si tienen WhatsApp o enlace para hablar antes de comprar, me lo pasas»: No tengo información confirmada para responder ese detalle del servicio.",
+          "current_task_coverage": {
+            "requested": false,
+            "completed": null
+          },
+          "current_failures": [],
+          "current_failed_assertions": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "generator_repeat_is_byte_identical": true,
+  "artifacts": [
+    {
+      "path": "n8n/Dietavity Sales Engine (Ticket 10).json",
+      "sha256": "04bb5fb1820424eee8aae26de920a6476764e55bd47e4f29c91181d19f4ec3e2",
+      "active": false
+    },
+    {
+      "path": "n8n/Dietavity Sales Conversation Test Harness (Ticket 41A).json",
+      "sha256": "8ec7985356374ae6b850d10c104dd4eba5e5b84688bf2e72b829e297b6d87963",
+      "active": false
+    },
+    {
+      "path": "n8n/Dietavity Autonomous Conversation Harness (Ticket 48).json",
+      "sha256": "fb06806d3715f464acf0ab0d854b937f9d8232560c43ca46e4f22fb6613f8c2f",
+      "active": false
+    },
+    {
+      "path": "n8n/Dietavity WhatsApp Recovery Poller.json",
+      "sha256": "00e834cd28a1b2e38bd885011f729304c63946d2c80168af236544066d20546c",
+      "active": false
+    }
+  ],
+  "live_import_completed": false,
+  "live_run_completed": false,
+  "live_blocker": "Computer Use permissions are not granted; no n8n connector is available."
+}

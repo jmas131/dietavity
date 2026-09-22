@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tu siguiente paso | Dietavity</title>
+  <meta name="robots" content="noindex, follow">
+  <meta name="theme-color" content="#f4f1e8">
+  <link rel="canonical" href="https://dietavity.com/programa-glp1">
+  <link rel="icon" href="/images/dietavity-favicon-96x96.png" type="image/png">
+  <link rel="stylesheet" href="/css/ticket-27-landing.css">
+  <link rel="stylesheet" href="/css/glp1-holding.css">
+  <!-- Same Google tag and page-load convention as the public purchase page. -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-L3F2YSYBMP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-L3F2YSYBMP');
+    gtag('event', 'glp1_purchase_intent_page_view');
+  </script>
+  <% if (typeof metaPixelId === 'string' && metaPixelId) { %>
+    <script id="meta-pixel-loader" src="/js/meta-pixel.js" data-pixel-id="<%= metaPixelId %>"></script>
+  <% } %>
+</head>
+<body class="glp1-holding">
+  <header class="landing-header">
+    <div class="landing-shell header-inner">
+      <a class="brand-link" href="/" aria-label="Dietavity, ir al inicio">
+        <img src="/images/dietavity-logo.webp" alt="" width="128" height="128">
+        <span>DIETAVITY</span>
+      </a>
+    </div>
+  </header>
+  <main class="holding-main">
+    <div class="holding-message">
+      <p>Estamos abriendo esta modalidad de Dietavity de forma gradual.</p>
+      <p>Te enviaremos por WhatsApp el enlace para completar tu compra.</p>
+      <p class="holding-price">$149 MXN · 28 días · pago único · sin suscripción</p>
+    </div>
+  </main>
+  <footer class="holding-footer">
+    <nav aria-label="Enlaces legales y de servicio">
+      <a href="/">Inicio</a>
+      <a href="/terminos-y-condiciones">Términos y Condiciones</a>
+      <a href="/aviso-de-privacidad">Aviso de Privacidad</a>
+    </nav>
+  </footer>
+</body>
+</html>

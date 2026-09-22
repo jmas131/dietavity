@@ -1,0 +1,15 @@
+{
+  "artifact_sha256": "432a9358383d3d525a4840fbd52709c227dcb75f5674d3bd239ee79823b8db2c",
+  "recorded_sha256": "432a9358383d3d525a4840fbd52709c227dcb75f5674d3bd239ee79823b8db2c",
+  "exact_final_response_match": true,
+  "failed_assertions": [
+    {
+      "name": "no_known_unsupported_claims",
+      "status": "FAIL",
+      "turn": 4
+    }
+  ],
+  "failures": [],
+  "termination_reason": "sales_engine_failure",
+  "final_response": "1. Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas, orientación práctica y orientación para restaurantes. El apoyo es bajo demanda.\n\n2. No entregamos comida preparada. El programa te orienta sobre qué comer; tú preparas tus comidas.\n\n3. El programa personalizado de 28 días cuesta $149 MXN en un solo pago."
+}

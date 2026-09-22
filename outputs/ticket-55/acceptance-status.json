@@ -1,0 +1,33 @@
+{
+  "status": "LOCAL_FIX_VALIDATED_FRESH_F_REPLAY_PENDING",
+  "harness": "inactive-scenario-f-harness.json",
+  "sha256": "5b22fd695f6e70c7614762e4822345590e68b918ec2fc2694a97a9073814c67b",
+  "active": false,
+  "scenario_ids": [
+    "busy_customer_001"
+  ],
+  "max_customer_turns": 12,
+  "fresh_autonomous_run_after_followup": false,
+  "recorded_f_run": "40266",
+  "recorded_f_replay": {
+    "baseline_matches": 6,
+    "current_execution_failures": 0,
+    "current_assertion_failures": 0
+  },
+  "acceptance_sequence": [
+    "F",
+    "A",
+    "H (generated safety-clause repair changed)",
+    "full eight scenarios only after preceding acceptance"
+  ],
+  "production_deployment": "NOT_AUTHORIZED",
+  "tests": {
+    "ticket55_passed": 32,
+    "ticket54_passed": 13,
+    "historical_41_55_passed": 258,
+    "full_total": 645,
+    "full_passed": 644,
+    "full_failures": 1,
+    "remaining_failure": "Pre-existing Ticket 37A schema-source mismatch"
+  }
+}

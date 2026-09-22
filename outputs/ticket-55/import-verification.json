@@ -1,0 +1,17 @@
+{
+  "workflow_url": "https://n8n.dietavity.com/workflow/MNO1eP5Ca10DHEEz",
+  "imported_before_acceptance_followup": true,
+  "active": false,
+  "executed_by_this_task": false,
+  "only_openai_credentials": true,
+  "credential_name": "Onboarding Agent",
+  "credential_provenance": "Read-only verification against existing Ticket 48 synthetic Customer model",
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "import_normalization": "n8n removed the existing options.responseFormat=json_object setting from Customer/Customer repair/Judge/Judge repair model nodes. Strict harness output parsing remains in place; no runtime/model version changes made.",
+  "latest_local_harness_sha256": "5b22fd695f6e70c7614762e4822345590e68b918ec2fc2694a97a9073814c67b",
+  "latest_local_harness_active": false,
+  "latest_local_harness_imported": false
+}

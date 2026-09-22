@@ -1,0 +1,221 @@
+{
+  "name": "Global Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        0
+      ],
+      "id": "7aa35bfc-cbfb-4342-b50e-57181cc273b0",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "17dc621d-c446-4bd9-ad9c-cd6ab7c69f80",
+              "name": "event",
+              "value": "global_workflow_error",
+              "type": "string"
+            },
+            {
+              "id": "08e2f6c1-21de-42e9-b3fb-73507b5bd8b4",
+              "name": "severity",
+              "value": "error",
+              "type": "string"
+            },
+            {
+              "id": "a861c3db-6d43-48ed-8e47-8dfaeae348e4",
+              "name": "workflow",
+              "value": "={{ String($json.workflow?.name || \"Unknown workflow\").slice(0, 200) }}",
+              "type": "string"
+            },
+            {
+              "id": "12a714e2-8733-4600-a21a-07a232331e07",
+              "name": "workflow_id",
+              "value": "={{ String($json.workflow?.id || \"\").slice(0, 100) }}",
+              "type": "string"
+            },
+            {
+              "id": "69cc359e-4411-4cda-9ab2-71efe6998904",
+              "name": "error_message",
+              "value": "={{ String($json.execution?.error?.message || $json.trigger?.error?.message || $json.error?.message || \"Unknown workflow error\").replace(/[\"\\\\\\n\\r\\t]/g, \" \").trim().slice(0, 500) }}",
+              "type": "string"
+            },
+            {
+              "id": "f4ccb2f4-e496-4ee5-a21b-f4e3feae1641",
+              "name": "last_node_executed",
+              "value": "={{ String($json.execution?.lastNodeExecuted || \"\").slice(0, 200) }}",
+              "type": "string"
+            },
+            {
+              "id": "0713734b-c422-4233-9aa9-73434f00c9fc",
+              "name": "execution_id",
+              "value": "={{ String($json.execution?.id || \"\").slice(0, 100) }}",
+              "type": "string"
+            },
+            {
+              "id": "7dc7f628-aaf2-4508-9287-d610c0737114",
+              "name": "execution_url",
+              "value": "={{ String($json.execution?.url || \"\").slice(0, 500) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        16,
+        0
+      ],
+      "id": "0a2b6234-8104-4e71-9472-ef1aa7317e49",
+      "name": "Build Log JSON"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (\n  SELECT $1::jsonb AS payload\n), released_claims AS (\n  UPDATE public.messages AS inbound\n  SET processing_owner = NULL,\n      processing_lease_until = NULL,\n      processing_completed_at = CASE\n        WHEN EXISTS (\n    SELECT 1 FROM public.messages AS lr_any\n    WHERE lr_any.in_reply_to_id = inbound.id AND lr_any.direction = 'outbound'\n  )\n  AND NOT EXISTS (\n    SELECT 1\n    FROM (\n      SELECT\n        COALESCE(NULLIF(lr.metadata->>'logical_reply_key', ''), lr.idempotency_key) AS logical_key,\n        COUNT(*) AS row_count,\n        COUNT(DISTINCT lr.part_index) AS index_count,\n        MIN(lr.part_index) AS min_index,\n        MAX(lr.part_index) AS max_index,\n        MIN(lr.part_count) AS min_count,\n        MAX(lr.part_count) AS max_count,\n        BOOL_AND(COALESCE(\n          lr.delivery_status IN ('accepted', 'scheduled', 'sent', 'delivered')\n          AND (\n            lr.provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n            OR lr.metadata->>'provider_acceptance_evidence' = 'message_sid'\n          )\n          AND lr.session_id = (SELECT session_id FROM public.messages WHERE id = inbound.id)\n          AND lr.part_index BETWEEN 1 AND lr.part_count\n          AND lr.part_count BETWEEN 1 AND 999\n          AND lr.idempotency_key = CASE WHEN lr.part_index = 1\n            THEN COALESCE(NULLIF(lr.metadata->>'logical_reply_key', ''), lr.idempotency_key)\n            ELSE (lr.metadata->>'logical_reply_key') || ':part:' || LPAD(lr.part_index::text, 3, '0') END\n          AND (NOT lr.declared OR NULLIF(lr.metadata->>'logical_reply_key', '') IS NOT NULL)\n          AND (NOT lr.declared OR jsonb_typeof(lr.metadata->'logical_reply_key') = 'string')\n          AND (lr.declared OR lr.idempotency_key NOT LIKE '%:part:%')\n        , FALSE)) AS all_accepted\n      FROM (\n        SELECT source.*,\n          source.metadata ?| ARRAY['logical_reply_key', 'part_index', 'part_count'] AS declared,\n          CASE WHEN NOT (source.metadata ?| ARRAY['logical_reply_key', 'part_index', 'part_count']) THEN 1\n            WHEN jsonb_typeof(source.metadata->'part_index') = 'number' AND source.metadata->>'part_index' ~ '^[1-9][0-9]{0,2}$'\n            THEN (source.metadata->>'part_index')::integer END AS part_index,\n          CASE WHEN NOT (source.metadata ?| ARRAY['logical_reply_key', 'part_index', 'part_count']) THEN 1\n            WHEN jsonb_typeof(source.metadata->'part_count') = 'number' AND source.metadata->>'part_count' ~ '^[1-9][0-9]{0,2}$'\n            THEN (source.metadata->>'part_count')::integer END AS part_count\n        FROM public.messages AS source\n      ) AS lr\n      WHERE lr.in_reply_to_id = inbound.id AND lr.direction = 'outbound'\n      GROUP BY COALESCE(NULLIF(lr.metadata->>'logical_reply_key', ''), lr.idempotency_key)\n    ) AS logical_reply\n    WHERE logical_reply.logical_key IS NULL\n       OR logical_reply.min_count < 1\n       OR logical_reply.min_count <> logical_reply.max_count\n       OR logical_reply.row_count <> logical_reply.min_count\n       OR logical_reply.index_count <> logical_reply.min_count\n       OR logical_reply.min_index <> 1\n       OR logical_reply.max_index <> logical_reply.min_count\n       OR logical_reply.all_accepted IS NOT TRUE\n  ) THEN NOW()\n        ELSE NULL\n      END,\n      processing_outcome = CASE\n        WHEN EXISTS (SELECT 1 FROM public.messages AS outbound WHERE outbound.in_reply_to_id = inbound.id AND outbound.direction = 'outbound')\n          THEN 'reconciliation'\n        ELSE NULL\n      END,\n      metadata = inbound.metadata || jsonb_build_object(\n        'session_ordering_state', CASE\n          WHEN EXISTS (SELECT 1 FROM public.messages AS outbound WHERE outbound.in_reply_to_id = inbound.id AND outbound.direction = 'outbound')\n            THEN 'reconciliation'\n          ELSE 'queued'\n        END,\n        'claim_released_by_error_handler_at', NOW()\n      )\n  FROM input\n  WHERE inbound.direction = 'inbound'\n    AND inbound.processing_order IS NOT NULL\n    AND inbound.processing_completed_at IS NULL\n    AND inbound.processing_owner = input.payload->>'execution_id'\n  RETURNING inbound.session_id, inbound.processing_outcome\n), reset_commercial_context AS (\n  UPDATE public.onboarding_sessions AS session\n  SET last_question_type = NULL, last_question_at = NULL,\n      commercial_context_expires_at = NULL, checkout_authorization_type = NULL,\n      checkout_authorized_at = NULL, updated_at = NOW()\n  WHERE session.session_id IN (SELECT session_id FROM released_claims WHERE processing_outcome = 'reconciliation')\n  RETURNING session.session_id\n)\nINSERT INTO public.logs (event, severity, error_message, error_context)\nSELECT 'global_workflow_error', 'error',\n  LEFT(COALESCE(input.payload->>'error_message', 'Unknown workflow error'), 500),\n  jsonb_strip_nulls(jsonb_build_object(\n    'workflow', NULLIF(input.payload->>'workflow', ''),\n    'workflow_id', NULLIF(input.payload->>'workflow_id', ''),\n    'lastNodeExecuted', NULLIF(input.payload->>'last_node_executed', ''),\n    'execution_id', NULLIF(input.payload->>'execution_id', ''),\n    'execution_url', NULLIF(input.payload->>'execution_url', ''),\n    'session_claims_released', (SELECT COUNT(*) FROM released_claims),\n    'commercial_contexts_reset', (SELECT COUNT(*) FROM reset_commercial_context)\n  ))\nFROM input;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ error_message: $json.error_message, workflow: $json.workflow, workflow_id: $json.workflow_id, last_node_executed: $json.last_node_executed, execution_id: $json.execution_id, execution_url: $json.execution_url }) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        272,
+        -96
+      ],
+      "id": "a4c9f423-55ee-4f29-8604-07aea4d1e2f6",
+      "name": "Insert Error Log (Error Handler)",
+      "notes": "Ticket 36 releases a failed execution's lease but completes the inbound only when Twilio acceptance is durable. Unknown/failed outbound work stays incomplete in reconciliation, cannot duplicate-send, and remains operationally visible.",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "93692c40-a558-40ff-bff1-054f02b9bc4f",
+              "name": "subject",
+              "value": "={{ $json.workflow }}",
+              "type": "string"
+            },
+            {
+              "id": "efca3c6f-e697-4b64-8375-3118e3226ea0",
+              "name": "body",
+              "value": "=<b>Workflow:</b> {{$json.workflow}}<br>\n<b>Workflow ID:</b> {{$json.workflow_id}}<br>\n<b>Error:</b> {{$json.error_message}}<br>\n<b>Node:</b> {{$json.last_node_executed}}<br>",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        288,
+        96
+      ],
+      "id": "8f6c9481-df87-4b71-8793-53799f287267",
+      "name": "Build Email Error Content"
+    },
+    {
+      "parameters": {
+        "fromEmail": "error@dietavity.com",
+        "toEmail": "juan@autorintelectual.com",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        624,
+        96
+      ],
+      "id": "cc05454f-a039-4912-9f83-153172ceb788",
+      "name": "Send Error Notification",
+      "webhookId": "bfcbfaac-03b5-47b5-bd18-e690324459af",
+      "credentials": {
+        "smtp": {
+          "id": "t4AWlg4CpwFcjALs",
+          "name": "SMTP Hostinger"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Log JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Log JSON": {
+      "main": [
+        [
+          {
+            "node": "Build Email Error Content",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insert Error Log (Error Handler)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Error Log (Error Handler)": {
+      "main": [
+        []
+      ]
+    },
+    "Build Email Error Content": {
+      "main": [
+        [
+          {
+            "node": "Send Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "326b7fb0-e95c-4741-9666-6d7d61c829c1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2edd72e6d5781df09a60b65fd523f4841afca081863c21ef852a5bbcd21fdca1"
+  },
+  "nodeGroups": [],
+  "id": "sa10JQEAbxNYvCGG",
+  "tags": []
+}

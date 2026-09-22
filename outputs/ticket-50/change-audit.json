@@ -1,0 +1,56 @@
+{
+  "label": "Synthetic outcome - not market evidence",
+  "changed_files": [
+    "lib/dietavity-knowledge.js",
+    "lib/sales-engine-v3.js",
+    "lib/ticket-48-harness.js",
+    "lib/sales-response-contract.js",
+    "scripts/generate-ticket-48-harness.js",
+    "scripts/refactor-ticket-10-workflow.js",
+    "n8n/Dietavity Autonomous Conversation Harness (Ticket 48).json",
+    "n8n/Dietavity Sales Conversation Test Harness (Ticket 41A).json",
+    "n8n/Dietavity Sales Engine (Ticket 10).json",
+    "test/ticket-9-canonical-message-ledger.test.js",
+    "test/ticket-8d-live-sales-context.test.js",
+    "test/ticket-8-sales-engine-v3.test.js",
+    "test/ticket-50-current-question.test.js",
+    "test-support/ticket-50-scenario-g.js",
+    "docs/TICKET-50-IMPLEMENTATION.md"
+  ],
+  "canonical_changed_nodes": [
+    "Build Canonical Dietavity Knowledge",
+    "Apply Deterministic Commercial Policy",
+    "Build Constrained Sales Response",
+    "Validate Sales Response Contract",
+    "Reserve Checkout Reply"
+  ],
+  "canonical_connections_unchanged": true,
+  "canonical_node_types_unchanged": true,
+  "recovery_poller_unchanged": true,
+  "database_unchanged": true,
+  "schema_sync_failure_exists_in_baseline": true,
+  "inactive_artifacts": {
+    "n8n/Dietavity Autonomous Conversation Harness (Ticket 48).json": true,
+    "n8n/Dietavity Sales Conversation Test Harness (Ticket 41A).json": true,
+    "n8n/Dietavity Sales Engine (Ticket 10).json": true
+  },
+  "live_runtime_available": false,
+  "side_effects": "Local code generation and model-boundary fixtures only; no external API calls, imports, activation, deployment, or application database writes.",
+  "sha256": {
+    "lib/dietavity-knowledge.js": "40df390a917d3bd87d04b008609235178d526fb185e1349d1ea275e212957d42",
+    "lib/sales-engine-v3.js": "9322706d78c230c83e869ccae62b2f6a5cf8cbcf9fb2ba89f0ea5ef6b969dbd6",
+    "lib/ticket-48-harness.js": "3df4cc60745b4bc82767964f9b9571109e750faef39ca4cb31e32dec62e52d37",
+    "lib/sales-response-contract.js": "37a05d1efb47732c6414174d3b17abbfd418a70ceb65e5a007d6392dc6edb56e",
+    "scripts/generate-ticket-48-harness.js": "7ea1a8c97520c83903ff8ef6d7e24774e4637783a90b6ceb6ddc2dd9a66dcf98",
+    "scripts/refactor-ticket-10-workflow.js": "3817bc7945a7fae30fa5fe80e8a5905e7a01baf35525c0bfdf797c187feb540a",
+    "n8n/Dietavity Autonomous Conversation Harness (Ticket 48).json": "90078864edcad2d695f67a64e22a4cba586b34382189417c886e1741f4bf5a8a",
+    "n8n/Dietavity Sales Conversation Test Harness (Ticket 41A).json": "8b09736850eaf074bac2801974458b24c6efe817ad1a428cb6d7232dfe59f8b4",
+    "n8n/Dietavity Sales Engine (Ticket 10).json": "c3abd198210f9fdd62b338fe0445062d14d94f89c9dd8276e2c45c93e8cb6c7c",
+    "test/ticket-9-canonical-message-ledger.test.js": "876d0e6c0090ebe2a347ebefaa56b0615aa255ac0cfe374dfef21e7e1d1fd71b",
+    "test/ticket-8d-live-sales-context.test.js": "cbfdd48ee305f708a346c41c84953d9596c9f49a1de1836998e07e4069fdb93b",
+    "test/ticket-8-sales-engine-v3.test.js": "d2407635d4777e67ad5b726a1a60e4f0ac9b4cdfb522a3ad88ff5c0864220c0c",
+    "test/ticket-50-current-question.test.js": "3a783058929f21745ec78f9666b7524057d22e0a09c429fb002437c04abdce91",
+    "test-support/ticket-50-scenario-g.js": "a7a71f8120167cfb32b784c0c1faaab0792046a4da25584c693e36e60bf3d1ab",
+    "docs/TICKET-50-IMPLEMENTATION.md": "83b5593c8c12b09aa0a00b6cf061e1285733bf94454a97a7b3f7ea93255dbc8d"
+  }
+}

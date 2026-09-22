@@ -1,0 +1,1072 @@
+{
+  "name": "Dietavity Stripe Checkout Sandbox",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        66000,
+        49520
+      ],
+      "id": "4085f1b6-ac37-4770-a4ed-43bb6f24286c",
+      "name": "Sandbox Start Authorized WhatsApp Checkout",
+      "notes": "Operator-only test entry. Configure an existing authorized test WhatsApp session before executing; never expose this path as a public webhook."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8926362f-bbec-44f5-a635-fc3eae918667",
+              "name": "session_id",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        66224,
+        49520
+      ],
+      "id": "ff23b35a-122d-43ac-a0a0-5afcc23fd808",
+      "name": "Sandbox Configure WhatsApp Checkout",
+      "notes": "Set session_id to an existing authorized test WhatsApp identity, such as its normalized +52... value. The empty default deliberately fails closed."
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json || {};\nconst sessionId = String(input.session_id || '')\n  .trim()\n  .replace(/^whatsapp:/i, '')\n  .replace(/\\s+/g, '');\n\nif (!/^\\+[1-9]\\d{7,14}$/.test(sessionId)) {\n  throw new Error('SANDBOX_AUTHORIZED_WHATSAPP_SESSION_REQUIRED');\n}\n\nreturn [{ json: { ...input, session_id: sessionId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        66448,
+        49520
+      ],
+      "id": "18be45ae-769c-4e9f-a2ce-36dcb01ca8a0",
+      "name": "Sandbox Validate WhatsApp Checkout Input",
+      "notes": "Reject empty, malformed, website-only, and non-WhatsApp checkout input before any Stripe request."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (\n  SELECT $1::jsonb AS payload\n)\nSELECT\n  session.session_id,\n  session.checkout_authorization_type,\n  session.offer_version\nFROM public.onboarding_sessions AS session\nCROSS JOIN input\nWHERE session.session_id = input.payload->>'session_id'\n  AND session.checkout_authorized_at IS NOT NULL\n  AND session.checkout_authorization_type IN ('explicit', 'contextual')\n  AND session.offer_version = '28d-149-v1'\n  AND session.checkout_session_id IS NULL;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        66672,
+        49520
+      ],
+      "id": "be01c390-8a26-445c-b644-d1a81f4433ea",
+      "name": "Sandbox Verify Existing Checkout Authorization",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Read-only production-equivalent authorization gate. Missing authorization or an existing Checkout Session emits no item and cannot create a duplicate sandbox session."
+    },
+    {
+      "parameters": {
+        "events": [
+          "checkout.session.completed"
+        ],
+        "apiVersion": "2026-07-29.dahlia"
+      },
+      "type": "n8n-nodes-base.stripeTrigger",
+      "typeVersion": 1,
+      "position": [
+        65936,
+        48528
+      ],
+      "id": "dca50fa5-9bea-491d-9207-91492401f16e",
+      "name": "Sandbox Webhook Stripe Checkout",
+      "webhookId": "502dea5f-4255-4fa1-b08d-25bdeeb02779",
+      "credentials": {
+        "stripeApi": {
+          "name": "Stripe Account Sandbox"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $input.first().json || {};\nconst session = event?.data?.object || {};\nconst metadata = session.metadata || {};\nconst normalizeId = (value) => {\n  if (value && typeof value === 'object') return value.id || '';\n  return value == null ? '' : String(value);\n};\nconst whatsappId = String(metadata.whatsapp_id ?? '')\n  .trim()\n  .replace(/^whatsapp:/i, '')\n  .replace(/\\s+/g, '')\n  .trim();\nconst completedAt = Number.isFinite(Number(event.created))\n  ? new Date(Number(event.created) * 1000).toISOString()\n  : '';\n\nreturn [{\n  json: {\n    event_id: normalizeId(event.id),\n    checkout_session_id: normalizeId(session.id),\n    mode: String(session.mode ?? '').toLowerCase(),\n    payment_status: String(session.payment_status ?? '').toLowerCase(),\n    payment_intent_id: normalizeId(session.payment_intent),\n    customer_id: normalizeId(session.customer),\n    email: String(session.customer_details?.email ?? '').trim().toLowerCase(),\n    amount_total: Number.isFinite(Number(session.amount_total)) ? Number(session.amount_total) : null,\n    currency: String(session.currency ?? '').toLowerCase(),\n    whatsapp_id: whatsappId,\n    user_id: String(metadata.user_id ?? '').trim(),\n    acquisition_source: String(metadata.acquisition_source ?? 'whatsapp').trim().toLowerCase(),\n    purchase_type: String(metadata.purchase_type ?? ''),\n    program_version: String(metadata.program_version ?? ''),\n    purchased_at: completedAt,\n    raw_event: event\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        66160,
+        48864
+      ],
+      "id": "0c5af90e-6c44-42d7-bf69-491bac5189b9",
+      "name": "Sandbox Normalize Stripe Checkout Event"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "1801c11c-82d3-4130-b111-b6fd6cb95ed8",
+                    "leftValue": "={{ $json.mode }}",
+                    "rightValue": "payment",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c4592201-7e17-48d0-ab3d-c87ae0e24bd7",
+                    "leftValue": "={{ $json.mode }}",
+                    "rightValue": "subscription",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        66384,
+        48864
+      ],
+      "id": "d0c82fd2-844e-43bb-b78c-5ece65dde404",
+      "name": "Sandbox Switch Checkout Session Mode"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst errors = [];\nif (data.mode !== 'payment') errors.push('mode must be payment');\nif (data.payment_status !== 'paid') errors.push('payment_status must be paid');\nif (data.purchase_type !== '28_day_program') errors.push('purchase_type must be 28_day_program');\nif (data.program_version !== '1') errors.push('program_version must be 1');\nif (data.currency !== 'mxn') errors.push('currency must be mxn');\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(data.email || '') || data.email.length > 254) errors.push('Stripe customer email is required');\nif (data.amount_total !== 14900) errors.push('amount_total must be 14900');\nif (data.acquisition_source === 'website') {\n  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.user_id || '')) {\n    errors.push('canonical website user_id is required');\n  }\n  if (data.whatsapp_id) errors.push('website Checkout must not include whatsapp_id');\n} else {\n  if (data.acquisition_source !== 'whatsapp') errors.push('unsupported acquisition source');\n  if (!data.whatsapp_id) errors.push('normalized whatsapp_id is required');\n}\nif (!data.checkout_session_id) errors.push('checkout_session_id is required');\nif (!data.payment_intent_id) errors.push('payment_intent_id is required');\nif (!data.purchased_at) errors.push('Stripe event completion time is required');\n\nreturn [{ json: { ...data, validation_valid: errors.length === 0, validation_errors: errors } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        66608,
+        48704
+      ],
+      "id": "e6d017fe-0669-49d6-865d-7848d1d0b3df",
+      "name": "Sandbox Validate One-Time Payment Basics"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "882217a5-e211-4c8b-8599-1889d70054b3",
+              "leftValue": "={{ $json.validation_valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        66832,
+        48704
+      ],
+      "id": "4d9efae3-0527-49d4-85c7-2c7c4ef8713c",
+      "name": "Sandbox If One-Time Payment Basics Valid"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.stripe.com/v1/checkout/sessions/{{ encodeURIComponent($json.checkout_session_id) }}/line_items?limit=100",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        67056,
+        48592
+      ],
+      "id": "c56c359c-6b91-4dc9-be60-eff2d7c1e044",
+      "name": "Sandbox Retrieve Stripe Checkout Line Items",
+      "credentials": {
+        "stripeApi": {
+          "name": "Stripe Account Sandbox"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const normalized = $('Sandbox Normalize Stripe Checkout Event').item.json;\nconst response = $input.first().json || {};\nconst lineItems = Array.isArray(response.data) ? response.data : [];\nconst expectedPriceId = 'price_1U1SvtCXkbpCbNJI0sAqDeQF';\nconst item = lineItems.length === 1 ? lineItems[0] : null;\nconst price = item?.price || {};\nconst priceId = typeof price === 'string' ? price : price.id;\nconst product = typeof price === 'object' ? price.product : null;\nconst productId = typeof product === 'string' ? product : (product?.id || null);\nconst errors = [];\n\nif (lineItems.length !== 1) errors.push('Checkout Session must contain exactly one line item');\nif (priceId !== expectedPriceId) errors.push('Stripe Price ID does not match the 28-day program Price');\nif (Number(item?.quantity) !== 1) errors.push('Checkout Session line-item quantity must be 1');\n\nreturn [{\n  json: {\n    ...normalized,\n    verified_price_id: priceId || '',\n    verified_product_id: productId || '',\n    price_validation_valid: errors.length === 0,\n    validation_errors: errors\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        67280,
+        48592
+      ],
+      "id": "21611100-6a07-4c8f-8549-fb2057af9d37",
+      "name": "Sandbox Verify Purchased Stripe Price"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c6790794-276f-4445-b28c-30ee5fa573e9",
+              "leftValue": "={{ $json.price_validation_valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        67504,
+        48592
+      ],
+      "id": "d525c9d1-3bac-4379-9b2f-2870510d83b4",
+      "name": "Sandbox If Purchased Stripe Price Valid"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (\n  SELECT $1::jsonb AS payload\n),\nwebsite_user AS (\n  UPDATE public.users AS target_user\n  SET\n    email = input.payload->>'email',\n    is_active = TRUE,\n    plan_type = '28_day_program',\n    stripe_customer_id = COALESCE(\n      NULLIF(input.payload->>'customer_id', ''),\n      target_user.stripe_customer_id\n    )\n  FROM input\n  WHERE input.payload->>'acquisition_source' = 'website'\n    AND target_user.id = NULLIF(input.payload->>'user_id', '')::uuid\n    AND target_user.whatsapp_id IS NULL\n    AND NULLIF(target_user.portal_token, '') IS NOT NULL\n  RETURNING target_user.*\n),\nwhatsapp_user AS (\n  INSERT INTO public.users AS target_user (\n    whatsapp_id,\n    email,\n    is_active,\n    plan_type,\n    stripe_customer_id\n  )\n  SELECT\n    payload->>'whatsapp_id',\n    payload->>'email',\n    TRUE,\n    '28_day_program',\n    NULLIF(payload->>'customer_id', '')\n  FROM input\n  WHERE input.payload->>'acquisition_source' = 'whatsapp'\n    AND NULLIF(input.payload->>'whatsapp_id', '') IS NOT NULL\n  ON CONFLICT (whatsapp_id) DO UPDATE\n    SET whatsapp_id = EXCLUDED.whatsapp_id,\n        email = EXCLUDED.email\n  RETURNING target_user.*\n),\nresolved_user AS (\n  SELECT * FROM website_user\n  UNION ALL\n  SELECT * FROM whatsapp_user\n),\nuser_resolution_assertion AS (\n  SELECT 1 / COUNT(*)::integer AS resolution_valid\n  FROM resolved_user\n),\nresolved_purchase AS (\n  INSERT INTO public.purchases AS target_purchase (\n    user_id,\n    program_id,\n    stripe_checkout_session_id,\n    stripe_payment_intent_id,\n    stripe_customer_id,\n    stripe_product_id,\n    stripe_price_id,\n    purchase_type,\n    payment_status,\n    amount_total,\n    currency,\n    purchased_at\n  )\n  SELECT\n    resolved_user.id,\n    NULL,\n    input.payload->>'checkout_session_id',\n    input.payload->>'payment_intent_id',\n    NULLIF(input.payload->>'customer_id', ''),\n    NULLIF(input.payload->>'verified_product_id', ''),\n    NULLIF(input.payload->>'verified_price_id', ''),\n    '28_day_program',\n    'paid',\n    14900,\n    'mxn',\n    (input.payload->>'purchased_at')::timestamptz\n  FROM input\n  CROSS JOIN resolved_user\n  CROSS JOIN user_resolution_assertion\n  WHERE user_resolution_assertion.resolution_valid = 1\n  ON CONFLICT (stripe_checkout_session_id) DO UPDATE\n    SET stripe_checkout_session_id = EXCLUDED.stripe_checkout_session_id\n  RETURNING target_purchase.*, (target_purchase.xmax = 0) AS purchase_created\n), linked_messages AS (\n  UPDATE public.messages AS message\n  SET user_id = resolved_user.id\n  FROM resolved_user, input\n  WHERE message.session_id = input.payload->>'whatsapp_id'\n    AND message.user_id IS NULL\n  RETURNING message.id\n), linked_funnel AS (\n  UPDATE public.sales_funnel_events AS event\n  SET user_id = resolved_user.id\n  FROM resolved_user, input\n  WHERE event.session_id = input.payload->>'whatsapp_id'\n    AND event.user_id IS NULL\n  RETURNING event.id\n), purchase_event AS (\n  INSERT INTO public.sales_funnel_events (\n    session_id, user_id, event_type, event_key, offer_version, metadata\n  )\n  SELECT\n    input.payload->>'whatsapp_id', resolved_user.id,\n    'purchase_completed',\n    'purchase_completed:' || resolved_purchase.stripe_checkout_session_id,\n    '28d-149-v1',\n    jsonb_build_object('checkout_session_id', resolved_purchase.stripe_checkout_session_id) ||\n    jsonb_strip_nulls(jsonb_build_object('offer_context', (\n      SELECT offer_context FROM public.onboarding_sessions\n      WHERE session_id = input.payload->>'whatsapp_id'\n    )))\n  FROM input CROSS JOIN resolved_user CROSS JOIN resolved_purchase\n  WHERE resolved_purchase.payment_status = 'paid'\n  ON CONFLICT (event_key) WHERE event_key IS NOT NULL DO NOTHING\n)\nSELECT\n  resolved_user.id AS user_id,\n  resolved_user.whatsapp_id,\n  resolved_user.portal_token,\n  resolved_purchase.id AS purchase_id,\n  resolved_purchase.stripe_checkout_session_id,\n  resolved_purchase.purchase_created\nFROM user_resolution_assertion\nLEFT JOIN resolved_user ON TRUE\nLEFT JOIN resolved_purchase ON TRUE\nWHERE user_resolution_assertion.resolution_valid = 1;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        67728,
+        48480
+      ],
+      "id": "08a5a477-cdd3-40d1-80e7-cd0176e41afc",
+      "name": "Sandbox Resolve User and Persist Purchase",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e67f49f8-0cc4-4051-882d-456b19613067",
+              "leftValue": "={{ $json.purchase_created }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        67952,
+        48480
+      ],
+      "id": "fe5285fa-adc0-4dff-9d17-7c72d1fb574f",
+      "name": "Sandbox If New Purchase Inserted"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (\n  SELECT $1::jsonb AS payload\n),\nupdated_session AS (\n  UPDATE public.onboarding_sessions AS target_session\n  SET\n    conversation_stage = NULL,\n    updated_at = NOW()\n  FROM input\n  WHERE target_session.session_id = input.payload->>'whatsapp_id'\n  RETURNING target_session.session_id\n)\nSELECT\n  input.payload->>'user_id' AS user_id,\n  input.payload->>'whatsapp_id' AS whatsapp_id,\n  input.payload->>'portal_token' AS portal_token,\n  input.payload->>'purchase_id' AS purchase_id,\n  input.payload->>'stripe_checkout_session_id' AS stripe_checkout_session_id,\n  (input.payload->>'purchase_created')::boolean AS purchase_created,\n  EXISTS (SELECT 1 FROM updated_session) AS onboarding_session_updated\nFROM input;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        68176,
+        48368
+      ],
+      "id": "c2b3e6f8-3480-43a2-a663-5e9d4f2c9131",
+      "name": "Sandbox Mark Onboarding Session Subscriber",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a24c036d-8c15-4454-a776-defba0240001",
+              "leftValue": "={{ Boolean($json.whatsapp_id) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        68368,
+        48368
+      ],
+      "id": "e7bd265a-97a6-4336-ae2d-b7fad65e348a",
+      "name": "Sandbox If Customer Has WhatsApp",
+      "notes": "Website purchasers receive Setup access through the verified Checkout success redirect; never reserve or send Twilio messages without a real WhatsApp channel."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (SELECT $1::jsonb AS payload), reserved AS (\n  INSERT INTO public.messages (\n    user_id, session_id, direction, body, message_kind, provider,\n    idempotency_key, in_reply_to_id, delivery_status, metadata,\n    assistant_response\n  )\n  SELECT\n    NULLIF(input.payload->>'user_id', '')::uuid,\n    input.payload->>'session_id', 'outbound', input.payload->>'body',\n    input.payload->>'message_kind', 'twilio', input.payload->>'idempotency_key',\n    NULLIF(input.payload->>'in_reply_to_id', '')::uuid, 'pending',\n    COALESCE(input.payload->'metadata', '{}'::jsonb), input.payload->>'body'\n  FROM input\n  WHERE NULLIF(input.payload->>'body', '') IS NOT NULL\n  ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING\n  RETURNING *\n)\nSELECT * FROM reserved;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({\n    session_id: $json.whatsapp_id,\n    user_id: $json.user_id,\n    body: '🎉 ¡Tu pago fue confirmado!\\n\\nAhora completa tu perfil para preparar tu programa personalizado de 28 días:\\n\\n👉 https://dietavity.com/setup/' + $json.portal_token,\n    message_kind: \"setup_link\",\n    idempotency_key: 'setup:' + $json.stripe_checkout_session_id,\n    in_reply_to_id: null,\n    metadata: { checkout_session_id: $json.stripe_checkout_session_id }\n  }) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        68240,
+        48288
+      ],
+      "id": "fe56e0b9-67c9-4ab8-b19f-f5111b8d035d",
+      "name": "Sandbox Reserve Setup Link",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Only the execution that inserts this unique logical reservation may call Twilio."
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $json.session_id }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        68400,
+        48368
+      ],
+      "id": "870b789e-dd35-462f-8164-b49aa65518b7",
+      "name": "Sandbox Send 28-Day Program Setup Link",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (SELECT $1::jsonb AS payload), classified AS (\n  SELECT\n    payload,\n    CASE\n      WHEN payload->>'error_code' = '21617'\n        OR LOWER(COALESCE(payload->>'provider_status', '')) IN ('canceled', 'failed', 'undelivered')\n        OR COALESCE(NULLIF(payload->>'status_code', '')::integer, 0) BETWEEN 400 AND 499\n        THEN 'failed'\n      WHEN payload->>'expected_status' = 'scheduled'\n        AND LOWER(COALESCE(payload->>'provider_status', '')) = 'scheduled'\n        AND payload->>'provider_message_sid' ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n        THEN 'scheduled'\n      WHEN payload->>'expected_status' = 'accepted'\n        AND payload->>'provider_message_sid' ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n        THEN 'accepted'\n      ELSE 'unknown'\n    END AS final_status\n  FROM input\n), updated AS (\n  UPDATE public.messages AS message\n  SET provider_message_sid = CASE\n        WHEN classified.payload->>'provider_message_sid' ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n          THEN classified.payload->>'provider_message_sid'\n        ELSE message.provider_message_sid\n      END,\n      delivery_status = classified.final_status,\n      metadata = message.metadata || jsonb_strip_nulls(jsonb_build_object(\n        'provider_status', NULLIF(classified.payload->>'provider_status', ''),\n        'provider_error_code', NULLIF(classified.payload->>'error_code', ''),\n        'provider_error_message', LEFT(NULLIF(classified.payload->>'error_message', ''), 300),\n        'provider_acceptance_evidence', CASE\n          WHEN classified.final_status IN ('accepted', 'scheduled') THEN 'message_sid'\n          WHEN classified.final_status = 'failed' THEN 'definitive_failure'\n          ELSE 'reconciliation_required'\n        END\n      ))\n  FROM classified\n  WHERE message.idempotency_key = classified.payload->>'idempotency_key'\n    AND message.delivery_status = 'pending'\n  RETURNING message.*\n)\nSELECT * FROM updated;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({\n    idempotency_key: $('Sandbox Reserve Setup Link').item.json.idempotency_key,\n    expected_status: 'accepted',\n    provider_message_sid: $json.sid || $json.messageSid || $json.message_sid || ($json.data && ($json.data.sid || $json.data.messageSid || $json.data.message_sid)) || '',\n    provider_status: $json.status || $json.messageStatus || $json.message_status || ($json.data && ($json.data.status || $json.data.messageStatus || $json.data.message_status)) || '',\n    status_code: $json.statusCode || $json.httpCode || $json.status_code || ($json.error && typeof $json.error === 'object' && ($json.error.statusCode || $json.error.httpCode || $json.error.status_code)) || '',\n    error_code: $json.code || $json.errorCode || $json.error_code || ($json.error && typeof $json.error === 'object' && ($json.error.code || $json.error.errorCode || $json.error.error_code)) || String($json.message || $json.errorMessage || $json.error_message || (typeof $json.error === 'string' ? $json.error : '') || '').match(/(?:^|\\D)(21617)(?:\\D|$)/)?.[1] || '',\n    error_message: $json.message || $json.errorMessage || $json.error_message || ($json.error && typeof $json.error === 'object' && ($json.error.message || $json.error.errorMessage || $json.error.error_message)) || (typeof $json.error === 'string' ? $json.error : '') || ''\n  }) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        68560,
+        48288
+      ],
+      "id": "d304e1c5-5ff6-4325-9221-46667ecb40ce",
+      "name": "Sandbox Update Setup Link Delivery",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Ticket 36: a valid Message SID proves API acceptance; explicit failed/undelivered/canceled or HTTP 4xx is failed; missing acceptance evidence remains actionable unknown."
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nif (!['accepted', 'scheduled'].includes(row.delivery_status)) {\n  throw new Error('TICKET_9_TWILIO_SEND_REQUIRES_RECONCILIATION:' + row.idempotency_key + ':' + row.delivery_status);\n}\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        68720,
+        48288
+      ],
+      "id": "c0a04b66-3bf8-4191-bdb6-9fe641050b23",
+      "name": "Sandbox Assert Setup Link Accepted",
+      "notes": "Ambiguous sends are never retried blindly. The Global Error Handler alerts after the unknown/failed state is durable."
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst unsupported = data.mode !== 'payment' && data.mode !== 'subscription';\nconst errors = Array.isArray(data.validation_errors) ? data.validation_errors : [];\nreturn [{\n  json: {\n    ...data,\n    validation_errors: errors.length ? errors : [unsupported ? `unsupported Checkout Session mode: ${data.mode || '(empty)'}` : 'Stripe Checkout validation failed']\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        67056,
+        49024
+      ],
+      "id": "05829bb4-edca-419f-b818-5a9757213d84",
+      "name": "Sandbox Prepare Stripe Checkout Rejection"
+    },
+    {
+      "parameters": {
+        "tableId": "logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "event",
+              "fieldValue": "stripe_checkout_rejected"
+            },
+            {
+              "fieldId": "severity",
+              "fieldValue": "warning"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.validation_errors.join(\"; \") }}"
+            },
+            {
+              "fieldId": "error_context",
+              "fieldValue": "={{ ({ event_id: $json.event_id || null, checkout_session_id: $json.checkout_session_id || null, mode: $json.mode || null, payment_status: $json.payment_status || null, amount_total: $json.amount_total ?? null, currency: $json.currency || null, whatsapp_id_present: Boolean($json.whatsapp_id), purchase_type: $json.purchase_type || null, program_version: $json.program_version || null, verified_price_id: $json.verified_price_id || null, reasons: $json.validation_errors }) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        67280,
+        49024
+      ],
+      "id": "85e44724-61c5-429e-9ef8-e40752418c1b",
+      "name": "Sandbox Log Stripe Checkout Rejection",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "event",
+              "fieldValue": "stripe_checkout_duplicate"
+            },
+            {
+              "fieldId": "severity",
+              "fieldValue": "info"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "Duplicate checkout.session.completed reused the existing purchase; setup link suppressed."
+            },
+            {
+              "fieldId": "error_context",
+              "fieldValue": "={{ ({ checkout_session_id: $json.stripe_checkout_session_id, purchase_id: $json.purchase_id, user_id: $json.user_id }) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        68176,
+        48592
+      ],
+      "id": "5a54d783-ff3e-483c-9401-0dfdb17b732c",
+      "name": "Sandbox Log Duplicate Stripe Checkout",
+      "credentials": {
+        "supabaseApi": {
+          "id": "B3vHRjTvOwuRSoIw",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ab16bada-8bc2-4435-8077-288fc11fb19a",
+              "name": "metadata",
+              "value": "={{ ({ whatsapp_id: $('Sandbox Validate WhatsApp Checkout Input').item.json.session_id, offer_version: '28d-149-v1', authorization_type: $('Sandbox Verify Existing Checkout Authorization').item.json.checkout_authorization_type }) }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        68144,
+        49392
+      ],
+      "id": "c5cda793-71ee-44df-b4c4-65382232277f",
+      "name": "Sandbox Add whatsapp_id",
+      "notes": "Former field name: metadata[whatsapp_id]\n------- \n{{ ({\n  whatsapp_id: $('Mockup Mobile Number').item.json.whatsapp_id\n    .replace(/^whatsapp:/, '')\n    .replace(/\\s+/g, '')\n}) }}\n----\n{{ ({\n  whatsapp_id:\n    $('Incoming Message').item.json.data.from\n    .toString()\n    .replace(/^whatsapp:/, '')\n    .replace(/\\s+/g, '')\n}) }}"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/checkout/sessions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.STRIPE_TEST_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "mode",
+              "value": "payment"
+            },
+            {
+              "name": "success_url",
+              "value": "https://dietavity.com/pago-exitoso?session_id={CHECKOUT_SESSION_ID}"
+            },
+            {
+              "name": "cancel_url",
+              "value": "https://dietavity.com/pago-cancelado"
+            },
+            {
+              "name": "line_items[0][price]",
+              "value": "price_1U1SvtCXkbpCbNJI0sAqDeQF"
+            },
+            {
+              "name": "line_items[0][quantity]",
+              "value": "1"
+            },
+            {
+              "name": "customer_creation",
+              "value": "if_required"
+            },
+            {
+              "name": "metadata[whatsapp_id]",
+              "value": "={{ $json.metadata.whatsapp_id }}"
+            },
+            {
+              "name": "metadata[purchase_type]",
+              "value": "28_day_program"
+            },
+            {
+              "name": "metadata[program_version]",
+              "value": "1"
+            },
+            {
+              "name": "payment_intent_data[metadata][whatsapp_id]",
+              "value": "={{ $json.metadata.whatsapp_id }}"
+            },
+            {
+              "name": "payment_intent_data[metadata][purchase_type]",
+              "value": "28_day_program"
+            },
+            {
+              "name": "payment_intent_data[metadata][program_version]",
+              "value": "1"
+            },
+            {
+              "name": "metadata[lead_session_id]",
+              "value": "={{ $('Sandbox Validate WhatsApp Checkout Input').item.json.session_id }}"
+            },
+            {
+              "name": "metadata[offer_version]",
+              "value": "28d-149-v1"
+            },
+            {
+              "name": "payment_intent_data[metadata][lead_session_id]",
+              "value": "={{ $('Sandbox Validate WhatsApp Checkout Input').item.json.session_id }}"
+            },
+            {
+              "name": "payment_intent_data[metadata][offer_version]",
+              "value": "28d-149-v1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        68336,
+        49392
+      ],
+      "id": "3ab0c9d2-d608-466d-9f26-478a553698c6",
+      "name": "Sandbox Stripe Checkout Session Payment"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.onboarding_sessions\nSET checkout_session_id = '{{ $json.id }}', updated_at = NOW()\nWHERE session_id = '{{ $('Sandbox Validate WhatsApp Checkout Input').item.json.session_id }}'\n  AND checkout_authorized_at IS NOT NULL\n  AND checkout_authorization_type IN ('explicit', 'contextual')\n  AND offer_version = '28d-149-v1'\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        70528,
+        49104
+      ],
+      "id": "392744a8-6276-4e39-a105-de44d7a737af",
+      "name": "Sandbox Persist Checkout Session Evidence v3",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Persists the Stripe Session ID before the URL is sent. Does not mark checkout_pending yet."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fc4a5086-d9c0-4fad-ae52-7752c7d0f235",
+              "name": "message",
+              "value": "=¡Perfecto! 😊 Tu programa personalizado de 28 días cuesta $149 MXN en un solo pago.\nPuedes adquirirlo aquí:\n{{ $('Sandbox Stripe Checkout Session Payment').item.json.url }}\nEl enlace sólo estará activo durante 24 horas.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        68544,
+        49392
+      ],
+      "id": "a99bf7dc-72d7-463c-83ac-5ec073edf192",
+      "name": "Sandbox Message with Stripe Payment URL"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Sandbox Webhook Stripe Checkout": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Normalize Stripe Checkout Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Normalize Stripe Checkout Event": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Switch Checkout Session Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Switch Checkout Session Mode": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Validate One-Time Payment Basics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sandbox Prepare Stripe Checkout Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sandbox Prepare Stripe Checkout Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Validate One-Time Payment Basics": {
+      "main": [
+        [
+          {
+            "node": "Sandbox If One-Time Payment Basics Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox If One-Time Payment Basics Valid": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Retrieve Stripe Checkout Line Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sandbox Prepare Stripe Checkout Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Retrieve Stripe Checkout Line Items": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Verify Purchased Stripe Price",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Verify Purchased Stripe Price": {
+      "main": [
+        [
+          {
+            "node": "Sandbox If Purchased Stripe Price Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox If Purchased Stripe Price Valid": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Resolve User and Persist Purchase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sandbox Prepare Stripe Checkout Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Resolve User and Persist Purchase": {
+      "main": [
+        [
+          {
+            "node": "Sandbox If New Purchase Inserted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox If New Purchase Inserted": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Mark Onboarding Session Subscriber",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sandbox Log Duplicate Stripe Checkout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Mark Onboarding Session Subscriber": {
+      "main": [
+        [
+          {
+            "node": "Sandbox If Customer Has WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox If Customer Has WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Reserve Setup Link",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Sandbox Reserve Setup Link": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Send 28-Day Program Setup Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Send 28-Day Program Setup Link": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Update Setup Link Delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Update Setup Link Delivery": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Assert Setup Link Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Assert Setup Link Accepted": {
+      "main": [
+        []
+      ]
+    },
+    "Sandbox Prepare Stripe Checkout Rejection": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Log Stripe Checkout Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Add whatsapp_id": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Stripe Checkout Session Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Stripe Checkout Session Payment": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Persist Checkout Session Evidence v3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Persist Checkout Session Evidence v3": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Message with Stripe Payment URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Message with Stripe Payment URL": {
+      "main": [
+        []
+      ]
+    },
+    "Sandbox Start Authorized WhatsApp Checkout": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Configure WhatsApp Checkout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Configure WhatsApp Checkout": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Validate WhatsApp Checkout Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Validate WhatsApp Checkout Input": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Verify Existing Checkout Authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sandbox Verify Existing Checkout Authorization": {
+      "main": [
+        [
+          {
+            "node": "Sandbox Add whatsapp_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "America/Mexico_City",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "sa10JQEAbxNYvCGG",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed"
+  },
+  "versionId": "6aa41b7b-4724-4b89-ae08-6510f7a9a286",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "tags": []
+}

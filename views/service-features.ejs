@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cómo funciona el programa | Dietavity</title>
+  <meta
+    name="description"
+    content="Dietavity te dice qué comer cada día con un programa personalizado de 28 días, comidas fáciles y familiares, y apoyo por WhatsApp."
+  >
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#F5F1E8">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-L3F2YSYBMP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-L3F2YSYBMP');
+  </script>
+  <% if (typeof metaPixelId === 'string' && metaPixelId) { %>
+    <script id="meta-pixel-loader" src="/js/meta-pixel.js" data-pixel-id="<%= metaPixelId %>"></script>
+  <% } %>
+
+  <link rel="icon" href="/images/dietavity-favicon-96x96.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body class="bg-light">
+  <main class="container py-5">
+    <header class="text-center mb-5">
+      <img
+        src="/images/dietavity-logo.webp"
+        alt="Dietavity"
+        class="img-fluid mb-4"
+        style="max-width: 180px;"
+      >
+      <h1 class="fw-bold mb-3">Dietavity te dice qué comer cada día</h1>
+      <p class="lead text-muted mx-auto" style="max-width: 680px;">
+        Un programa personalizado de 28 días con comidas fáciles, familiares y saludables,
+        pensado para reducir las decisiones diarias sobre qué preparar.
+      </p>
+    </header>
+
+    <section class="mx-auto" style="max-width: 760px;" aria-labelledby="steps-title">
+      <h2 id="steps-title" class="fw-bold text-center mb-4">Así funciona tu programa</h2>
+      <ol class="service-steps list-unstyled">
+        <li>
+          <span class="step-number">1</span>
+          <div><h3>Cuéntanos sobre ti</h3><p>Después del pago, completa tus objetivos, preferencias y restricciones relevantes.</p></div>
+        </li>
+        <li>
+          <span class="step-number">2</span>
+          <div><h3>Creamos tu programa</h3><p>Dietavity personaliza tu programa de comidas para 28 días, organizado en cuatro semanas.</p></div>
+        </li>
+        <li>
+          <span class="step-number">3</span>
+          <div><h3>Sabes qué comer cada día</h3><p>Tu desayuno, comida, cena y snack quedan organizados por día en tu portal.</p></div>
+        </li>
+        <li>
+          <span class="step-number">4</span>
+          <div><h3>Te acompañamos</h3><p>Durante el programa, pide por WhatsApp ideas, recetas, orientación práctica o ayuda para volver a tu portal.</p></div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="card border-0 shadow-sm rounded-4 my-5">
+      <div class="card-body p-4 p-md-5">
+        <h2 class="h4 fw-bold mb-3">Tu programa está en el portal Dietavity</h2>
+        <p class="text-muted mb-3">
+          Ahí puedes consultar cada desayuno, comida, cena y snack, además de tus recetas,
+          calorías estimadas y lista de compras. También puedes usar “No me gustó” para cambiar una comida.
+        </p>
+        <p class="text-muted mb-0">
+          WhatsApp complementa la experiencia con orientación práctica y soporte; no reemplaza la estructura de tu portal.
+        </p>
+      </div>
+    </section>
+
+    <section class="card border-0 shadow-sm rounded-4 mb-5">
+      <div class="card-body p-4 p-md-5">
+        <p class="small-label text-uppercase mb-2">Nuestro enfoque</p>
+        <h2 class="h4 fw-bold mb-3">Comidas cotidianas con principios saludables</h2>
+        <p class="text-muted mb-0">
+          Dietavity combina alimentos familiares e ingredientes cotidianos con principios de alimentación
+          presentes en algunas de las poblaciones más longevas del mundo. Así, la inspiración nutricional
+          acompaña la personalización sin imponer una cocina extranjera ni convertir cada comida en un platillo mexicano.
+        </p>
+      </div>
+    </section>
+
+    <section class="text-center mb-5" aria-labelledby="precio-title">
+      <h2 id="precio-title" class="fw-bold mb-2">Tu programa personalizado de 28 días</h2>
+      <p class="offer-price mb-1">$149 MXN</p>
+      <p class="text-muted mb-2">Un solo pago. Sin renovación automática.</p>
+      <p class="small text-muted mb-4">El pago se procesa mediante el Checkout seguro de Stripe.</p>
+      <a href="/programa-de-28-dias" class="btn btn-success btn-lg px-4 dietavity-button">
+        Comienza tu programa
+      </a>
+      <p class="small text-muted mt-3 mb-0">
+        ¿Tienes dudas?
+        <a
+          href="https://wa.me/18158698400"
+          onclick="gtag('event', 'whatsapp_secondary_click')"
+        >Pregúntanos por WhatsApp</a>
+      </p>
+    </section>
+
+    <footer class="site-footer text-center small text-muted">
+      <nav aria-label="Enlaces legales y de servicio">
+        <a href="/">Inicio</a>
+        <a href="/terminos-y-condiciones">Términos y Condiciones</a>
+        <a href="/aviso-de-privacidad">Aviso de Privacidad</a>
+      </nav>
+    </footer>
+  </main>
+</body>
+
+</html>

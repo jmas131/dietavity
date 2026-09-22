@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Recupera tu acceso | Dietavity</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #f7f5ee; color: #21362b; }
+    .recovery-card { max-width: 34rem; margin: 8vh auto; padding: 2rem; background: #fff; border-radius: 1rem; box-shadow: 0 12px 35px rgba(26, 58, 40, .1); }
+    .recovery-card h1 { font-size: clamp(1.7rem, 6vw, 2.3rem); }
+    .recovery-card label, .recovery-card input, .recovery-card button { display: block; width: 100%; }
+    .recovery-card input { box-sizing: border-box; padding: .85rem; margin: .5rem 0 1rem; border: 1px solid #aebcaf; border-radius: .55rem; font-size: 1rem; }
+    .recovery-card button { padding: .9rem; border: 0; border-radius: .55rem; background: #1f6d47; color: #fff; font-weight: 700; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <main class="recovery-card">
+    <h1>Recupera tu acceso a Dietavity</h1>
+    <% if (state === 'submitted') { %>
+      <p>Si encontramos una compra asociada a ese correo, te enviaremos las instrucciones para recuperar tu acceso.</p>
+    <% } else if (state === 'linked') { %>
+      <p>Listo. Vinculamos este WhatsApp de forma segura y continuaremos con tu solicitud original.</p>
+    <% } else if (state === 'support') { %>
+      <p>No pudimos completar la vinculación automáticamente. Escríbenos a soporte@dietavity.com para recibir ayuda.</p>
+    <% } else if (state === 'invalid') { %>
+      <p>Este enlace ya no está disponible. Solicita uno nuevo para recuperar tu acceso.</p>
+      <p><a href="/recuperar-acceso">Solicitar un nuevo enlace</a></p>
+    <% } else { %>
+      <p>Escribe el correo que utilizaste al realizar tu compra.</p>
+      <form method="post" action="/recuperar-acceso" autocomplete="off">
+        <label for="email">Correo electrónico</label>
+        <input id="email" name="email" type="email" maxlength="254" required autocomplete="email" inputmode="email">
+        <% if (initiationToken) { %><input type="hidden" name="initiation_token" value="<%= initiationToken %>"><% } %>
+        <button type="submit">Recuperar acceso</button>
+      </form>
+    <% } %>
+  </main>
+</body>
+</html>

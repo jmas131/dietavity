@@ -1,0 +1,484 @@
+{
+  "validation_mode": "RECORDED_MODEL_OUTPUT_REPLAY_NOT_AUTONOMOUS",
+  "summary": {
+    "recorded_turns": 79,
+    "execution_failures": 0,
+    "assertion_failures": 0
+  },
+  "turns": [
+    {
+      "scenario": "A",
+      "turn": 1,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 2,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 3,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 4,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 5,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 6,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 7,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 8,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 9,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 10,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 11,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "A",
+      "turn": 12,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 1,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 2,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 3,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 4,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 5,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 6,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 7,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 8,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 9,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 10,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 11,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "B",
+      "turn": 12,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 1,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 2,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 3,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 4,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 5,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 6,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 7,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 8,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 9,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 10,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 11,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "C",
+      "turn": 12,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 1,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 2,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 3,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 4,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 5,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 6,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 7,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 8,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 9,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 10,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 11,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "D",
+      "turn": 12,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 1,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 2,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 3,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 4,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 5,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 6,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 7,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 8,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 9,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "E",
+      "turn": 10,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "F",
+      "turn": 1,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "F",
+      "turn": 2,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "F",
+      "turn": 3,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "F",
+      "turn": 4,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "F",
+      "turn": 5,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "F",
+      "turn": 6,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "F",
+      "turn": 7,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 1,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 2,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 3,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 4,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 5,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 6,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 7,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 8,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 9,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 10,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 11,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "G",
+      "turn": 12,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "H",
+      "turn": 1,
+      "execution_failures": [],
+      "failed_assertions": []
+    },
+    {
+      "scenario": "H",
+      "turn": 2,
+      "execution_failures": [],
+      "failed_assertions": []
+    }
+  ]
+}

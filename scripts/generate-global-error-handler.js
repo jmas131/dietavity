@@ -1,0 +1,12 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const { ERROR_HANDLER_SQL } = require('../lib/global-error-handler');
+const root = path.resolve(__dirname, '..');
+const output = path.join(root, 'n8n', 'Global Error Handler.json');
+const workflow = JSON.parse(fs.readFileSync(output, 'utf8'));
+const node = workflow.nodes.find((candidate) => candidate.name === 'Insert Error Log (Error Handler)');
+if (!node) throw new Error('Missing Global Error Handler persistence node');
+node.parameters.query = ERROR_HANDLER_SQL;
+fs.writeFileSync(output, `${JSON.stringify(workflow, null, 2)}\n`);
+console.log('Wrote n8n/Global Error Handler.json');

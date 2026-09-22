@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Tu plan | Dietavity</title>
+
+  <meta 
+    name="description"
+    content="Aquí está tu plan de alimentación basado en países con alta esperanza de vida | Dietavity"
+  >
+  
+  <meta 
+    name="robots"
+    content="noindex, nofollow"
+  >
+  
+  <meta
+    name="theme-color" 
+    content="#F5F1E8"
+  >
+
+  <link
+    rel="icon"
+    href="/images/dietavity-favicon-96x96.png"
+    type="image/png"
+  />
+
+<!--- PWA -->
+
+  <link
+    rel="apple-touch-icon"
+    href="/images/apple-touch-icon.png"
+  />
+  
+  <% if (plan) { %>
+    <link
+      rel="manifest"
+      href="/manifest/<%= plan.token %>.json"
+    >
+  <% } %>
+
+  <!-- Connect to Google Fonts API -->
+
+  <link 
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+  >
+  
+  <link
+    rel="preconnect"
+    href="https://gstatic.com" crossorigin
+  >
+  
+  <!-- Load the font stylesheet -->
+   
+  <link
+    rel="stylesheet"
+    href="https://googleapis.com"
+  >
+
+  <!-- CSS -->
+
+  <link
+    rel="stylesheet" 
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/css/style.css"
+  >
+
+</head>
+
+<body>
+
+<% if (!plan) { %>
+
+  <main class="container py-5">
+
+    <section class="hero-card text-center">
+
+      <img
+        src="/images/dietavity-logo.webp"
+        alt="Dietavity"
+        class="img-fluid mb-4"
+        style="max-width: 180px;"
+      >
+
+      <h1 class="hero-title">
+        <%= portalState.title %>
+      </h1>
+
+      <% (portalState.messages || [portalState.message]).forEach((message, index, messages) => { %>
+        <p class="hero-subtitle <%= index === messages.length - 1 ? 'mb-0' : '' %>">
+          <%= message %>
+        </p>
+      <% }); %>
+
+      <% if (portalState.pollProgramStatus) { %>
+        <p
+          id="program-status-timeout"
+          class="hero-subtitle small mt-3 mb-0"
+          hidden
+        >
+          La preparación está tomando un poco más de lo esperado. Puedes actualizar esta página en unos minutos.
+        </p>
+      <% } %>
+
+    </section>
+
+  </main>
+
+<% } else { %>
+
+<!-- CURRENT DAY LOGIC -->
+
+<%
+const dayNames = [
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+  'Domingo'
+];
+
+let todayIndex = null;
+let today = null;
+let todayName = null;
+
+if (!isPreparation) {
+
+  const timezone =
+    user.timezone || 'America/Mexico_City';
+
+  const userNow = new Date(
+    new Date().toLocaleString(
+      'en-US',
+      { timeZone: timezone }
+    )
+  );
+
+  todayIndex =
+    userNow.getDay() === 0
+      ? 6
+      : userNow.getDay() - 1;
+
+  today =
+    plan.days[todayIndex] || plan.days[0];
+
+  todayName =
+    dayNames[todayIndex];
+
+}
+%>
+
+<div class="container py-4 pb-5">
+
+  <!-- HERO -->
+
+  <div class="hero-card mb-4">
+
+    <div class="small-label mb-2">
+      <% if (isPreparation) { %>
+        Preparación • Semana <%= weekNumber %> 🌿
+      <% } else { %>
+        <%= todayName %> • Semana <%= weekNumber %> 🌿
+      <% } %>
+    </div>
+
+    <h1 class="hero-title">
+      <%= isPreparation ? portalState.title : `Hola ${plan.user_name}` %>
+    </h1>
+
+    <% if (isPreparation) { %>
+      <% portalState.messages.forEach(message => { %>
+        <p class="hero-subtitle">
+          <%= message %>
+        </p>
+      <% }); %>
+    <% } else { %>
+      <p class="hero-subtitle">
+        Este plan está diseñado para ayudarte a sentirte mejor,
+        con comidas simples inspiradas en hábitos de países longevos.
+      </p>
+    <% } %>
+
+    <div class="goal-pill">
+      <%= plan.goal %>
+    </div>
+
+    <% if (programProgress) { %>
+
+      <section
+        class="program-progress mt-4"
+        aria-label="Progreso del programa de 28 días"
+      >
+
+        <div class="program-progress-heading">
+          <span class="program-progress-title">
+            Programa de 28 días
+          </span>
+
+          <span>
+            Semana <%= programProgress.weekNumber %> de 4
+          </span>
+        </div>
+
+        <div class="program-progress-day">
+          Día <%= programProgress.day %> de 28
+        </div>
+
+        <div
+          class="progress program-progress-track"
+          role="progressbar"
+          aria-label="Día <%= programProgress.day %> de 28"
+          aria-valuenow="<%= programProgress.day %>"
+          aria-valuemin="1"
+          aria-valuemax="28"
+        >
+          <div
+            class="progress-bar program-progress-bar"
+            style="width: <%= programProgress.percentage %>%"
+          ></div>
+        </div>
+
+      </section>
+
+    <% } %>
+
+  </div>
+
+  <!-- DAY OVERVIEW -->
+
+  <% if (isPreparation) { %>
+
+    <% if (!isScheduledPreparation) { %>
+
+      <div class="today-card mb-4">
+
+        <h2 class="today-day mb-3">
+          Revisa tu semana
+        </h2>
+
+        <p class="mb-0">
+          Explora las comidas, consulta las recetas y realiza los cambios que necesites antes de comenzar.
+        </p>
+
+      </div>
+
+    <% } %>
+
+  <% } else { %>
+
+    <div class="today-card mb-4">
+
+      <div class="today-label mb-2">
+        HOY
+      </div>
+
+      <h2 class="today-day">
+        <%= dayNames[today.day - 1] %>
+      </h2>
+
+      <div class="today-calories mb-4">
+        <%= 
+          (Number(today.meals.breakfast?.calories) || 0) + 
+          (Number(today.meals.lunch?.calories) || 0) + 
+          (Number(today.meals.dinner?.calories) || 0) + 
+          (Number(today.meals.snack?.calories) || 0) 
+        %> kcal
+      </div>
+
+      <div class="meal-preview mb-3">
+        🍳 <strong>Desayuno:</strong>
+        <%= today.meals.breakfast?.title || 'Desayuno saludable' %>
+      </div>
+
+      <div class="meal-preview mb-3">
+        🥗 <strong>Comida:</strong>
+        <%= today.meals.lunch?.title || 'Comida saludable' %>
+      </div>
+
+      <div class="meal-preview mb-3">
+        🍽 <strong>Cena:</strong>
+        <%= today.meals.dinner?.title || 'Cena saludable' %>
+      </div>
+
+      <div class="meal-preview">
+        🍎 <strong>Snack:</strong>
+        <%= (today.meals.snacks || [])
+          .map(s => typeof s === 'string' ? s : s.title)
+          .filter(Boolean)
+          .join(' · ') || 'Snack saludable'
+        %>
+      </div>
+
+    </div>
+
+  <% } %>
+
+  <div class="d-grid mb-4">
+    <button
+      type="button"
+      class="btn btn-outline-success rounded-pill py-2 fw-semibold"
+      data-bs-toggle="modal"
+      data-bs-target="#shoppingListModal"
+      data-plan-id="<%= plan.id %>"
+      data-week-id="<%= plan.week_id %>"
+      data-program-id="<%= plan.program_id %>"
+    >
+      🛒 Lista del súper
+    </button>
+  </div>
+
+  <!-- ACCORDION -->
+
+  <div class="accordion" id="mealAccordion">
+
+    <% plan.days.forEach((day, index) => { %>
+
+      <div class="accordion-item custom-accordion mb-3">
+
+        <h2 class="accordion-header">
+
+          <button
+            class="accordion-button <%= isPreparation || index !== todayIndex ? 'collapsed' : '' %>"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#day<%= index %>"
+          >
+
+            <div class="w-100 d-flex justify-content-between">
+
+              <span>
+                <%= dayNames[day.day - 1] %>
+              </span>
+
+              <span class="text-muted small me-3">
+                <%= (Number(day.meals.breakfast?.calories) || 0) + (Number(day.meals.lunch?.calories) || 0) + (Number(day.meals.dinner?.calories) || 0) + (Number(day.meals.snack?.calories) || 0) %> kcal
+              </span>
+
+            </div>
+
+          </button>
+
+        </h2>
+
+        <div
+          id="day<%= index %>"
+          class="accordion-collapse collapse <%= !isPreparation && index === todayIndex ? 'show' : '' %>"
+          data-bs-parent="#mealAccordion"
+        >
+
+          <div class="accordion-body">
+
+            <% if (!isPreparation) { %>
+
+              <div class="progress-wrapper mb-4">
+
+                <div class="progress-top">
+
+                  <span>
+                  Progreso del día
+                  </span>
+
+                  <span
+                    id="progress-text-<%= index %>"
+                    >
+                    0%
+                  </span>
+
+                </div>
+
+                <div class="progress custom-progress">
+
+                  <div
+                    class="progress-bar custom-progress-bar"
+                    id="progress-bar-<%= index %>"
+                    style="width: 0%"
+                  ></div>
+
+                </div>
+
+              </div>
+
+            <% } %>
+
+            <!-- BREAKFAST -->
+
+            <div class="meal-card mb-3" id="meal-card-<%= index %>-breakfast" data-day="<%= index %>" data-meal="breakfast">
+
+              <div class="meal-header">
+
+                <div class="meal-title">
+                🍳 Desayuno
+                </div>
+
+                <% if (!isPreparation) { %>
+                  <button
+                    class="check-button"
+
+                    data-day="<%= index %>"
+
+                    onclick="toggleMeal(
+                      'day-<%= index %>-breakfast',
+                      this
+                    )"
+                  >
+                    ○
+                  </button>
+                <% } %>
+
+              </div>
+
+              <div class="meal-description" id="meal-text-<%= index %>-breakfast">
+                <%= day.meals.breakfast?.title || 'Desayuno saludable' %>
+              </div>
+
+              <button
+                class="recipe-button mt-3"
+
+                onclick='openRecipeModal(
+                  "<%= day.meals.breakfast?.title || 'Desayuno saludable' %>",
+                  <%- JSON.stringify(day.meals.breakfast?.recipe?.ingredients || []) %>,
+                  <%- JSON.stringify(day.meals.breakfast?.recipe?.steps || []) %>
+                )'
+              >
+                Ver receta
+              </button>
+
+              <button
+                class="swap-button mt-2"
+
+                onclick='swapMeal(
+                <%- JSON.stringify(day.meals.breakfast) %>,
+                this,
+                "<%= plan.id %>",
+                "active",
+                "<%= plan.week_id %>",
+                "<%= plan.program_id %>"
+                )'
+              >
+                No me gustó
+              </button>
+
+            </div>
+
+            <!-- LUNCH -->
+
+            <div class="meal-card mb-3" id="meal-card-<%= index %>-lunch" data-day="<%= index %>" data-meal="lunch">
+
+              <div class="meal-header">
+
+                <div class="meal-title">
+                  🥗 Comida
+                </div>
+
+                <% if (!isPreparation) { %>
+                  <button
+                    class="check-button"
+
+                    data-day="<%= index %>"
+
+                    onclick="toggleMeal(
+                      'day-<%= index %>-lunch',
+                      this
+                    )"
+                  >
+                    ○
+                  </button>
+                <% } %>
+
+              </div>
+
+              <div class="meal-description" id="meal-text-<%= index %>-lunch">
+                <%= day.meals.lunch?.title || 'Comida saludable' %>
+              </div>
+
+              <button
+                class="recipe-button mt-3"
+
+                onclick='openRecipeModal(
+                  "<%= day.meals.lunch?.title || 'Comida saludable' %>",
+                  <%- JSON.stringify(day.meals.lunch?.recipe?.ingredients || []) %>,
+                  <%- JSON.stringify(day.meals.lunch?.recipe?.steps || []) %>
+                )'
+              >
+                Ver receta
+              </button>
+
+              <button
+                class="swap-button mt-2"
+
+                onclick='swapMeal(
+                <%- JSON.stringify(day.meals.lunch) %>,
+                this,
+                "<%= plan.id %>",
+                "active",
+                "<%= plan.week_id %>",
+                "<%= plan.program_id %>"
+                )'
+              >
+                No me gustó
+              </button>
+
+            </div>
+
+            <!-- DINNER -->
+
+            <div class="meal-card mb-3" id="meal-card-<%= index %>-dinner" data-day="<%= index %>" data-meal="dinner">
+
+              <div class="meal-header">
+
+                <div class="meal-title">
+                  🍽 Cena
+                </div>
+
+                <% if (!isPreparation) { %>
+                  <button
+                    class="check-button"
+
+                    data-day="<%= index %>"
+
+                    onclick="toggleMeal(
+                      'day-<%= index %>-dinner',
+                      this
+                    )"
+                  >
+                    ○
+                  </button>
+                <% } %>
+
+              </div>
+
+              <div class="meal-description" id="meal-text-<%= index %>-dinner">
+                <%= day.meals.dinner?.title || 'Cena saludable' %>
+              </div>
+
+              <button
+                class="recipe-button mt-3"
+
+                onclick='openRecipeModal(
+                  "<%= day.meals.dinner?.title || 'Cena saludable' %>",
+                  <%- JSON.stringify(day.meals.dinner?.recipe?.ingredients || []) %>,
+                  <%- JSON.stringify(day.meals.dinner?.recipe?.steps || []) %>
+                )'
+              >
+                Ver receta
+              </button>
+
+              <button
+                class="swap-button mt-2"
+
+                onclick='swapMeal(
+                <%- JSON.stringify(day.meals.dinner) %>,
+                this,
+                "<%= plan.id %>",
+                "active",
+                "<%= plan.week_id %>",
+                "<%= plan.program_id %>"
+                )'
+              >
+                No me gustó
+              </button>
+
+            </div>
+
+            <!-- SNACK -->
+
+            <div class="meal-card" id="meal-card-<%= index %>-snack" data-day="<%= index %>" data-meal="snack">
+
+              <div class="meal-header">
+
+                <div class="meal-title">
+                  🍎 Snack
+                </div>
+                
+                <% if (!isPreparation) { %>
+                  <button
+                    class="check-button"
+
+                    data-day="<%= index %>"
+
+                    onclick="toggleMeal(
+                      'day-<%= index %>-snack',
+                      this
+                    )"
+                  >
+                    ○
+                  </button>
+                <% } %>
+
+              </div>
+
+              <div class="meal-description" id="meal-text-<%= index %>-snack">
+                <%= (day.meals.snacks || [])
+                  .map(s => typeof s === 'string' ? s : s.title)
+                  .filter(Boolean)
+                  .join(' · ') || 'Snack saludable'
+                %>
+              </div>
+
+              <button
+                class="swap-button mt-2"
+
+                onclick='swapMeal(
+                <%- JSON.stringify(day.meals.snack) %>,
+                this,
+                "<%= plan.id %>",
+                "active",
+                "<%= plan.week_id %>",
+                "<%= plan.program_id %>"
+                )'
+              >
+                No me gustó
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    <% }) %>
+
+  </div>
+
+  <% if (upcomingPlan) { %>
+
+    <!-- UPCOMING PREPARED WEEK -->
+
+    <section
+      class="mt-5 p-3 p-md-4 rounded-4 border bg-light"
+      data-week-id="<%= upcomingPlan.week_id %>"
+      data-program-id="<%= upcomingPlan.program_id %>"
+    >
+
+      <div class="small-label mb-2">
+        Próxima semana
+      </div>
+
+      <h2 class="today-day mb-3">
+        Prepara tu Semana <%= upcomingPlan.week_number %>
+      </h2>
+
+      <p class="mb-4">
+        Revisa tus comidas, consulta las recetas y realiza los cambios que necesites antes de que comience.
+      </p>
+
+      <div class="d-grid mb-4">
+        <button
+          type="button"
+          class="btn btn-outline-success rounded-pill py-2 fw-semibold"
+          data-bs-toggle="modal"
+          data-bs-target="#shoppingListModal"
+          data-plan-id="<%= upcomingPlan.id %>"
+          data-week-id="<%= upcomingPlan.week_id %>"
+          data-program-id="<%= upcomingPlan.program_id %>"
+        >
+          🛒 Lista del súper
+        </button>
+      </div>
+
+      <div class="accordion" id="upcomingMealAccordion">
+
+        <% upcomingPlan.days.forEach((day, index) => { %>
+
+          <div class="accordion-item custom-accordion mb-3">
+
+            <h3 class="accordion-header">
+              <button
+                class="accordion-button collapsed"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#upcoming-day-<%= index %>"
+              >
+                <div class="w-100 d-flex justify-content-between">
+                  <span><%= dayNames[day.day - 1] %></span>
+                  <span class="text-muted small me-3">
+                    <%= (Number(day.meals.breakfast?.calories) || 0) + (Number(day.meals.lunch?.calories) || 0) + (Number(day.meals.dinner?.calories) || 0) + (Number(day.meals.snack?.calories) || 0) %> kcal
+                  </span>
+                </div>
+              </button>
+            </h3>
+
+            <div
+              id="upcoming-day-<%= index %>"
+              class="accordion-collapse collapse"
+              data-bs-parent="#upcomingMealAccordion"
+            >
+              <div class="accordion-body">
+
+                <%
+                const upcomingMeals = [
+                  { key: 'breakfast', icon: '🍳', label: 'Desayuno', fallback: 'Desayuno saludable' },
+                  { key: 'lunch', icon: '🥗', label: 'Comida', fallback: 'Comida saludable' },
+                  { key: 'dinner', icon: '🍽', label: 'Cena', fallback: 'Cena saludable' },
+                  { key: 'snack', icon: '🍎', label: 'Snack', fallback: 'Snack saludable' }
+                ];
+                %>
+
+                <% upcomingMeals.forEach((mealDefinition, mealIndex) => { %>
+                  <%
+                  const upcomingMeal = day.meals[mealDefinition.key];
+                  const upcomingMealTitle = mealDefinition.key === 'snack'
+                    ? (day.meals.snacks || [])
+                        .map(snack => typeof snack === 'string' ? snack : snack.title)
+                        .filter(Boolean)
+                        .join(' · ') || mealDefinition.fallback
+                    : upcomingMeal?.title || mealDefinition.fallback;
+                  %>
+
+                  <div
+                    class="meal-card <%= mealIndex < upcomingMeals.length - 1 ? 'mb-3' : '' %>"
+                    id="upcoming-meal-card-<%= index %>-<%= mealDefinition.key %>"
+                    data-day="<%= index %>"
+                    data-meal="<%= mealDefinition.key %>"
+                    data-plan-id="<%= upcomingPlan.id %>"
+                    data-week-id="<%= upcomingPlan.week_id %>"
+                    data-program-id="<%= upcomingPlan.program_id %>"
+                  >
+                    <div class="meal-header">
+                      <div class="meal-title">
+                        <%= mealDefinition.icon %> <%= mealDefinition.label %>
+                      </div>
+                    </div>
+
+                    <div class="meal-description">
+                      <%= upcomingMealTitle %>
+                    </div>
+
+                    <% if (upcomingMeal?.recipe) { %>
+                      <button
+                        class="recipe-button mt-3"
+                        onclick='openRecipeModal(
+                          <%- JSON.stringify(upcomingMeal.title || upcomingMealTitle) %>,
+                          <%- JSON.stringify(upcomingMeal.recipe.ingredients || []) %>,
+                          <%- JSON.stringify(upcomingMeal.recipe.steps || []) %>
+                        )'
+                      >
+                        Ver receta
+                      </button>
+                    <% } %>
+
+                    <button
+                      class="swap-button mt-2"
+                      onclick='swapMeal(
+                        <%- JSON.stringify(upcomingMeal) %>,
+                        this,
+                        "<%= upcomingPlan.id %>",
+                        "upcoming",
+                        "<%= upcomingPlan.week_id %>",
+                        "<%= upcomingPlan.program_id %>"
+                      )'
+                    >
+                      No me gustó
+                    </button>
+                  </div>
+
+                <% }); %>
+
+              </div>
+            </div>
+
+          </div>
+
+        <% }); %>
+
+      </div>
+
+    </section>
+
+  <% } %>
+
+  <% if (isPreparation && !isScheduledPreparation) { %>
+
+    <section class="today-card mt-4">
+
+      <% if (selectedStartDate) { %>
+
+        <h2 class="today-day mb-3">
+          Tu programa está listo
+        </h2>
+
+        <p class="mb-0">
+          Comenzarás tu programa de 28 días el <strong><%= selectedStartDateLabel %></strong>.
+        </p>
+
+      <% } else { %>
+
+        <h2 class="today-day mb-3">
+          ¿Cuándo quieres comenzar?
+        </h2>
+
+        <p>
+          Elige la fecha en que quieres comenzar tu programa de 28 días.
+        </p>
+
+        <form method="post" action="/p/<%= plan.token %>/start">
+
+          <label class="form-label" for="start_date">
+            Fecha de inicio
+          </label>
+
+          <input
+            class="form-control mb-3"
+            type="date"
+            id="start_date"
+            name="start_date"
+            min="<%= startDateMin %>"
+            max="<%= startDateMax %>"
+            value="<%= startDateMin %>"
+            required
+          >
+
+          <button
+            class="btn btn-success rounded-pill py-2 px-4 fw-semibold w-100"
+            type="submit"
+          >
+            Comenzar mi programa
+          </button>
+
+        </form>
+
+      <% } %>
+
+    </section>
+
+  <% } %>
+
+  <!-- PREVIOUS PLAN -->
+
+  <% if (previousPlan) { %>
+
+    <div class="previous-plan-card mt-4">
+
+      <button
+        class="previous-plan-button"
+        data-bs-toggle="collapse"
+        data-bs-target="#previous-plan"
+      >
+        <span>
+          Semana anterior
+        </span>
+
+        <span>
+          ↕
+        </span>
+      </button>
+
+      <div
+        id="previous-plan"
+        class="collapse"
+      >
+
+        <div class="previous-plan-content">
+
+          <% previousPlan.meals.days.forEach(day => { %>
+
+            <div class="previous-day mb-4">
+
+              <div class="previous-day-title mb-2">
+                <%= dayNames[day.day - 1] %>
+              </div>
+
+              <div class="previous-meal">
+                🍳 <%= day.meals.breakfast?.title %>
+              </div>
+
+              <div class="previous-meal">
+                🥗 <%= day.meals.lunch?.title %>
+              </div>
+
+              <div class="previous-meal">
+                🍽 <%= day.meals.dinner?.title %>
+              </div>
+
+            </div>
+
+          <% }) %>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  <% } %>
+
+</div>
+
+<!-- SUPPORT BUTTON -->
+
+<a
+  href="https://wa.me/18158698400"
+  class="support-button"
+>
+  WhatsApp
+</a>
+
+<script
+  src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
+</script>
+
+<!-- RECIPE MODAL -->
+
+<div
+  class="modal fade"
+  id="recipeModal"
+  tabindex="-1"
+>
+
+  <div class="modal-dialog modal-dialog-centered">
+
+    <div class="modal-content border-0 rounded-4">
+
+      <div class="modal-body p-4">
+
+        <div class="d-flex justify-content-between align-items-start mb-4">
+
+          <h3
+            class="fw-bold"
+            id="recipeTitle"
+          ></h3>
+
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+          ></button>
+
+        </div>
+
+        <div class="mb-4">
+
+          <div class="fw-bold mb-2">
+            Ingredientes
+          </div>
+
+          <ul id="recipeIngredients"></ul>
+
+        </div>
+
+        <div>
+
+          <div class="fw-bold mb-2">
+            Preparación
+          </div>
+
+          <ol id="recipeSteps"></ol>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- SHOPPING LIST MODAL -->
+
+<div
+  class="modal fade"
+  id="shoppingListModal"
+  tabindex="-1"
+  aria-labelledby="shoppingListTitle"
+  aria-hidden="true"
+>
+
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+
+    <div class="modal-content border-0 rounded-4">
+
+      <div class="modal-header border-0 px-4 pt-4 pb-2">
+
+        <h3
+          class="modal-title fw-bold"
+          id="shoppingListTitle"
+        >
+          🛒 Lista del súper
+        </h3>
+
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Cerrar"
+        ></button>
+
+      </div>
+
+      <div
+        class="modal-body px-4 pb-4"
+        id="shoppingListContent"
+      >
+        <p class="text-muted mb-0">
+          Preparando tu lista…
+        </p>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+
+// WINDOW
+
+window.planData = <%- JSON.stringify(plan) %>;
+window.upcomingPlanData = <%- JSON.stringify(upcomingPlan) %>;
+
+const portalToken =
+  window.planData?.token || '';
+
+window.planDataByKey = {
+  active: window.planData,
+  upcoming: window.upcomingPlanData
+};
+
+const shoppingListModal =
+  document.getElementById('shoppingListModal');
+
+shoppingListModal.addEventListener(
+  'show.bs.modal',
+  loadShoppingList
+);
+
+async function loadShoppingList(event) {
+
+  const content =
+    document.getElementById('shoppingListContent');
+
+  const trigger =
+    event.relatedTarget;
+
+  const planId =
+    trigger?.dataset.planId || '<%= plan.id %>';
+
+  const weekId =
+    trigger?.dataset.weekId || '<%= plan.week_id %>';
+
+  const programId =
+    trigger?.dataset.programId || '<%= plan.program_id %>';
+
+  content.innerHTML =
+    '<p class="text-muted mb-0">Preparando tu lista…</p>';
+
+  try {
+
+    const query =
+      new URLSearchParams({ weekId, programId });
+
+    const response =
+      await fetch(
+        `/api/shopping-list/${encodeURIComponent(planId)}?${query}`,
+        {
+          headers: {
+            'X-Portal-Token': portalToken
+          }
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok || !data.success) {
+
+      throw new Error(
+        data.error || 'No se pudo cargar la lista'
+      );
+
+    }
+
+    content.innerHTML = '';
+
+    const populatedGroups =
+      data.groups.filter(group => group.ingredients.length);
+
+    if (!populatedGroups.length) {
+
+      content.innerHTML =
+        '<p class="text-muted mb-0">No hay ingredientes disponibles para esta semana.</p>';
+
+      return;
+
+    }
+
+    populatedGroups.forEach((group, index) => {
+
+      const section =
+        document.createElement('section');
+
+      if (index < populatedGroups.length - 1) {
+        section.classList.add('mb-4');
+      }
+
+      const heading =
+        document.createElement('h4');
+
+      heading.className = 'h6 fw-bold mb-2';
+      heading.textContent = group.name;
+
+      const list =
+        document.createElement('ul');
+
+      list.className = 'mb-0 ps-4';
+
+      group.ingredients.forEach(ingredient => {
+
+        const item =
+          document.createElement('li');
+
+        item.textContent = ingredient;
+        list.appendChild(item);
+
+      });
+
+      section.appendChild(heading);
+      section.appendChild(list);
+      content.appendChild(section);
+
+    });
+
+  } catch (err) {
+
+    console.error(err);
+
+    content.innerHTML =
+      '<p class="text-danger mb-0">No se pudo cargar la lista del súper. Inténtalo nuevamente.</p>';
+
+  }
+
+}
+
+function openRecipeModal(title, ingredients, steps) {
+
+  document.getElementById('recipeTitle').innerText = title;
+
+  const ingredientsList =
+    document.getElementById('recipeIngredients');
+
+  ingredientsList.innerHTML = '';
+
+  ingredients.forEach(item => {
+
+    const li = document.createElement('li');
+
+    li.innerText = item;
+
+    ingredientsList.appendChild(li);
+
+  });
+
+  const stepsList =
+    document.getElementById('recipeSteps');
+
+  stepsList.innerHTML = '';
+
+  steps.forEach(step => {
+
+    const li = document.createElement('li');
+
+    li.innerText = step;
+
+    stepsList.appendChild(li);
+
+  });
+
+  const modal =
+    new bootstrap.Modal(
+      document.getElementById('recipeModal')
+    );
+
+  modal.show();
+
+}
+
+async function swapMeal(
+  meal,
+  button,
+  planId,
+  planDataKey,
+  weekId,
+  programId
+) {
+
+  const card =
+    button.closest('.meal-card');
+
+  const dayIndex =
+    parseInt(card.dataset.day);
+
+  const mealType =
+    card.dataset.meal;
+
+  button.disabled = true;
+  button.innerText = 'Actualizando...';
+  button.style.opacity = '0.7';
+
+  try {
+
+    const response =
+
+      await fetch('/api/regenerate-meal', {
+
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Portal-Token': portalToken
+        },
+
+        body: JSON.stringify({
+
+          planId,
+
+          weekId,
+
+          programId,
+
+          dayIndex,
+
+          mealType
+
+        })
+
+      });
+
+    const data =
+      await response.json();
+
+    if (!response.ok || !data.meal) {
+
+      throw new Error(
+        data.error || 'No se pudo actualizar la comida'
+      );
+
+    }
+
+    if (data.meal) {
+
+      // UPDATE FRONTEND STATE
+
+      const dayMeals =
+        window.planDataByKey[planDataKey]
+          .days[dayIndex]
+          .meals;
+
+      if (
+        mealType === 'snack' &&
+        Array.isArray(dayMeals.snacks)
+      ) {
+
+        dayMeals.snacks[0] = data.meal;
+        dayMeals.snack = data.meal;
+
+      } else {
+
+        dayMeals[mealType] = data.meal;
+
+      }
+
+      // UPDATE MEAL TEXT
+
+      const mealText =
+        card.querySelector('.meal-description');
+
+      if (mealText) {
+
+        mealText.innerText =
+          mealType === 'snack'
+            ? (dayMeals.snacks || [data.meal])
+                .map(snack => snack.title)
+                .filter(Boolean)
+                .join(' · ')
+            : data.meal.title;
+
+        const recipeButton =
+          card.querySelector('.recipe-button');
+
+        if (recipeButton) {
+
+          recipeButton.setAttribute(
+
+            'onclick',
+
+            `openRecipeModal(
+              ${JSON.stringify(data.meal.title)},
+              ${JSON.stringify(data.meal.recipe?.ingredients || [])},
+              ${JSON.stringify(data.meal.recipe?.steps || [])}
+            )`
+
+          );
+
+        }
+
+        button.disabled = false;
+        button.innerText = 'No me gustó';
+        button.style.opacity = '1';
+
+      }
+
+    }
+
+  } catch (err) {
+
+    console.error(err);
+    
+    button.disabled = false;
+    button.innerText = 'No me gustó';
+
+  }
+
+}
+
+function toggleMeal(id, button) {
+
+  const completed =
+    localStorage.getItem(id) === 'true';
+
+  if (completed) {
+
+    localStorage.setItem(id, 'false');
+
+    button.innerText = '○';
+
+    button.classList.remove('check-complete');
+
+    const day =
+    button.dataset.day;
+
+    updateDayProgress(day);
+
+  } else {
+
+    localStorage.setItem(id, 'true');
+
+    button.innerText = '✓';
+
+    button.classList.add('check-complete');
+
+    const day =
+    button.dataset.day;
+
+    updateDayProgress(day);
+
+  }
+
+}
+
+function loadMealChecks() {
+
+  const buttons =
+    document.querySelectorAll('.check-button');
+
+  buttons.forEach(button => {
+
+    const onclick =
+      button.getAttribute('onclick');
+
+    const match =
+      onclick.match(/'([^']+)'/);
+
+    if (!match) return;
+
+    const id = match[1];
+
+    const completed =
+      localStorage.getItem(id) === 'true';
+
+    if (completed) {
+
+      button.innerText = '✓';
+
+      button.classList.add('check-complete');
+
+    }
+
+  });
+
+  const days =
+  new Set();
+
+  buttons.forEach(button => {
+  days.add(button.dataset.day);
+  });
+
+  days.forEach(day => {
+  updateDayProgress(day);
+  });
+
+}
+
+function updateDayProgress(dayIndex) {
+
+  const buttons =
+    document.querySelectorAll(
+      `.check-button[data-day="${dayIndex}"]`
+    );
+
+  const total = buttons.length;
+
+  let completed = 0;
+
+  buttons.forEach(button => {
+
+    if (
+      button.classList.contains('check-complete')
+    ) {
+      completed++;
+    }
+
+  });
+
+  const percent =
+    Math.round((completed / total) * 100);
+
+  const progressBar =
+    document.getElementById(
+      `progress-bar-${dayIndex}`
+    );
+
+  const progressText =
+    document.getElementById(
+      `progress-text-${dayIndex}`
+    );
+
+  progressBar.style.width =
+    `${percent}%`;
+
+  progressText.innerText =
+    `${percent}%`;
+
+}
+
+document.addEventListener(
+  'DOMContentLoaded',
+  loadMealChecks
+);
+
+document.addEventListener(
+  'visibilitychange',
+  () => {
+
+    if (
+      document.visibilityState === 'visible'
+    ) {
+
+      location.reload();
+
+    }
+
+  }
+);
+
+</script>
+
+<% } %>
+
+<% if (!plan && portalState.pollProgramStatus) { %>
+
+<script>
+(() => {
+
+  if (window.__dietavityProgramStatusPolling) return;
+
+  window.__dietavityProgramStatusPolling = true;
+
+  const portalToken =
+    <%- JSON.stringify(user.portal_token) %>;
+
+  const pollIntervalMs = 4000;
+  const maxPollingDurationMs = 180000;
+  const requestTimeoutMs = 8000;
+  const startedAt = Date.now();
+  let pollingTimer = null;
+  let stopped = false;
+
+  const stopPolling = showTimeoutMessage => {
+
+    stopped = true;
+
+    if (pollingTimer) {
+      window.clearTimeout(pollingTimer);
+      pollingTimer = null;
+    }
+
+    if (showTimeoutMessage) {
+      const timeoutMessage =
+        document.getElementById('program-status-timeout');
+
+      if (timeoutMessage) timeoutMessage.hidden = false;
+    }
+
+  };
+
+  const scheduleNextPoll = () => {
+
+    if (stopped) return;
+
+    const elapsed = Date.now() - startedAt;
+
+    if (elapsed >= maxPollingDurationMs) {
+      stopPolling(true);
+      return;
+    }
+
+    pollingTimer = window.setTimeout(
+      pollProgramStatus,
+      Math.min(pollIntervalMs, maxPollingDurationMs - elapsed)
+    );
+
+  };
+
+  const pollProgramStatus = async () => {
+
+    if (stopped) return;
+
+    const controller = new AbortController();
+    const requestTimer = window.setTimeout(
+      () => controller.abort(),
+      requestTimeoutMs
+    );
+
+    try {
+
+      const response = await fetch('/api/program-status', {
+        headers: {
+          'X-Portal-Token': portalToken
+        },
+        signal: controller.signal
+      });
+
+      if (response.ok) {
+
+        const status = await response.json();
+
+        if (status.ready) {
+          stopPolling(false);
+          window.location.reload();
+          return;
+        }
+
+      }
+
+    } catch {
+
+      // A temporary polling failure must not replace the preparation screen.
+
+    } finally {
+
+      window.clearTimeout(requestTimer);
+
+    }
+
+    scheduleNextPoll();
+
+  };
+
+  scheduleNextPoll();
+
+})();
+</script>
+
+<% } %>
+
+</body>
+</html>
