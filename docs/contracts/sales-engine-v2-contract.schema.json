@@ -45,17 +45,21 @@
       "type": "object", "required": ["obligation_id","resolution_status","authority","source","allowed_claims","prohibited_claims","customer_uncertainty_required"], "additionalProperties": false,
       "properties": {
         "obligation_id": {"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"}, "resolution_status": {"enum":["resolved","unknown","clarification_required","prohibited","failed"]},
-        "authority": {"enum":["canonical_fact","deterministic_policy","commercial_authorization","reviewed_knowledge","generated_guidance","conversational_generation","bounded_unknown","clarification_required","prohibited","resolver_failure"]}, "source": {"$ref":"#/$defs/source"},
+        "authority": {"enum":["canonical_fact","deterministic_policy","commercial_authorization","reviewed_knowledge","generated_guidance","conversational_generation","bounded_unknown","clarification_required","prohibited","resolver_failure"]}, "source": {},
         "factual_payload": {}, "policy_decision": {"type":"object"}, "allowed_claims": {"type":"array","items":{"type":"string"}}, "prohibited_claims": {"type":"array","items":{"type":"string"}},
         "retrieved_knowledge_references": {"type":"array","items":{"$ref":"#/$defs/source"}}, "llm_reasoning_permitted": {"type":"boolean"}, "customer_uncertainty_required": {"type":"boolean"}, "action_authorization": {"$ref":"#/$defs/authorizedAction"}
       },
       "allOf": [
         {"if":{"properties":{"authority":{"const":"bounded_unknown"}}},"then":{"properties":{"customer_uncertainty_required":{"const":true}}}},
-        {"if":{"properties":{"authority":{"const":"canonical_fact"}}},"then":{"properties":{"source":{"properties":{"type":{"const":"canonical_fact"}}}}}},
-        {"if":{"properties":{"authority":{"enum":["deterministic_policy","commercial_authorization"]}}},"then":{"properties":{"source":{"properties":{"type":{"const":"deterministic_policy"}}}}}},
-        {"if":{"properties":{"authority":{"const":"reviewed_knowledge"}}},"then":{"properties":{"source":{"properties":{"type":{"const":"reviewed_knowledge"}}}}}},
-        {"if":{"properties":{"authority":{"const":"generated_guidance"}}},"then":{"properties":{"source":{"properties":{"type":{"const":"generated_guidance"}}}}}},
-        {"if":{"properties":{"authority":{"const":"conversational_generation"}}},"then":{"properties":{"source":{"properties":{"type":{"const":"conversational_generation"}}}}}},
+        {"if":{"properties":{"authority":{"const":"canonical_fact"}}},"then":{"properties":{"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"canonical_fact"}}}]}}}},
+        {"if":{"properties":{"authority":{"enum":["deterministic_policy","commercial_authorization"]}}},"then":{"properties":{"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"deterministic_policy"}}}]}}}},
+        {"if":{"properties":{"authority":{"const":"reviewed_knowledge"}}},"then":{"properties":{"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"reviewed_knowledge"}}}]}}}},
+        {"if":{"properties":{"authority":{"const":"generated_guidance"}}},"then":{"properties":{"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"generated_guidance"}}}]}}}},
+        {"if":{"properties":{"authority":{"const":"conversational_generation"}}},"then":{"properties":{"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"conversational_generation"}}}]}}}},
+        {"if":{"properties":{"authority":{"const":"bounded_unknown"}}},"then":{"properties":{"source":{"anyOf":[{"type":"null"},{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"canonical_fact"}}}]}]}}}},
+        {"if":{"properties":{"authority":{"const":"clarification_required"}}},"then":{"properties":{"source":{"type":"null"}}}},
+        {"if":{"properties":{"authority":{"const":"prohibited"}}},"then":{"properties":{"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"deterministic_policy"}}}]}}}},
+        {"if":{"properties":{"authority":{"const":"resolver_failure"}}},"then":{"properties":{"source":{"type":"null"}}}},
         {"if":{"properties":{"authority":{"enum":["canonical_fact","deterministic_policy","commercial_authorization","bounded_unknown","clarification_required","prohibited","resolver_failure"]}}},"then":{"properties":{"llm_reasoning_permitted":{"const":false}}}}
       ]
     },
