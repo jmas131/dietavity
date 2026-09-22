@@ -21,7 +21,7 @@
       ]
     },
     "historyMessage": {
-      "type": "object", "required": ["role", "text", "occurred_at"], "additionalProperties": false,
+      "type": "object", "required": ["role", "text", "occurred_at", "source_id"], "additionalProperties": false,
       "properties": { "role": {"enum":["customer","assistant"]}, "text": {"type":"string"}, "occurred_at": {"$ref":"#/$defs/timestamp"}, "source_id": {"type":"string"}, "final_visible": {"type":"boolean"} }
     },
     "obligation": {
@@ -66,11 +66,12 @@
   },
   "properties": {
     "ConversationContext": {
-      "type": "object", "required": ["contract_version","context_id","locale","current_message","history","session_state","offer_context","customer_state","commercial_state","metadata","authoritative_context","informational_context"], "additionalProperties": false,
+      "type": "object", "required": ["contract_version","context_id","locale","current_message","history","history_metadata","session_state","offer_context","customer_state","commercial_state","metadata","authoritative_context","informational_context"], "additionalProperties": false,
       "properties": {
         "contract_version":{"const":"2.0"},"context_id":{"type":"string"},"locale":{"const":"es-MX"},
         "current_message":{"allOf":[{"$ref":"#/$defs/historyMessage"},{"properties":{"role":{"const":"customer"}}}]},"history":{"type":"array","items":{"$ref":"#/$defs/historyMessage"}},
-        "session_state":{"type":"object","required":["session_id"],"additionalProperties":true,"properties":{"session_id":{"type":"string","minLength":1}}},"offer_context":{"type":"object","additionalProperties":true},"customer_state":{"type":"object","additionalProperties":true},"commercial_state":{"type":"object","additionalProperties":true},"metadata":{"type":"object"},"authoritative_context":{"type":"object"},"informational_context":{"type":"object","properties":{"knowledge":{"type":"array","items":{"$ref":"#/$defs/retrievedKnowledge"}}},"additionalProperties":true}
+        "history_metadata":{"type":"object","required":["ordering","history_truncated","retained_prior_turns","retained_prior_characters"],"additionalProperties":false,"properties":{"ordering":{"const":"occurred_at"},"history_truncated":{"type":"boolean"},"retained_prior_turns":{"type":"integer","minimum":0},"retained_prior_characters":{"type":"integer","minimum":0}}},
+        "session_state":{"type":"object","required":["session_id"],"additionalProperties":false,"properties":{"session_id":{"type":"string","minLength":1}}},"offer_context":{"type":"object","additionalProperties":false,"properties":{"offer_version":{"type":"string","minLength":1}}},"customer_state":{"type":"object","additionalProperties":false},"commercial_state":{"type":"object","additionalProperties":false,"properties":{"checkout_sent":{"type":"boolean"},"valid_purchase_confirmation":{"type":"boolean"}}},"metadata":{"type":"object","required":["channel"],"additionalProperties":false,"properties":{"channel":{"const":"whatsapp"},"campaign":{"enum":["standard","glp1_validation"]}}},"authoritative_context":{"type":"object","additionalProperties":false},"informational_context":{"type":"object","required":["knowledge"],"properties":{"knowledge":{"type":"array","maxItems":0,"items":{"$ref":"#/$defs/retrievedKnowledge"}}},"additionalProperties":false}
       }
     },
     "Obligation": {"$ref":"#/$defs/obligation"},
