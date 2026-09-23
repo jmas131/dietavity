@@ -6,6 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createFactResolver, resolveFactFromFacts } = require('../lib/sales-engine-v2/fact-resolver');
 const { createPolicyResolver } = require('../lib/sales-engine-v2/policy-resolver');
+const { normativeResolvedValid, sourceValid } = require('../lib/sales-engine-v2/resolved-obligation-validator');
 
 const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs', 'contracts', 'sales-engine-v2-contract.schema.json'), 'utf8'));
 const facts = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'sales-engine-v2', 'product-facts.json'), 'utf8')).facts;
@@ -96,6 +97,27 @@ test('Ticket 61A rejects null and mismatched provenance, including missing model
     resolved('conversational_generation', { type: 'conversational_generation', id: 'c', version: '1' }),
     resolved('resolver_failure', policy, 'failed'),
   ]) assert.equal(resolvedContractValid(value), false, JSON.stringify(value));
+});
+
+test('Ticket 65A shared source validation matches all six central provenance classes', () => {
+  const base = type => ({ type, id: `${type}-1`, version: '1' });
+  const generated = { ...base('generated_guidance'), model_run_id: 'run-generated', generation_stage: 'bounded_reasoning' };
+  const conversational = { ...base('conversational_generation'), model_run_id: 'run-composer', generation_stage: 'composer' };
+  for (const type of ['canonical_fact', 'deterministic_policy', 'reviewed_knowledge', 'system']) {
+    assert.equal(sourceValid(base(type), type), true, type);
+    assert.equal(sourceValid({ ...base(type), model_run_id: 'run', generation_stage: 'composer' }, type), false, `${type} metadata`);
+  }
+  assert.equal(sourceValid(generated, 'generated_guidance'), true);
+  assert.equal(sourceValid({ ...generated, generation_stage: 'composer' }, 'generated_guidance'), false);
+  assert.equal(sourceValid(conversational, 'conversational_generation'), true);
+  for (const value of [{ ...conversational, model_run_id: '' }, (() => { const { model_run_id, ...rest } = conversational; return rest; })(), (() => { const { generation_stage, ...rest } = conversational; return rest; })(), { ...conversational, generation_stage: 'bounded_reasoning' }, { ...conversational, generation_stage: 'other' }, { ...conversational, extra: true }]) assert.equal(sourceValid(value, 'conversational_generation'), false, JSON.stringify(value));
+  assert.equal(normativeResolvedValid({ ...resolved('conversational_generation', conversational), llm_reasoning_permitted: false }), true);
+  assert.equal(normativeResolvedValid({ ...resolved('conversational_generation', generated), llm_reasoning_permitted: false }), false);
+  const generatedResolved = { ...resolved('generated_guidance', generated), llm_reasoning_permitted: true, guidance_payload: { semantic_safety_validation_required: true, units: [{ unit_type: 'organization', content: 'Contenido generado.', bounded_input_ids: ['bi-1'] }] } };
+  assert.equal(normativeResolvedValid(generatedResolved), true);
+  assert.equal(normativeResolvedValid({ ...generatedResolved, source: conversational }), false);
+  assert.match(JSON.stringify(schema.$defs.source.allOf), /conversational_generation/);
+  assert.match(JSON.stringify(schema.$defs.source.allOf), /"composer"/);
 });
 
 test('Ticket 61A accepts every deferred lifecycle stage without inventing authority', () => {

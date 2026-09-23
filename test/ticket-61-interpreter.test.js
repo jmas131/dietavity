@@ -96,6 +96,22 @@ test('Ticket 61 rejects authority-shaped attributes and exact-deduplicates only 
   assert.deepEqual(obligations.map(item => item.id), ['o-1']);
 });
 
+test('Ticket 65A deduplicates practical guidance by normalized task semantics before global bi-N allocation', () => {
+  const candidate = (task_kind, input_type, value) => ({ category: 'practical_guidance', subject: 'prep', current_turn_evidence: 'arroz pollo frijoles', confidence: 'high', ambiguous: false, practical_task: { task_kind, bounded_inputs: [{ input_type, value }] } });
+  const obligations = validateModelOutput({ obligations: [
+    candidate('organization', 'ingredient', 'arroz'),
+    candidate('organization', 'ingredient', 'arroz'),
+    candidate('transformation', 'ingredient', 'arroz'),
+    candidate('organization', 'ingredient', 'pollo'),
+    candidate('organization', 'meal_component', 'arroz'),
+  ] }, 'arroz pollo frijoles');
+  assert.deepEqual(obligations.map(value => [value.practical_task.task_kind, value.practical_task.bounded_inputs[0].input_type, value.practical_task.bounded_inputs[0].value]), [
+    ['organization', 'ingredient', 'arroz'], ['transformation', 'ingredient', 'arroz'], ['organization', 'ingredient', 'pollo'], ['organization', 'meal_component', 'arroz'],
+  ]);
+  assert.deepEqual(obligations.map(value => value.id), ['o-1', 'o-2', 'o-3', 'o-4']);
+  assert.deepEqual(obligations.map(value => value.practical_task.bounded_inputs[0].id), ['bi-1', 'bi-2', 'bi-3', 'bi-4']);
+});
+
 test('Ticket 61 remains disconnected from fact, policy, workflow, persistence, and provider clients', () => {
   for (const file of ['interpreter.js', 'interpreter-validator.js']) {
     const source = fs.readFileSync(path.join(__dirname, '..', 'lib', 'sales-engine-v2', file), 'utf8');
