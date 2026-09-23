@@ -23,7 +23,9 @@ test('Ticket 61 fixture matrix is contract and validator coverage, not model sem
   const fixtures = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'sales-engine-v2', 'interpreter-cases.json'), 'utf8'));
   for (const fixture of fixtures) {
     const obligations = await interpretConversation({ context: context(fixture.message, fixture.history), model: fixed({ obligations: fixture.obligations }) });
-    assert.deepEqual(obligations.map(({ id, ...obligation }) => obligation), fixture.obligations, fixture.name);
+    let fixtureBoundedInputIndex = 0;
+    const expected = fixture.obligations.map(obligation => obligation.practical_task === undefined ? obligation : { ...obligation, practical_task: { ...obligation.practical_task, bounded_inputs: obligation.practical_task.bounded_inputs.map(input => ({ id: `bi-${++fixtureBoundedInputIndex}`, ...input, origin: 'current_turn' })) } });
+    assert.deepEqual(obligations.map(({ id, ...obligation }) => obligation), expected, fixture.name);
     assert.deepEqual(obligations.map(item => item.id), obligations.map((_, index) => `o-${index + 1}`), fixture.name);
   }
 });

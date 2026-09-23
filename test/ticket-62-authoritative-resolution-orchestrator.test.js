@@ -7,7 +7,8 @@ const assert = require('node:assert/strict');
 const { createFactResolver } = require('../lib/sales-engine-v2/fact-resolver');
 const { createPolicyResolver } = require('../lib/sales-engine-v2/policy-resolver');
 const { ResolutionOrchestratorError, resolveObligations } = require('../lib/sales-engine-v2/resolution-orchestrator');
-const { RESOLVED_OBLIGATION_KEYS, resolvedValid } = require('../lib/sales-engine-v2/resolution-orchestrator-validator');
+const { resolvedValid } = require('../lib/sales-engine-v2/resolution-orchestrator-validator');
+const { RESOLVED_OBLIGATION_KEYS } = require('../lib/sales-engine-v2/resolved-obligation-validator');
 
 const root = path.join(__dirname, '..');
 const facts = JSON.parse(fs.readFileSync(path.join(root, 'config/sales-engine-v2/product-facts.json'), 'utf8')).facts;
@@ -20,7 +21,7 @@ const resolvers = () => ({ factResolver: createFactResolver({ facts, membershipD
 function context(campaign = 'standard', history = []) {
   return { contract_version: '2.0', context_id: 'c-1', locale: 'es-MX', current_message: { role: 'customer', text: 'mensaje actual', occurred_at: asOf, source_id: 'm-current' }, history, history_metadata: { ordering: 'occurred_at', history_truncated: false, retained_prior_turns: history.length, retained_prior_characters: 0 }, session_state: { session_id: 's-1' }, offer_context: { offer_version: '28d-149-v1' }, customer_state: {}, commercial_state: { checkout_sent: false, valid_purchase_confirmation: false }, metadata: { channel: 'whatsapp', campaign }, authoritative_context: {}, informational_context: { knowledge: [] } };
 }
-function obligation(id, category, subject, attributes = undefined, ambiguous = false) { return { id, category, ...(subject ? { subject } : {}), current_turn_evidence: 'mensaje actual', confidence: 'high', ambiguous, ...(attributes ? { attributes } : {}) }; }
+function obligation(id, category, subject, attributes = undefined, ambiguous = false) { return { id, category, ...(subject ? { subject } : {}), current_turn_evidence: 'mensaje actual', confidence: 'high', ambiguous, ...(attributes ? { attributes } : {}), ...(category === 'practical_guidance' ? { practical_task: { task_kind: 'knowledge_question', bounded_inputs: [] } } : {}) }; }
 function resolve(obligations, extra = {}) { return resolveObligations({ context: context(), obligations, asOf, ...resolvers(), ...extra }); }
 
 test('Ticket 62 routes canonical facts, payment membership, and unmapped capability independently', () => {

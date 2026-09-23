@@ -24,13 +24,49 @@
       "type": "object", "required": ["role", "text", "occurred_at", "source_id"], "additionalProperties": false,
       "properties": { "role": {"enum":["customer","assistant"]}, "text": {"type":"string"}, "occurred_at": {"$ref":"#/$defs/timestamp"}, "source_id": {"type":"string"}, "final_visible": {"type":"boolean"} }
     },
+    "boundedInput": {
+      "type": "object", "required": ["id","input_type","value","origin"], "additionalProperties": false,
+      "properties": {
+        "id":{"type":"string","pattern":"^bi-[1-9][0-9]*$"},
+        "input_type":{"enum":["meal_name","ingredient","preparation_step","meal_component","schedule_constraint","time_constraint","user_preference"]},
+        "value":{"type":"string","minLength":1}, "origin":{"const":"current_turn"}
+      }
+    },
+    "practicalTask": {
+      "type":"object", "required":["task_kind","bounded_inputs"], "additionalProperties":false,
+      "properties":{"task_kind":{"enum":["knowledge_question","transformation","organization"]},"bounded_inputs":{"type":"array","items":{"$ref":"#/$defs/boundedInput"}}},
+      "allOf":[
+        {"if":{"properties":{"task_kind":{"enum":["transformation","organization"]}}},"then":{"properties":{"bounded_inputs":{"minItems":1}}}}
+      ]
+    },
+    "guidanceUnit": {
+      "type":"object", "required":["unit_type","content"], "additionalProperties":false,
+      "properties": {
+        "unit_type":{"enum":["reviewed_information","practical_instruction","transformation","organization"]},
+        "content":{"type":"string","minLength":1},
+        "reviewed_knowledge_reference_ids":{"type":"array","items":{"type":"string","minLength":1},"minItems":1,"uniqueItems":true},
+        "bounded_input_ids":{"type":"array","items":{"type":"string","pattern":"^bi-[1-9][0-9]*$"},"minItems":1,"uniqueItems":true}
+      },
+      "allOf":[
+        {"if":{"properties":{"unit_type":{"enum":["reviewed_information","practical_instruction"]}}},"then":{"required":["reviewed_knowledge_reference_ids"],"not":{"required":["bounded_input_ids"]}}},
+        {"if":{"properties":{"unit_type":{"enum":["transformation","organization"]}}},"then":{"required":["bounded_input_ids"],"not":{"required":["reviewed_knowledge_reference_ids"]}}}
+      ]
+    },
+    "guidancePayload": {
+      "type":"object", "required":["units","semantic_safety_validation_required"], "additionalProperties":false,
+      "properties":{"units":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/guidanceUnit"}},"semantic_safety_validation_required":{"const":true}}
+    },
     "obligation": {
       "type": "object", "required": ["id","category","current_turn_evidence","confidence","ambiguous"], "additionalProperties": false,
       "properties": {
         "id": {"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},
         "category": {"enum":["product_fact","provider_service_fact","practical_guidance","conversational_task","commercial_purchase_intent","reminder_request","medication_management","safety_sensitive_nutrition","clarification","support_account","social_acknowledgement"]},
-        "subject": {"type":"string"}, "current_turn_evidence": {"type":"string","minLength":1}, "confidence": {"enum":["high","medium","low"]}, "ambiguous": {"type":"boolean"}, "attributes": {"type":"object"}
-      }
+        "subject": {"type":"string"}, "current_turn_evidence": {"type":"string","minLength":1}, "confidence": {"enum":["high","medium","low"]}, "ambiguous": {"type":"boolean"}, "attributes": {"type":"object"}, "practical_task":{"$ref":"#/$defs/practicalTask"}
+      },
+      "allOf":[
+        {"if":{"properties":{"category":{"const":"practical_guidance"}}},"then":{"required":["practical_task"]}},
+        {"if":{"required":["practical_task"]},"then":{"properties":{"category":{"const":"practical_guidance"}}}}
+      ]
     },
     "authorizedAction": {
       "type": "object", "required": ["action_type","authorization_source","authorizing_rule","parameters","preconditions","constraints","idempotency","status"], "additionalProperties": false,
@@ -47,7 +83,7 @@
         "obligation_id": {"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"}, "resolution_status": {"enum":["resolved","unknown","clarification_required","prohibited","failed","deferred"]},
         "authority": {"type":["string","null"],"enum":["canonical_fact","deterministic_policy","commercial_authorization","reviewed_knowledge","generated_guidance","conversational_generation","bounded_unknown","clarification_required","prohibited","resolver_failure",null]}, "source": {},
         "factual_payload": {}, "policy_decision": {"type":"object"}, "allowed_claims": {"type":"array","items":{"type":"string"}}, "prohibited_claims": {"type":"array","items":{"type":"string"}},
-        "retrieved_knowledge_references": {"type":"array","items":{"$ref":"#/$defs/source"}}, "llm_reasoning_permitted": {"type":"boolean"}, "customer_uncertainty_required": {"type":"boolean"}, "action_authorization": {"$ref":"#/$defs/authorizedAction"}, "next_stage":{"enum":["reviewed_knowledge_or_reasoning","conversational_generation","support_resolution","response_composition"]}
+        "retrieved_knowledge_references": {"type":"array","items":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"reviewed_knowledge"}}}]}}, "guidance_payload":{"$ref":"#/$defs/guidancePayload"}, "llm_reasoning_permitted": {"type":"boolean"}, "customer_uncertainty_required": {"type":"boolean"}, "action_authorization": {"$ref":"#/$defs/authorizedAction"}, "next_stage":{"enum":["reviewed_knowledge_or_reasoning","conversational_generation","support_resolution","response_composition"]}
       },
       "allOf": [
         {"if":{"properties":{"authority":{"const":"bounded_unknown"}}},"then":{"properties":{"customer_uncertainty_required":{"const":true}}}},
@@ -60,7 +96,9 @@
         {"if":{"properties":{"authority":{"const":"clarification_required"}}},"then":{"properties":{"source":{"type":"null"}}}},
         {"if":{"properties":{"authority":{"const":"prohibited"}}},"then":{"properties":{"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"deterministic_policy"}}}]}}}},
         {"if":{"properties":{"authority":{"const":"resolver_failure"}}},"then":{"properties":{"source":{"type":"null"}}}},
-        {"if":{"properties":{"resolution_status":{"const":"deferred"}}},"then":{"required":["next_stage","llm_reasoning_permitted"],"properties":{"authority":{"const":null},"source":{"type":"null"},"allowed_claims":{"maxItems":0},"prohibited_claims":{"maxItems":0},"customer_uncertainty_required":{"const":false},"llm_reasoning_permitted":{"const":false}},"not":{"anyOf":[{"required":["factual_payload"]},{"required":["policy_decision"]},{"required":["action_authorization"]},{"required":["retrieved_knowledge_references"]}]}}},
+        {"if":{"properties":{"authority":{"const":"reviewed_knowledge"}}},"then":{"required":["guidance_payload","retrieved_knowledge_references"],"properties":{"resolution_status":{"const":"resolved"},"llm_reasoning_permitted":{"const":false}}}},
+        {"if":{"properties":{"authority":{"const":"generated_guidance"}}},"then":{"required":["guidance_payload"],"properties":{"resolution_status":{"const":"resolved"},"llm_reasoning_permitted":{"const":true}}}},
+        {"if":{"properties":{"resolution_status":{"const":"deferred"}}},"then":{"required":["next_stage","llm_reasoning_permitted"],"properties":{"authority":{"const":null},"source":{"type":"null"},"allowed_claims":{"maxItems":0},"prohibited_claims":{"maxItems":0},"customer_uncertainty_required":{"const":false},"llm_reasoning_permitted":{"const":false}},"not":{"anyOf":[{"required":["factual_payload"]},{"required":["policy_decision"]},{"required":["action_authorization"]},{"required":["retrieved_knowledge_references"]},{"required":["guidance_payload"]}]}}},
         {"if":{"properties":{"authority":{"const":null}}},"then":{"properties":{"resolution_status":{"const":"deferred"}}}},
         {"if":{"required":["next_stage"]},"then":{"properties":{"resolution_status":{"const":"deferred"}}}},
         {"if":{"properties":{"authority":{"enum":["canonical_fact","deterministic_policy","commercial_authorization","bounded_unknown","clarification_required","prohibited","resolver_failure"]}}},"then":{"properties":{"llm_reasoning_permitted":{"const":false}}}}

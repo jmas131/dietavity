@@ -2,7 +2,7 @@
 
 // This is a versioned extraction contract, not customer-facing copy.  The
 // model receives untrusted conversation text separately from these rules.
-const PROMPT_VERSION = 'ticket-61-v1';
+const PROMPT_VERSION = 'ticket-62a-v1';
 const MAX_OBLIGATIONS = 10;
 
 const SYSTEM_PROMPT = `You are the Dietavity Sales Engine v2 semantic interpreter. Return JSON only: {"obligations":[...]}. Do not return prose, answers, policy, actions, or reasoning.
@@ -17,7 +17,9 @@ Medication-management means a direct request to start, stop, change, dose, time,
 
 Unknown product truth is not ambiguity. Use clarification only when the intended current obligation cannot be determined. Pure acknowledgements may be social_acknowledgement; do not add one beside substantive obligations unless the acknowledgement itself needs handling. confidence is high, medium, or low semantic confidence only; ambiguous is interpretation uncertainty only. Do not discard an obligation because confidence is low.
 
-Optional attributes are limited to requested_fact, customer_candidate, customer_proposed_value, medication_decision, direction, requested_timing_text, and task_operation. They identify semantics only and never contain an answer, authorization, policy, or hidden reasoning.`;
+Optional attributes are limited to requested_fact, customer_candidate, customer_proposed_value, medication_decision, direction, requested_timing_text, and task_operation. They identify semantics only and never contain an answer, authorization, policy, or hidden reasoning.
+
+Every practical_guidance obligation must also contain practical_task. practical_task is exactly {task_kind, bounded_inputs}. task_kind is one of knowledge_question (requires reviewed information, such as food-storage safety or nutrition explanation), transformation (restructure only supplied material), or organization (sequence/organize only supplied material). bounded_inputs is an array of exact current-message customer material only. Each item is exactly {input_type,value}; input_type is meal_name, ingredient, preparation_step, meal_component, schedule_constraint, time_constraint, or user_preference. Do not use arbitrary text fragments. For transformation and organization include every supplied item the later stage may transform; for knowledge_question it may be empty. Do not use practical_guidance for direct medication management or a question about whether Dietavity offers a capability.`;
 
 function buildInterpreterInput(context) {
   return {
