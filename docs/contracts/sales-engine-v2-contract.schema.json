@@ -146,9 +146,40 @@
     "SemanticGuidanceGate": {"$ref":"#/$defs/semanticGuidanceGate"},
     "AuthorizedAction": {"$ref":"#/$defs/authorizedAction"},
     "ResponsePlan": {
-      "type":"object", "required":["contract_version","context_id","obligation_ids","resolved_obligations","required_coverage","canonical_facts","policy_outcomes","required_safety_language","bounded_uncertainties","authorized_actions","prohibited_claims","prohibited_actions","question_budget","locale"], "additionalProperties":false,
+      "type":"object", "required":["contract_version","context_id","locale","obligation_ids","required_coverage","canonical_facts","policy_outcomes","permitted_guidance","bounded_uncertainties","clarification_requirements","deferred_obligations","authorized_actions","prohibited_claims","prohibited_actions","question_budget","completion_requirement"], "additionalProperties":false,
       "properties": {
-        "contract_version":{"const":"2.0"},"context_id":{"type":"string"},"obligation_ids":{"type":"array","items":{"type":"string"},"uniqueItems":true},"resolved_obligations":{"type":"array","items":{"$ref":"#/$defs/resolvedObligation"}},"required_coverage":{"type":"array","items":{"type":"string"},"uniqueItems":true},"canonical_facts":{"type":"array","items":{"type":"object"}},"policy_outcomes":{"type":"array","items":{"type":"object"}},"permitted_reasoning":{"type":"array","items":{"type":"object"}},"retrieved_knowledge":{"type":"array","items":{"$ref":"#/$defs/retrievedKnowledge"}},"required_safety_language":{"type":"array","items":{"type":"string"}},"bounded_uncertainties":{"type":"array","items":{"type":"string"}},"authorized_actions":{"type":"array","items":{"$ref":"#/$defs/authorizedAction"}},"prohibited_claims":{"type":"array","items":{"type":"string"}},"prohibited_actions":{"type":"array","items":{"type":"string"}},"question_budget":{"type":"integer","minimum":0,"maximum":1},"locale":{"const":"es-MX"},"completion_requirement":{"type":"string"}
+        "contract_version":{"const":"2.0"}, "context_id":{"type":"string","minLength":1}, "locale":{"const":"es-MX"},
+        "obligation_ids":{"type":"array","items":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"uniqueItems":true},
+        "required_coverage":{"type":"array","items":{"type":"object","required":["obligation_id","handling"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"handling":{"enum":["express_fact","express_policy","express_guidance","express_uncertainty","request_clarification","withhold_safety","withhold_indeterminate","commercial_handling","conversational_handling","support_unresolved","social_acknowledgement","deferred_practical_guidance","resolution_unavailable"]}}}},
+        "canonical_facts":{"type":"array","items":{"type":"object","required":["obligation_id","source","factual_payload","allowed_claims","prohibited_claims"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"canonical_fact"}}}]},"factual_payload":{},"allowed_claims":{"type":"array","items":{"type":"string"}},"prohibited_claims":{"type":"array","items":{"type":"string"}}}}},
+        "policy_outcomes":{"type":"array","items":{"type":"object","required":["obligation_id","authority","source","policy_decision","allowed_claims","prohibited_claims"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"authority":{"enum":["deterministic_policy","commercial_authorization","prohibited"]},"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"deterministic_policy"}}}]},"policy_decision":{"type":"object"},"allowed_claims":{"type":"array","items":{"type":"string"}},"prohibited_claims":{"type":"array","items":{"type":"string"}}}}},
+        "permitted_guidance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["obligation_id", "authority", "source", "guidance_payload", "semantic_gate"],
+            "additionalProperties": false,
+            "properties": {
+              "obligation_id": {"type": "string", "pattern": "^o-[A-Za-z0-9._-]+$"},
+              "authority": {"enum": ["reviewed_knowledge", "generated_guidance"]},
+              "source": {"anyOf": [
+                {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"type": {"const": "reviewed_knowledge"}}}]},
+                {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"type": {"const": "generated_guidance"}}}]}
+              ]},
+              "guidance_payload": {"$ref": "#/$defs/guidancePayload"},
+              "retrieved_knowledge_references": {"type": "array", "items": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"type": {"const": "reviewed_knowledge"}}}]}},
+              "semantic_gate": {"type": "object", "required": ["gate_id", "gate_version", "gate_status"], "additionalProperties": false, "properties": {"gate_id": {"const": "semantic-guidance-safety-gate"}, "gate_version": {"const": "ticket-64-v1"}, "gate_status": {"const": "cleared"}}}
+            },
+            "allOf": [
+              {"if": {"properties": {"authority": {"const": "reviewed_knowledge"}}}, "then": {"required": ["retrieved_knowledge_references"], "properties": {"source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"type": {"const": "reviewed_knowledge"}}}]}, "retrieved_knowledge_references": {"minItems": 1}}}},
+              {"if": {"properties": {"authority": {"const": "generated_guidance"}}}, "then": {"properties": {"source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"type": {"const": "generated_guidance"}}}]}}}}
+            ]
+          }
+        },
+        "bounded_uncertainties":{"type":"array","items":{"type":"object","required":["obligation_id","reason","prohibited_claims"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"reason":{"enum":["canonical_fact_unknown","guidance_gate_indeterminate","support_unresolved","resolver_failure"]},"source":{"anyOf":[{"type":"null"},{"$ref":"#/$defs/source"}]},"prohibited_claims":{"type":"array","items":{"type":"string"}}},"allOf":[{"if":{"properties":{"reason":{"const":"canonical_fact_unknown"}}},"then":{"properties":{"source":{"anyOf":[{"type":"null"},{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"canonical_fact"}}}]}]}}}},{"if":{"properties":{"reason":{"enum":["guidance_gate_indeterminate","support_unresolved","resolver_failure"]}}},"then":{"not":{"required":["source"]}}}]}},
+        "clarification_requirements":{"type":"array","items":{"type":"object","required":["obligation_id"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"subject":{"type":"string"},"attributes":{"type":"object"}}}},
+        "deferred_obligations":{"type":"array","items":{"type":"object","required":["obligation_id","next_stage"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"next_stage":{"enum":["reviewed_knowledge_or_reasoning","conversational_generation","support_resolution","response_composition"]}}}},
+        "authorized_actions":{"type":"array","items":{"$ref":"#/$defs/authorizedAction"}}, "prohibited_claims":{"type":"array","items":{"type":"object","required":["obligation_id","claim"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"claim":{"type":"string","minLength":1}}}}, "prohibited_actions":{"type":"array","items":{"enum":["create_checkout","provide_checkout_destination","provide_holding_page_destination","schedule_reminder","persist_commercial_transition","update_conversation_state"]},"uniqueItems":true}, "question_budget":{"enum":[0,1]}, "completion_requirement":{"const":"cover_all_required_items"}
       }
     }
   },
