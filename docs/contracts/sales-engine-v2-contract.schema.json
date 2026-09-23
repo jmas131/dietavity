@@ -94,7 +94,10 @@
         "authorization_source": {"const":"deterministic_policy"}, "authorizing_rule": {"type":"string","minLength":1}, "parameters": {"type":"object"}, "preconditions": {"type":"array","items":{"type":"string"}}, "constraints":{"type":"object"},
         "idempotency": {"type":"object","required":["required","key_scope"],"additionalProperties":false,"properties":{"required":{"const":true},"key_scope":{"enum":["inbound_message","session","action"]}}},
         "status": {"const":"authorized"}, "expires_at": {"$ref":"#/$defs/timestamp"}
-      }
+      },
+      "allOf": [
+        {"if":{"properties":{"action_type":{"const":"schedule_reminder"}}},"then":{"properties":{"parameters":{"required":["scheduled_for"],"properties":{"scheduled_for":{"$ref":"#/$defs/timestamp"}}}}}}
+      ]
     },
     "resolvedObligation": {
       "type": "object", "required": ["obligation_id","resolution_status","authority","source","allowed_claims","prohibited_claims","customer_uncertainty_required"], "additionalProperties": false,

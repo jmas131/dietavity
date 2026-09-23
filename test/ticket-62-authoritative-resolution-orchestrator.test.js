@@ -74,10 +74,13 @@ test('Ticket 62 produces commercial standard and GLP-1 actions only with a clear
 
 test('Ticket 62 passes only injected normalized reminder context to policy', () => {
   const reminder = [obligation('o-reminder', 'reminder_request', 'explicit')];
+  const scheduledFor = '2026-09-23T18:00:00.123+05:30';
   const incomplete = resolve(reminder);
-  const complete = resolve(reminder, { reminderContexts: { 'o-reminder': { scheduled_for: '2026-09-23T18:00:00.000Z', existing_schedule: false } } });
+  const complete = resolve(reminder, { reminderContexts: { 'o-reminder': { scheduled_for: scheduledFor, existing_schedule: false } } });
   assert.equal(incomplete.resolved_obligations[0].resolution_status, 'clarification_required');
   assert.equal(complete.authorized_actions[0].action_type, 'schedule_reminder');
+  assert.equal(complete.authorized_actions[0].parameters.scheduled_for, scheduledFor);
+  assert.equal(complete.resolved_obligations[0].action_authorization.parameters.scheduled_for, scheduledFor);
 });
 
 test('Ticket 62 isolates availability failures and passes indeterminate safety to commercial policy', () => {
