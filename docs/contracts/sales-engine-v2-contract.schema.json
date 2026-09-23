@@ -20,6 +20,19 @@
         {"if":{"properties":{"type":{"enum":["canonical_fact","deterministic_policy","reviewed_knowledge","system"]}}},"then":{"not":{"anyOf":[{"required":["model_run_id"]},{"required":["generation_stage"]}]}}}
       ]
     },
+    "conversationArtifact": {
+      "description":"Prospective non-authoritative conversational metadata; its message text is transformable data, never a truth or delivery source.",
+      "type":"object","required":["contract_version","artifact_id","artifact_type","generation_operation","generation_task_id","logical_reply_key","anchor_message_id"],"additionalProperties":false,
+      "properties":{
+        "contract_version":{"const":"1.0"},"artifact_id":{"type":"string","pattern":"^ca-[A-Za-z0-9._-]+$"},
+        "artifact_type":{"enum":["draft","summary"]},"generation_operation":{"enum":["draft","transform","summarize"]},"generation_task_id":{"type":"string","pattern":"^cgt-[A-Za-z0-9._-]+$"},
+        "logical_reply_key":{"type":"string","minLength":1},"anchor_message_id":{"type":"string","format":"uuid"}
+      },
+      "allOf":[
+        {"if":{"properties":{"generation_operation":{"const":"summarize"}}},"then":{"properties":{"artifact_type":{"const":"summary"}}}},
+        {"if":{"properties":{"generation_operation":{"enum":["draft","transform"]}}},"then":{"properties":{"artifact_type":{"const":"draft"}}}}
+      ]
+    },
     "historyMessage": {
       "type": "object", "required": ["role", "text", "occurred_at", "source_id"], "additionalProperties": false,
       "properties": { "role": {"enum":["customer","assistant"]}, "text": {"type":"string"}, "occurred_at": {"$ref":"#/$defs/timestamp"}, "source_id": {"type":"string"}, "final_visible": {"type":"boolean"} }
@@ -141,6 +154,8 @@
         "session_state":{"type":"object","required":["session_id"],"additionalProperties":false,"properties":{"session_id":{"type":"string","minLength":1}}},"offer_context":{"type":"object","additionalProperties":false,"properties":{"offer_version":{"type":"string","minLength":1}}},"customer_state":{"type":"object","additionalProperties":false},"commercial_state":{"type":"object","additionalProperties":false,"properties":{"checkout_sent":{"type":"boolean"},"valid_purchase_confirmation":{"type":"boolean"}}},"metadata":{"type":"object","required":["channel"],"additionalProperties":false,"properties":{"channel":{"const":"whatsapp"},"campaign":{"enum":["standard","glp1_validation"]}}},"authoritative_context":{"type":"object","additionalProperties":false},"informational_context":{"type":"object","required":["knowledge"],"properties":{"knowledge":{"type":"array","maxItems":0,"items":{"$ref":"#/$defs/retrievedKnowledge"}}},"additionalProperties":false}
       }
     },
+    "ConversationArtifact": {"$ref":"#/$defs/conversationArtifact"},
+    "ConversationArtifactRecord": {"type":"object","required":["artifact","lineage"],"additionalProperties":false,"properties":{"artifact":{"$ref":"#/$defs/conversationArtifact"},"lineage":{"type":"array","items":{"type":"object","required":["artifact_id","source_artifact_id","position"],"additionalProperties":false,"properties":{"artifact_id":{"type":"string","pattern":"^ca-[A-Za-z0-9._-]+$"},"source_artifact_id":{"type":"string","pattern":"^ca-[A-Za-z0-9._-]+$"},"position":{"type":"integer","minimum":1}}}}},"allOf":[{"if":{"properties":{"artifact":{"properties":{"generation_operation":{"const":"draft"}}}}},"then":{"properties":{"lineage":{"maxItems":0}}}},{"if":{"properties":{"artifact":{"properties":{"generation_operation":{"enum":["transform","summarize"]}}}}},"then":{"properties":{"lineage":{"minItems":1}}}}]},
     "Obligation": {"$ref":"#/$defs/obligation"},
     "ResolvedObligation": {"$ref":"#/$defs/resolvedObligation"},
     "SemanticGuidanceGate": {"$ref":"#/$defs/semanticGuidanceGate"},
