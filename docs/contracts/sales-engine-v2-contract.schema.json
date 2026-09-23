@@ -56,6 +56,25 @@
       "type":"object", "required":["units","semantic_safety_validation_required"], "additionalProperties":false,
       "properties":{"units":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/guidanceUnit"}},"semantic_safety_validation_required":{"const":true}}
     },
+    "semanticGuidanceFinding": {
+      "type":"object", "required":["code","severity","unit_index","rationale"], "additionalProperties":false,
+      "properties":{"code":{"enum":["unsupported_external_fact","product_or_provider_claim","commercial_claim","medication_management","diagnosis_or_prescription","unauthorized_action_claim","bounded_input_semantic_drift","reviewed_knowledge_contradiction","safety_sensitive_guidance","other_semantic_risk"]},"severity":{"enum":["blocking","review_required"]},"unit_index":{"type":"integer","minimum":0},"rationale":{"type":"string","minLength":1}}
+    },
+    "semanticGuidanceAssessmentSource": {
+      "type":"object", "required":["assessment_stage","assessor_run_id","outcome"], "additionalProperties":false,
+      "properties":{"assessment_stage":{"const":"semantic_guidance_safety"},"assessor_run_id":{"type":"string","minLength":1},"outcome":{"enum":["completed","unavailable"]},"failure_code":{"const":"SEMANTIC_ASSESSOR_UNAVAILABLE"}},
+      "allOf":[{"if":{"properties":{"outcome":{"const":"unavailable"}}},"then":{"required":["failure_code"]}},{"if":{"properties":{"outcome":{"const":"completed"}}},"then":{"not":{"required":["failure_code"]}}}]
+    },
+    "semanticGuidanceGate": {
+      "type":"object", "required":["obligation_id","gate_id","gate_version","gate_status","findings","assessment_source"], "additionalProperties":false,
+      "properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"gate_id":{"const":"semantic-guidance-safety-gate"},"gate_version":{"const":"ticket-64-v1"},"gate_status":{"enum":["cleared","blocked","indeterminate"]},"findings":{"type":"array","items":{"$ref":"#/$defs/semanticGuidanceFinding"}},"assessment_source":{"$ref":"#/$defs/semanticGuidanceAssessmentSource"}},
+      "oneOf":[
+        {"title":"completed assessment with no findings clears","properties":{"gate_status":{"const":"cleared"},"findings":{"maxItems":0},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}}},
+        {"title":"completed assessment with a blocking finding blocks","properties":{"gate_status":{"const":"blocked"},"findings":{"contains":{"properties":{"severity":{"const":"blocking"}}}},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}}},
+        {"title":"completed assessment with review-only findings is indeterminate","properties":{"gate_status":{"const":"indeterminate"},"findings":{"contains":{"properties":{"severity":{"const":"review_required"}}}},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}},"not":{"properties":{"findings":{"contains":{"properties":{"severity":{"const":"blocking"}}}}}}},
+        {"title":"unavailable assessment is empty and indeterminate","properties":{"gate_status":{"const":"indeterminate"},"findings":{"maxItems":0},"assessment_source":{"properties":{"outcome":{"const":"unavailable"}}}}}
+      ]
+    },
     "obligation": {
       "type": "object", "required": ["id","category","current_turn_evidence","confidence","ambiguous"], "additionalProperties": false,
       "properties": {
@@ -121,6 +140,7 @@
     },
     "Obligation": {"$ref":"#/$defs/obligation"},
     "ResolvedObligation": {"$ref":"#/$defs/resolvedObligation"},
+    "SemanticGuidanceGate": {"$ref":"#/$defs/semanticGuidanceGate"},
     "AuthorizedAction": {"$ref":"#/$defs/authorizedAction"},
     "ResponsePlan": {
       "type":"object", "required":["contract_version","context_id","obligation_ids","resolved_obligations","required_coverage","canonical_facts","policy_outcomes","required_safety_language","bounded_uncertainties","authorized_actions","prohibited_claims","prohibited_actions","question_budget","locale"], "additionalProperties":false,
