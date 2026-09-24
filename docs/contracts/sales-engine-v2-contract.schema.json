@@ -117,6 +117,21 @@
         {"title":"unavailable assessment is empty and indeterminate","properties":{"gate_status":{"const":"indeterminate"},"findings":{"maxItems":0},"assessment_source":{"properties":{"outcome":{"const":"unavailable"}}}}}
       ]
     },
+    "artifactReproductionFinding": {
+      "type":"object","required":["code","severity","artifact_id","rationale"],"additionalProperties":false,
+      "properties":{"code":{"enum":["product_or_provider_claim","commercial_claim","medication_management","diagnosis_or_prescription","safety_sensitive_guidance","unauthorized_action_or_execution_claim","delivery_claim","transformation_authority_escalation","instruction_injection","other_reproduction_risk"]},"severity":{"enum":["blocking","review_required"]},"artifact_id":{"type":"string","pattern":"^ca-[A-Za-z0-9._-]+$"},"rationale":{"type":"string","minLength":1}}
+    },
+    "artifactReproductionSafetyGate": {
+      "description":"A clearance permits only the bound conversational operation; it never establishes artifact truth, policy, safety approval, authorization, execution, or delivery.",
+      "type":"object","required":["obligation_id","gate_id","gate_version","operation","artifact_bindings","constraint_digest","gate_status","findings","assessment_source"],"additionalProperties":false,
+      "properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"gate_id":{"const":"artifact-reproduction-safety-gate"},"gate_version":{"const":"ticket-64a-v1"},"operation":{"enum":["show","transform","summarize"]},"artifact_bindings":{"type":"array","minItems":1,"items":{"type":"object","required":["artifact_id","content_digest"],"additionalProperties":false,"properties":{"artifact_id":{"type":"string","pattern":"^ca-[A-Za-z0-9._-]+$"},"content_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}},"constraint_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"gate_status":{"enum":["cleared","blocked","indeterminate"]},"findings":{"type":"array","items":{"$ref":"#/$defs/artifactReproductionFinding"}},"assessment_source":{"type":"object","required":["assessment_stage","assessor_run_id","outcome"],"additionalProperties":false,"properties":{"assessment_stage":{"const":"artifact_reproduction_safety"},"assessor_run_id":{"type":"string","minLength":1},"outcome":{"enum":["completed","unavailable"]},"failure_code":{"const":"ARTIFACT_REPRODUCTION_ASSESSOR_UNAVAILABLE"}}}},
+      "oneOf":[
+        {"properties":{"gate_status":{"const":"cleared"},"findings":{"maxItems":0},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}}},
+        {"properties":{"gate_status":{"const":"blocked"},"findings":{"contains":{"properties":{"severity":{"const":"blocking"}}}},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}}},
+        {"properties":{"gate_status":{"const":"indeterminate"},"findings":{"contains":{"properties":{"severity":{"const":"review_required"}}}},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}},"not":{"properties":{"findings":{"contains":{"properties":{"severity":{"const":"blocking"}}}}}}},
+        {"properties":{"gate_status":{"const":"indeterminate"},"findings":{"maxItems":0},"assessment_source":{"properties":{"outcome":{"const":"unavailable"},"failure_code":{"const":"ARTIFACT_REPRODUCTION_ASSESSOR_UNAVAILABLE"}}}}}
+      ]
+    },
     "obligation": {
       "type": "object", "required": ["id","category","current_turn_evidence","confidence","ambiguous"], "additionalProperties": false,
       "properties": {
@@ -219,6 +234,7 @@
     "Obligation": {"$ref":"#/$defs/obligation"},
     "ResolvedObligation": {"$ref":"#/$defs/resolvedObligation"},
     "SemanticGuidanceGate": {"$ref":"#/$defs/semanticGuidanceGate"},
+    "ArtifactReproductionSafetyGate": {"$ref":"#/$defs/artifactReproductionSafetyGate"},
     "AuthorizedAction": {"$ref":"#/$defs/authorizedAction"},
     "ResponsePlan": {
       "type":"object", "required":["contract_version","context_id","locale","obligation_ids","required_coverage","canonical_facts","policy_outcomes","permitted_guidance","conversational_generation","commercial_semantics","bounded_uncertainties","clarification_requirements","deferred_obligations","authorized_actions","prohibited_claims","prohibited_actions","question_budget","completion_requirement"], "additionalProperties":false,
