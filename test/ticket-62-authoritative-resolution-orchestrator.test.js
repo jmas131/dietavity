@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const { createFactResolver } = require('../lib/sales-engine-v2/fact-resolver');
 const { createPolicyResolver } = require('../lib/sales-engine-v2/policy-resolver');
 const { ResolutionOrchestratorError, resolveObligations } = require('../lib/sales-engine-v2/resolution-orchestrator');
-const { resolvedValid } = require('../lib/sales-engine-v2/resolution-orchestrator-validator');
+const { assertOutputs, resolvedValid } = require('../lib/sales-engine-v2/resolution-orchestrator-validator');
 const { RESOLVED_OBLIGATION_KEYS } = require('../lib/sales-engine-v2/resolved-obligation-validator');
 const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 
@@ -79,7 +79,26 @@ test('Ticket 62 produces commercial standard and GLP-1 actions only with a clear
   assert.equal(standard.authorized_actions[0].action_type, 'provide_checkout_destination');
   assert.equal(glp1.authorized_actions[0].action_type, 'provide_holding_page_destination');
   assert.notEqual(purchase[0].authorization_subject_id, glp1Subject.authorization_subject_id);
+  assert.match(standard.authorized_actions[0].action_id, /^act-[0-9a-f]{64}$/);
+  assert.equal(standard.authorized_actions[0].action_identity_version, 'action-identity-v1');
+  assert.match(standard.authorized_actions[0].idempotency.execution_key, /^aek-[0-9a-f]{64}$/);
+  assert.equal(standard.authorized_actions[0].idempotency.execution_key_version, 'action-execution-idempotency-v1');
   assert.equal(standard.resolved_obligations[0].source.type, 'deterministic_policy');
+});
+
+test('Ticket 59B action identity is stable across retry and interpretation-local obligation changes', () => {
+  const first = resolve([obligation('o-1', 'commercial_purchase_intent', 'explicit_current_request')]);
+  const retried = resolve([{ ...obligation('o-99', 'commercial_purchase_intent', 'explicit_current_request'), current_turn_evidence: 'otra redacción', confidence: 'low' }]);
+  assert.equal(first.authorized_actions[0].action_id, retried.authorized_actions[0].action_id);
+  assert.equal(first.authorized_actions[0].idempotency.execution_key, retried.authorized_actions[0].idempotency.execution_key);
+  const otherInbound = resolveObligations({ context: { ...context(), current_message: { ...context().current_message, canonical_message_id: '11111111-1111-4111-8111-000000000063' } }, obligations: [obligation('o-1', 'commercial_purchase_intent', 'explicit_current_request')], asOf, ...resolvers() });
+  assert.notEqual(first.authorized_actions[0].action_id, otherInbound.authorized_actions[0].action_id);
+});
+
+test('Ticket 59B rejects duplicate action identities in an orchestration projection', () => {
+  const result = resolve([obligation('o-1', 'commercial_purchase_intent', 'explicit_current_request')]);
+  const duplicatedResolution = { ...structuredClone(result.resolved_obligations[0]), obligation_id: 'o-2' };
+  assert.throws(() => assertOutputs([{ id: 'o-1' }, { id: 'o-2' }], [result.resolved_obligations[0], duplicatedResolution], [result.authorized_actions[0], structuredClone(result.authorized_actions[0])]), error => error.code === 'ORCHESTRATION_ACTION_INVALID');
 });
 
 test('Ticket 60B-R fails closed for missing, malformed, or context-mismatched commercial subjects', () => {

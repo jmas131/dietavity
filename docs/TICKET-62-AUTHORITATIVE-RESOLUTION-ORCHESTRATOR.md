@@ -10,6 +10,8 @@
 
 It imports no model, network, provider, persistence, workflow, or runtime clock dependency. It does not inspect raw language or history, generate wording, retrieve knowledge, execute an action, or write state.
 
+For the executable commercial launch actions, Ticket 62 is also the identity-projection boundary: it combines the validated canonical inbound ledger UUID, commercial authorization subject, action type, and Ticket 59 deterministic-policy source into the Ticket 59B `action_id` and executor idempotency key. This remains authorization metadata only, never execution or delivery evidence.
+
 Its validator is intentionally stage-specific. The shared normative `ResolvedObligation` validator also recognizes future `reviewed_knowledge` and `generated_guidance` terminal variants, but Ticket 62 rejects them because it only produces authoritative/deferred outcomes.
 
 `reminderContexts` is retained as a dormant compatibility input only. V2 launch never passes it into a policy authorization path and rejects any resulting `schedule_reminder` action. The orchestrator does not parse `requested_timing_text`; reminder intent resolves only to the bounded launch-unavailable handling.

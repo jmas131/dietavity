@@ -6,6 +6,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createPolicyResolver, PolicyResolverError } = require('../lib/sales-engine-v2/policy-resolver');
 const { actionValid } = require('../lib/sales-engine-v2/resolution-orchestrator-validator');
+const { deriveAuthorizedActionIdentity } = require('../lib/sales-engine-v2/authorized-action-identity');
+const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 
 const root = path.join(__dirname, '..');
 const policies = JSON.parse(fs.readFileSync(path.join(root, 'config/sales-engine-v2/policies.json'), 'utf8')).policies;
@@ -47,7 +49,8 @@ test('Ticket 59A accepts only a complete ISO-with-timezone reminder action while
   assert.equal(actionValid(authorizedReminder()), true);
   assert.equal(actionValid(authorizedReminder({ offer_version: null })), false);
   assert.equal(actionValid(authorizedReminder({ offer_version: null, scheduled_for: '2026-09-23 18:00:00' })), false);
-  assert.equal(actionValid({ ...authorizedReminder({ offer_version: null }), action_type: 'provide_checkout_destination' }), true);
+  const identity = deriveAuthorizedActionIdentity({ canonicalMessageId: '11111111-1111-4111-8111-000000000059', authorizationSubject: deriveCommercialAuthorizationSubject({ campaign: 'standard', offerVersion: '28d-149-v1' }), actionType: 'provide_checkout_destination', policy: { id: 'commercial.checkout.standard', version: '1' } });
+  assert.equal(actionValid({ ...authorizedReminder({ offer_version: null }), action_identity_version: identity.action_identity_version, action_id: identity.action_id, action_type: 'provide_checkout_destination', idempotency: { required: true, key_scope: 'inbound_message', execution_key_version: identity.execution_key_version, execution_key: identity.execution_key } }), true);
 });
 
 test('Ticket 59A schema makes scheduled_for required only for schedule_reminder', () => {
