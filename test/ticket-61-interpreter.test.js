@@ -9,12 +9,17 @@ const { interpretConversation } = require('../lib/sales-engine-v2/interpreter');
 const { InterpreterError, validateModelOutput } = require('../lib/sales-engine-v2/interpreter-validator');
 const { MAX_OBLIGATIONS, PROMPT_VERSION } = require('../config/sales-engine-v2/interpreter-prompt');
 
-function context(message, history = []) {
+function context(message, history = [], conversationArtifacts = []) {
   return createConversationContext({
     currentTurn: { id: 'inbound-61', text: message, received_at: '2026-09-22T12:00:00.000Z' },
     memory: history.map((item, index) => ({ source_id: `prior-${index}`, role: item.role, text: item.text, occurred_at: `2026-09-22T11:${String(index).padStart(2, '0')}:00.000Z` })),
+    conversationArtifacts,
     runtimeMetadata: { conversation_id: 'conversation-61', session_id: 'session-61', channel: 'whatsapp' },
   });
+}
+const messageId = suffix => `11111111-1111-4111-8111-${String(suffix).padStart(12, '0')}`;
+function artifactRecord({ id = 'ca-draft-1', type = 'draft', operation = 'draft', task = 'cgt-1', key = 'reply-1', anchor = messageId(1), text = 'Mensaje previo', occurred_at = '2026-09-22T11:00:00.000Z', lineage = [] } = {}) {
+  return { artifact: { contract_version: '1.0', artifact_id: id, artifact_type: type, generation_operation: operation, generation_task_id: task, logical_reply_key: key, anchor_message_id: anchor }, lineage: lineage.map((source_artifact_id, index) => ({ artifact_id: id, source_artifact_id, position: index + 1 })), messages: [{ id: anchor, direction: 'outbound', body: text, timestamp: occurred_at, idempotency_key: key, metadata: { logical_reply_key: key, part_index: 1, part_count: 1 } }] };
 }
 const fixed = output => async request => { assert.equal(request.input.prompt_version, PROMPT_VERSION); return output; };
 const errorCode = async (promise, code) => await assert.rejects(promise, error => error instanceof InterpreterError && error.code === code);
@@ -24,7 +29,10 @@ test('Ticket 61 fixture matrix is contract and validator coverage, not model sem
   for (const fixture of fixtures) {
     const obligations = await interpretConversation({ context: context(fixture.message, fixture.history), model: fixed({ obligations: fixture.obligations }) });
     let fixtureBoundedInputIndex = 0;
-    const expected = fixture.obligations.map(obligation => obligation.practical_task === undefined ? obligation : { ...obligation, practical_task: { ...obligation.practical_task, bounded_inputs: obligation.practical_task.bounded_inputs.map(input => ({ id: `bi-${++fixtureBoundedInputIndex}`, ...input, origin: 'current_turn' })) } });
+    const expected = fixture.obligations.map(obligation => ({ ...obligation,
+      ...(obligation.practical_task === undefined ? {} : { practical_task: { ...obligation.practical_task, bounded_inputs: obligation.practical_task.bounded_inputs.map(input => ({ id: `bi-${++fixtureBoundedInputIndex}`, ...input, origin: 'current_turn' })) } }),
+      ...(obligation.conversational_task === undefined ? {} : { conversational_task: { ...obligation.conversational_task, current_turn_constraints: obligation.conversational_task.current_turn_constraints.map(constraint => ({ ...constraint, origin: 'current_turn' })), current_turn_inputs: obligation.conversational_task.current_turn_inputs.map(input => ({ ...input, origin: 'current_turn' })) } }),
+    }));
     assert.deepEqual(obligations.map(({ id, ...obligation }) => obligation), expected, fixture.name);
     assert.deepEqual(obligations.map(item => item.id), obligations.map((_, index) => `o-${index + 1}`), fixture.name);
   }
@@ -62,6 +70,53 @@ test('Ticket 61 uses history only to resolve the current affirmative and never m
     model: fixed({ obligations: [] }),
   });
   assert.deepEqual(staleOnly, []);
+});
+
+test('Ticket 61C selects only explicit bounded artifacts for transform, summarize, and show', async () => {
+  const draft = artifactRecord({ text: 'El programa cuesta $99 según un borrador viejo.' });
+  const cases = [
+    ['Hazlo más corto', 'transform', ['ca-draft-1'], ['más corto']],
+    ['Hazlo más casual', 'transform', ['ca-draft-1'], ['más casual']],
+    ['Resúmelo', 'summarize', ['ca-draft-1'], []],
+    ['Muéstramelo otra vez', 'show', ['ca-draft-1'], []],
+  ];
+  for (const [message, operation, artifact_ids, current_turn_constraints] of cases) {
+    const obligations = await interpretConversation({ context: context(message, [], [draft]), model: fixed({ obligations: [{ category: 'conversational_task', subject: operation, current_turn_evidence: message, confidence: 'high', ambiguous: false, attributes: { task_operation: operation }, conversational_task: { operation, artifact_ids, current_turn_constraints: current_turn_constraints.map(value => ({ value })), current_turn_inputs: [] } }] }) });
+    assert.deepEqual(obligations[0].conversational_task, { operation, artifact_ids, current_turn_constraints: current_turn_constraints.map(value => ({ value, origin: 'current_turn' })), current_turn_inputs: [] });
+    assert.equal('factual_payload' in obligations[0], false);
+    assert.doesNotMatch(JSON.stringify(obligations[0]), /authority|policy|safety|authorized|delivery|execution/i);
+  }
+});
+
+test('Ticket 61C keeps new drafts and current-turn bounded material artifact-free', async () => {
+  const draft = await interpretConversation({ context: context('Escribe un mensaje para decirle a mi hermana que llegaré tarde.'), model: fixed({ obligations: [{ category: 'conversational_task', subject: 'draft', current_turn_evidence: 'Escribe un mensaje para decirle a mi hermana que llegaré tarde', confidence: 'high', ambiguous: false, attributes: { task_operation: 'draft' }, conversational_task: { operation: 'draft', artifact_ids: [], current_turn_constraints: [], current_turn_inputs: [{ input_type: 'draft_specification', value: 'un mensaje para decirle a mi hermana que llegaré tarde' }] } }] }) });
+  assert.deepEqual(draft[0].conversational_task.artifact_ids, []);
+  assert.deepEqual(draft[0].conversational_task.current_turn_inputs, [{ input_type: 'draft_specification', value: 'un mensaje para decirle a mi hermana que llegaré tarde', origin: 'current_turn' }]);
+  assert.notEqual(draft[0].conversational_task.current_turn_inputs[0].value, draft[0].current_turn_evidence);
+  assert.throws(() => validateModelOutput({ obligations: [{ category: 'conversational_task', current_turn_evidence: 'Escribe un mensaje', confidence: 'high', ambiguous: false, conversational_task: { operation: 'draft', artifact_ids: [], current_turn_constraints: [], current_turn_inputs: [{ input_type: 'draft_specification', value: 'texto de historial' }] } }] }, 'Escribe un mensaje'), error => error.code === 'INTERPRETER_CONVERSATIONAL_INPUT_INVALID');
+  const currentTurnOnly = await interpretConversation({ context: context('Organiza arroz y pollo'), model: fixed({ obligations: [{ category: 'practical_guidance', subject: 'organizar', current_turn_evidence: 'Organiza arroz y pollo', confidence: 'high', ambiguous: false, practical_task: { task_kind: 'organization', bounded_inputs: [{ input_type: 'ingredient', value: 'arroz' }, { input_type: 'ingredient', value: 'pollo' }] } }] }) });
+  assert.deepEqual(currentTurnOnly[0].practical_task.bounded_inputs.map(input => input.origin), ['current_turn', 'current_turn']);
+});
+
+test('Ticket 61C clarifies ambiguous or untyped prior material and rejects unavailable artifact IDs', async () => {
+  const clarification = { obligations: [{ category: 'clarification', current_turn_evidence: 'Hazlo más corto', confidence: 'low', ambiguous: true }] };
+  const many = [artifactRecord(), artifactRecord({ id: 'ca-draft-2', task: 'cgt-2', key: 'reply-2', anchor: messageId(2), occurred_at: '2026-09-22T11:02:00.000Z' })];
+  assert.equal((await interpretConversation({ context: context('Hazlo más corto', [], many), model: fixed(clarification) }))[0].category, 'clarification');
+  assert.equal((await interpretConversation({ context: context('Hazlo más corto', [{ role: 'assistant', text: 'Texto ordinario' }]), model: fixed(clarification) }))[0].category, 'clarification');
+  await errorCode(interpretConversation({ context: context('Hazlo más corto', [], [artifactRecord({ id: 'ca-draft-retained' })]), model: fixed({ obligations: [{ category: 'conversational_task', current_turn_evidence: 'Hazlo más corto', confidence: 'high', ambiguous: false, conversational_task: { operation: 'transform', artifact_ids: ['ca-omitted'], current_turn_constraints: [{ value: 'más corto' }], current_turn_inputs: [] } }] }) }), 'INTERPRETER_ARTIFACT_REFERENCE_INVALID');
+  assert.throws(() => validateModelOutput({ obligations: [{ category: 'product_fact', current_turn_evidence: 'precio', confidence: 'high', ambiguous: false, conversational_task: { operation: 'show', artifact_ids: ['ca-draft-1'], current_turn_constraints: [], current_turn_inputs: [] } }] }, 'precio', [{ artifact_id: 'ca-draft-1' }]), error => error.code === 'INTERPRETER_CONVERSATIONAL_TASK_INVALID');
+  assert.throws(() => validateModelOutput({ obligations: [{ category: 'conversational_task', current_turn_evidence: 'Hazlo', confidence: 'high', ambiguous: false, conversational_task: { operation: 'show', artifact_ids: [], current_turn_constraints: [], current_turn_inputs: [] } }] }, 'Hazlo', [{ artifact_id: 'ca-draft-1' }]), error => error.code === 'INTERPRETER_ARTIFACT_REFERENCE_INVALID');
+});
+
+test('Ticket 61C preserves independent current product obligations without promoting artifact claims', async () => {
+  const draft = artifactRecord({ text: 'El programa cuesta $99.' });
+  const message = 'Hazlo más corto y cuesta $99';
+  const obligations = await interpretConversation({ context: context(message, [], [draft]), model: fixed({ obligations: [
+    { category: 'conversational_task', current_turn_evidence: 'Hazlo más corto', confidence: 'high', ambiguous: false, conversational_task: { operation: 'transform', artifact_ids: ['ca-draft-1'], current_turn_constraints: [{ value: 'más corto' }], current_turn_inputs: [] } },
+    { category: 'product_fact', subject: 'price', current_turn_evidence: 'cuesta $99', confidence: 'high', ambiguous: false, attributes: { requested_fact: 'price' } },
+  ] }) });
+  assert.deepEqual(obligations.map(item => item.category), ['conversational_task', 'product_fact']);
+  assert.equal(JSON.stringify(obligations[0]).includes('$99'), false);
 });
 
 test('Ticket 61 keeps untrusted customer text separate from immutable interpreter instructions', async () => {

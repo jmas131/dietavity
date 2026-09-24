@@ -66,6 +66,21 @@
         {"if":{"properties":{"task_kind":{"enum":["transformation","organization"]}}},"then":{"properties":{"bounded_inputs":{"minItems":1}}}}
       ]
     },
+    "conversationalTask": {
+      "description":"Bounded conversational-generation selection only; referenced artifact text is not truth, policy, safety, authorization, delivery, or execution evidence. Cross-context artifact membership is enforced by executable validation.",
+      "type":"object","required":["operation","artifact_ids","current_turn_constraints","current_turn_inputs"],"additionalProperties":false,
+      "properties":{
+        "operation":{"enum":["draft","transform","summarize","show"]},
+        "artifact_ids":{"type":"array","items":{"type":"string","pattern":"^ca-[A-Za-z0-9._-]+$"},"uniqueItems":true},
+        "current_turn_constraints":{"type":"array","items":{"type":"object","required":["value","origin"],"additionalProperties":false,"properties":{"value":{"type":"string","minLength":1},"origin":{"const":"current_turn"}}}},
+        "current_turn_inputs":{"type":"array","items":{"type":"object","required":["input_type","value","origin"],"additionalProperties":false,"properties":{"input_type":{"const":"draft_specification"},"value":{"type":"string","minLength":1},"origin":{"const":"current_turn"}}}}
+      },
+      "allOf":[
+        {"if":{"properties":{"operation":{"const":"draft"}}},"then":{"properties":{"artifact_ids":{"maxItems":0},"current_turn_inputs":{"minItems":1}}}},
+        {"if":{"properties":{"operation":{"enum":["transform","show"]}}},"then":{"properties":{"artifact_ids":{"minItems":1,"maxItems":1}}}},
+        {"if":{"properties":{"operation":{"const":"summarize"}}},"then":{"properties":{"artifact_ids":{"minItems":1}}}}
+      ]
+    },
     "guidanceUnit": {
       "type":"object", "required":["unit_type","content"], "additionalProperties":false,
       "properties": {
@@ -107,11 +122,13 @@
       "properties": {
         "id": {"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},
         "category": {"enum":["product_fact","provider_service_fact","practical_guidance","conversational_task","commercial_purchase_intent","reminder_request","medication_management","safety_sensitive_nutrition","clarification","support_account","social_acknowledgement"]},
-        "subject": {"type":"string"}, "current_turn_evidence": {"type":"string","minLength":1}, "confidence": {"enum":["high","medium","low"]}, "ambiguous": {"type":"boolean"}, "attributes": {"type":"object"}, "practical_task":{"$ref":"#/$defs/practicalTask"}
+        "subject": {"type":"string"}, "current_turn_evidence": {"type":"string","minLength":1}, "confidence": {"enum":["high","medium","low"]}, "ambiguous": {"type":"boolean"}, "attributes": {"type":"object"}, "practical_task":{"$ref":"#/$defs/practicalTask"}, "conversational_task":{"$ref":"#/$defs/conversationalTask"}
       },
       "allOf":[
         {"if":{"properties":{"category":{"const":"practical_guidance"}}},"then":{"required":["practical_task"]}},
-        {"if":{"required":["practical_task"]},"then":{"properties":{"category":{"const":"practical_guidance"}}}}
+        {"if":{"required":["practical_task"]},"then":{"properties":{"category":{"const":"practical_guidance"}}}},
+        {"if":{"properties":{"category":{"const":"conversational_task"}}},"then":{"required":["conversational_task"]}},
+        {"if":{"required":["conversational_task"]},"then":{"properties":{"category":{"const":"conversational_task"}}}}
       ]
     },
     "authorizedAction": {

@@ -52,6 +52,13 @@ test('Ticket 62 keeps deferred, clarification, and policy-backed outcomes distin
   assert.deepEqual(result.authorized_actions, []);
 });
 
+test('Ticket 61C.1 preserves globally allocated practical bounded-input IDs through orchestration', () => {
+  const practical = id => ({ id, category: 'practical_guidance', subject: 'organizar', current_turn_evidence: 'mensaje actual', confidence: 'high', ambiguous: false, practical_task: { task_kind: 'organization', bounded_inputs: [{ id: id === 'o-practical-1' ? 'bi-1' : 'bi-2', input_type: 'user_preference', value: 'mensaje', origin: 'current_turn' }] } });
+  const result = resolve([practical('o-practical-1'), practical('o-practical-2')]);
+  assert.deepEqual(result.resolved_obligations.map(item => item.next_stage), ['reviewed_knowledge_or_reasoning', 'reviewed_knowledge_or_reasoning']);
+  assert.throws(() => resolve([practical('o-practical-1'), { ...practical('o-practical-2'), practical_task: { task_kind: 'organization', bounded_inputs: [{ id: 'bi-1', input_type: 'user_preference', value: 'mensaje', origin: 'current_turn' }] } }]), error => error.code === 'ORCHESTRATION_OBLIGATION_INVALID');
+});
+
 test('Ticket 62 resolves safety before commercial policy without changing returned order', () => {
   const result = resolve([
     obligation('o-buy', 'commercial_purchase_intent', 'explicit_current_request'),
