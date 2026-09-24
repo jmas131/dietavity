@@ -5,7 +5,7 @@ const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildResponsePlan, ResponsePlanError } = require('../lib/sales-engine-v2/response-plan-builder');
-const { responsePlanValid } = require('../lib/sales-engine-v2/response-plan-validator');
+const { UNCERTAINTY_REASONS, responsePlanValid } = require('../lib/sales-engine-v2/response-plan-validator');
 const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 const { deriveAuthorizedActionIdentity } = require('../lib/sales-engine-v2/authorized-action-identity');
 
@@ -61,6 +61,25 @@ test('Ticket 65 preserves bounded deferred handling and resolver failures withou
   assert.deepEqual(plan.required_coverage.map(value => value.handling), ['conversational_handling', 'support_unresolved', 'social_acknowledgement', 'resolution_unavailable']);
   assert.deepEqual(plan.bounded_uncertainties.map(value => value.reason), ['support_unresolved', 'resolver_failure']);
   assert.deepEqual(plan.conversational_generation, [{ obligation_id: 'o-task', operation: 'draft', current_turn_inputs: [{ input_type: 'draft_specification', value: 'mensaje', origin: 'current_turn' }], current_turn_constraints: [], artifacts: [] }]);
+});
+
+test('Ticket 65A.0 gives Ticket 63 practical bounded_unknown its own terminal uncertainty semantic', () => {
+  const practical = obligation('o-practical', 'practical_guidance');
+  const product = obligation('o-product', 'product_fact');
+  const practicalUnknown = base('o-practical', { resolution_status: 'unknown', authority: 'bounded_unknown', source: null, customer_uncertainty_required: true });
+  const productUnknown = base('o-product', { resolution_status: 'unknown', authority: 'bounded_unknown', source: null, customer_uncertainty_required: true });
+  const plan = buildResponsePlan(input([practical, product], [practicalUnknown, productUnknown]));
+  assert.deepEqual(plan.required_coverage, [{ obligation_id: 'o-practical', handling: 'express_uncertainty' }, { obligation_id: 'o-product', handling: 'express_uncertainty' }]);
+  assert.deepEqual(plan.bounded_uncertainties, [
+    { obligation_id: 'o-practical', reason: 'practical_guidance_unknown', prohibited_claims: [] },
+    { obligation_id: 'o-product', reason: 'canonical_fact_unknown', prohibited_claims: [] },
+  ]);
+  assert.equal(plan.deferred_obligations.some(item => item.obligation_id === 'o-practical'), false);
+  assert.equal(JSON.stringify(plan.bounded_uncertainties).includes('reviewed_knowledge'), false);
+  assert.equal(plan.permitted_guidance.length, 0);
+  assert.equal(responsePlanValid(plan), true);
+  assert.equal(responsePlanValid({ ...plan, bounded_uncertainties: [{ ...plan.bounded_uncertainties[0], source: null }, plan.bounded_uncertainties[1]] }), false);
+  assert.equal(responsePlanValid({ ...plan, bounded_uncertainties: [{ ...plan.bounded_uncertainties[0], reason: 'unknown_reason' }, plan.bounded_uncertainties[1]] }), false);
 });
 
 test('Ticket 65 validates one-to-one identity and semantic-gate alignment fail closed', () => {
@@ -125,12 +144,15 @@ test('Ticket 65 executable validator rejects guidance authority laundering and m
   assert.equal(responsePlanValid({ ...generatedPlan, permitted_guidance: [generatedWithoutReferences] }), true);
 });
 
-test('Ticket 65 bounds uncertainty provenance to canonical unknowns only', () => {
+test('Ticket 65 bounds canonical and practical unknown provenance distinctly', () => {
   const plan = buildResponsePlan(input([obligation('o-unknown', 'provider_service_fact')], [base('o-unknown', { resolution_status: 'unknown', authority: 'bounded_unknown', source: null, customer_uncertainty_required: true })]));
   assert.equal(responsePlanValid(plan), true);
   assert.equal(responsePlanValid({ ...plan, bounded_uncertainties: [{ ...plan.bounded_uncertainties[0], source: { type: 'generated_guidance', id: 'x', version: '1', model_run_id: 'run', generation_stage: 'bounded_reasoning' } }] }), false);
   const uncertainty = schema.properties.ResponsePlan.properties.bounded_uncertainties.items;
+  assert.equal(UNCERTAINTY_REASONS.has('practical_guidance_unknown'), true);
+  assert.equal(uncertainty.properties.reason.enum.includes('practical_guidance_unknown'), true);
   assert.equal(uncertainty.allOf[0].then.properties.source.anyOf[1].allOf[1].properties.type.const, 'canonical_fact');
+  assert.equal(uncertainty.allOf[1].if.properties.reason.enum.includes('practical_guidance_unknown'), true);
   assert.deepEqual(uncertainty.allOf[1].then.not.required, ['source']);
 });
 
