@@ -176,6 +176,23 @@
         {"if":{"properties":{"execution_status":{"enum":["failed_retryable","failed_terminal"]}}},"then":{"properties":{"payload":{"type":"null"}}}}
       ]
     },
+    "CommercialExecutionExpression": {
+      "description":"Closed customer-expressible semantics for a commercial execution state. It references, but does not copy, a successful bounded destination by action_id.",
+      "type":"object","required":["obligation_id","semantics_version","commercial_intent","action_id","execution_status","commercial_next_step_status","destination_may_be_expressed","allowed_claims","prohibited_claims"],"additionalProperties":false,
+      "properties":{
+        "obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"semantics_version":{"const":"ticket-65c1-v1"},"commercial_intent":{"enum":["checkout_offer","holding_page_offer"]},"action_id":{"type":"string","pattern":"^act-[0-9a-f]{64}$"},
+        "execution_status":{"enum":["succeeded","not_executed","in_progress","failed_retryable","failed_terminal"]},"commercial_next_step_status":{"enum":["available","unavailable_now"]},"destination_may_be_expressed":{"type":"boolean"},
+        "allowed_claims":{"type":"array","items":{"enum":["commercial_next_step_available","exact_validated_destination","commercial_next_step_unavailable_now"]}},
+        "prohibited_claims":{"type":"array","items":{"enum":["delivery_claim","customer_received_or_opened_destination","unvalidated_destination","execution_attempt_or_failure_claim","execution_success_or_failure_claim","provider_failure_explanation","retry_instruction_or_timing","future_destination_or_delivery","product_or_capability_unavailability","permanent_unavailability_claim","alternate_purchase_route"]}}
+      },
+      "allOf":[
+        {"if":{"required":["execution_status"],"properties":{"execution_status":{"const":"succeeded"}}},"then":{"properties":{"commercial_next_step_status":{"const":"available"},"destination_may_be_expressed":{"const":true},"allowed_claims":{"const":["commercial_next_step_available","exact_validated_destination"]},"prohibited_claims":{"const":["delivery_claim","customer_received_or_opened_destination","unvalidated_destination"]}}}},
+        {"if":{"required":["execution_status"],"properties":{"execution_status":{"const":"not_executed"}}},"then":{"properties":{"commercial_next_step_status":{"const":"unavailable_now"},"destination_may_be_expressed":{"const":false},"allowed_claims":{"const":["commercial_next_step_unavailable_now"]},"prohibited_claims":{"const":["execution_attempt_or_failure_claim","provider_failure_explanation","retry_instruction_or_timing","future_destination_or_delivery","product_or_capability_unavailability"]}}}},
+        {"if":{"required":["execution_status"],"properties":{"execution_status":{"const":"in_progress"}}},"then":{"properties":{"commercial_next_step_status":{"const":"unavailable_now"},"destination_may_be_expressed":{"const":false},"allowed_claims":{"const":["commercial_next_step_unavailable_now"]},"prohibited_claims":{"const":["execution_success_or_failure_claim","provider_failure_explanation","retry_instruction_or_timing","future_destination_or_delivery","product_or_capability_unavailability"]}}}},
+        {"if":{"required":["execution_status"],"properties":{"execution_status":{"const":"failed_retryable"}}},"then":{"properties":{"commercial_next_step_status":{"const":"unavailable_now"},"destination_may_be_expressed":{"const":false},"allowed_claims":{"const":["commercial_next_step_unavailable_now"]},"prohibited_claims":{"const":["provider_failure_explanation","retry_instruction_or_timing","future_destination_or_delivery","product_or_capability_unavailability"]}}}},
+        {"if":{"required":["execution_status"],"properties":{"execution_status":{"const":"failed_terminal"}}},"then":{"properties":{"commercial_next_step_status":{"const":"unavailable_now"},"destination_may_be_expressed":{"const":false},"allowed_claims":{"const":["commercial_next_step_unavailable_now"]},"prohibited_claims":{"const":["provider_failure_explanation","permanent_unavailability_claim","future_destination_or_delivery","product_or_capability_unavailability","alternate_purchase_route"]}}}}
+      ]
+    },
     "PreComposerEnvelope": {
       "description":"Immutable bounded execution-result envelope for a future Composer. It deliberately excludes AuthorizedAction internals, execution keys, raw executor output, and raw workflow state.",
       "type":"object","required":["pre_composer_envelope_version","response_semantics","customer_action_results","action_execution_states"],"additionalProperties":false,
