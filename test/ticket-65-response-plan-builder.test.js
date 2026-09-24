@@ -9,14 +9,16 @@ const { responsePlanValid } = require('../lib/sales-engine-v2/response-plan-vali
 
 const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs/contracts/sales-engine-v2-contract.schema.json'), 'utf8'));
 const at = '2026-09-23T18:00:00.000Z';
-function context() { return { contract_version: '2.0', context_id: 'c-65', locale: 'es-MX', current_message: { role: 'customer', text: 'mensaje actual', occurred_at: at, source_id: 'm-65' }, history: [], history_metadata: { ordering: 'occurred_at', history_truncated: false, retained_prior_turns: 0, retained_prior_characters: 0 }, conversation_artifacts: [], conversation_artifacts_metadata: { ordering: 'occurred_at', artifacts_truncated: false, retained_artifacts: 0, retained_artifact_characters: 0 }, session_state: { session_id: 's-65' }, offer_context: {}, customer_state: {}, commercial_state: { checkout_sent: false, valid_purchase_confirmation: false }, metadata: { channel: 'whatsapp' }, authoritative_context: {}, informational_context: { knowledge: [] } }; }
-function obligation(id, category = 'product_fact', extra = {}) { return { id, category, current_turn_evidence: 'mensaje actual', confidence: 'high', ambiguous: false, ...extra, ...(category === 'practical_guidance' ? { practical_task: { task_kind: 'organization', bounded_inputs: [{ id: 'bi-1', input_type: 'preparation_step', value: 'cortar', origin: 'current_turn' }] } } : {}) }; }
+function context({ text = 'mensaje actual', artifacts = [], history = [] } = {}) { return { contract_version: '2.0', context_id: 'c-65', locale: 'es-MX', current_message: { role: 'customer', text, occurred_at: at, source_id: 'm-65' }, history, history_metadata: { ordering: 'occurred_at', history_truncated: false, retained_prior_turns: history.length, retained_prior_characters: history.reduce((total, item) => total + item.text.length, 0) }, conversation_artifacts: artifacts, conversation_artifacts_metadata: { ordering: 'occurred_at', artifacts_truncated: false, retained_artifacts: artifacts.length, retained_artifact_characters: artifacts.reduce((total, item) => total + item.text.length, 0) }, session_state: { session_id: 's-65' }, offer_context: {}, customer_state: {}, commercial_state: { checkout_sent: false, valid_purchase_confirmation: false }, metadata: { channel: 'whatsapp' }, authoritative_context: {}, informational_context: { knowledge: [] } }; }
+function artifact(id, text, index, { operation = 'draft', lineage = [] } = {}) { return { artifact_id: id, artifact_type: operation === 'summarize' ? 'summary' : 'draft', generation_operation: operation, generation_task_id: `cgt-${id.slice(3)}`, logical_reply_key: `reply-${id.slice(3)}`, anchor_message_id: `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`, text, lineage_artifact_ids: lineage, occurred_at: `2026-09-${String(10 + index).padStart(2, '0')}T18:00:00.000Z` }; }
+function conversationalTask(operation, artifact_ids = [], current_turn_constraints = [], current_turn_inputs = []) { return { operation, artifact_ids, current_turn_constraints, current_turn_inputs }; }
+function obligation(id, category = 'product_fact', extra = {}) { return { id, category, current_turn_evidence: 'mensaje actual', confidence: 'high', ambiguous: false, ...extra, ...(category === 'practical_guidance' ? { practical_task: { task_kind: 'organization', bounded_inputs: [{ id: 'bi-1', input_type: 'preparation_step', value: 'cortar', origin: 'current_turn' }] } } : {}), ...(category === 'conversational_task' && !extra.conversational_task ? { conversational_task: conversationalTask('draft', [], [], [{ input_type: 'draft_specification', value: 'mensaje', origin: 'current_turn' }]) } : {}) }; }
 function base(id, fields) { return { obligation_id: id, allowed_claims: [], prohibited_claims: [], customer_uncertainty_required: false, llm_reasoning_permitted: false, ...fields }; }
 function fact(id) { return base(id, { resolution_status: 'resolved', authority: 'canonical_fact', source: { type: 'canonical_fact', id: 'offer.price', version: '1' }, factual_payload: { amount: 149, currency: 'MXN' } }); }
 function policy(id, authority = 'deterministic_policy', extra = {}) { return base(id, { resolution_status: authority === 'prohibited' ? 'prohibited' : 'resolved', authority, source: { type: 'deterministic_policy', id: 'policy-65', version: '1' }, policy_decision: { reason_code: 'TEST' }, ...extra }); }
 function guidance(id, authority = 'generated_guidance') { return base(id, { resolution_status: 'resolved', authority, source: authority === 'generated_guidance' ? { type: authority, id: 'resolver', version: '1', model_run_id: 'run-65', generation_stage: 'bounded_reasoning' } : { type: authority, id: 'resolver', version: '1' }, ...(authority === 'reviewed_knowledge' ? { retrieved_knowledge_references: [{ type: 'reviewed_knowledge', id: 'rk-65', version: '1' }] } : {}), llm_reasoning_permitted: authority === 'generated_guidance', guidance_payload: { semantic_safety_validation_required: true, units: authority === 'reviewed_knowledge' ? [{ unit_type: 'reviewed_information', content: 'Contenido revisado.', reviewed_knowledge_reference_ids: ['rk-65'] }] : [{ unit_type: 'organization', content: 'Primero corta.', bounded_input_ids: ['bi-1'] }] } }); }
 function gate(id, status = 'cleared') { const finding = status === 'blocked' ? { code: 'commercial_claim', severity: 'blocking', unit_index: 0, rationale: 'riesgo' } : status === 'indeterminate' ? { code: 'unsupported_external_fact', severity: 'review_required', unit_index: 0, rationale: 'revisión' } : null; return { obligation_id: id, gate_id: 'semantic-guidance-safety-gate', gate_version: 'ticket-64-v1', gate_status: status, findings: finding ? [finding] : [], assessment_source: { assessment_stage: 'semantic_guidance_safety', assessor_run_id: 'a-65', outcome: 'completed' } }; }
-function input(obligations, resolved, gates = [], authorizedActions = []) { return { context: context(), obligations, resolvedObligations: resolved, semanticGuidanceGates: gates, authorizedActions }; }
+function input(obligations, resolved, gates = [], authorizedActions = [], contextValue = context()) { return { context: contextValue, obligations, resolvedObligations: resolved, semanticGuidanceGates: gates, authorizedActions }; }
 
 test('Ticket 65 builds a closed, deterministic plan for facts, policy, unknown, clarification, and cleared guidance', () => {
   const obligations = [obligation('o-fact'), obligation('o-policy', 'medication_management'), obligation('o-unknown', 'provider_service_fact'), obligation('o-clarify', 'clarification', { subject: 'timing' }), obligation('o-guide', 'practical_guidance')];
@@ -55,6 +57,7 @@ test('Ticket 65 preserves bounded deferred handling and resolver failures withou
   const plan = buildResponsePlan(input(obligations, [deferred('conversational_generation'), deferred('support_resolution'), deferred('response_composition'), base('o-fail', { resolution_status: 'failed', authority: 'resolver_failure', source: null })]));
   assert.deepEqual(plan.required_coverage.map(value => value.handling), ['conversational_handling', 'support_unresolved', 'social_acknowledgement', 'resolution_unavailable']);
   assert.deepEqual(plan.bounded_uncertainties.map(value => value.reason), ['support_unresolved', 'resolver_failure']);
+  assert.deepEqual(plan.conversational_generation, [{ obligation_id: 'o-task', operation: 'draft', current_turn_inputs: [{ input_type: 'draft_specification', value: 'mensaje', origin: 'current_turn' }], current_turn_constraints: [], artifacts: [] }]);
 });
 
 test('Ticket 65 validates one-to-one identity and semantic-gate alignment fail closed', () => {
@@ -86,6 +89,7 @@ test('Ticket 65 central schema removes unsafe placeholder fields and closes plan
   assert.equal(Object.hasOwn(definition.properties, 'permitted_reasoning'), false);
   assert.deepEqual(definition.properties.question_budget.enum, [0, 1]);
   assert.equal(definition.properties.permitted_guidance.items.properties.semantic_gate.properties.gate_status.const, 'cleared');
+  assert.deepEqual(definition.properties.conversational_generation.items.properties.operation.enum, ['draft', 'transform', 'summarize', 'show']);
   assert.equal(definition.properties.prohibited_actions.uniqueItems, true);
 });
 
@@ -122,4 +126,64 @@ test('Ticket 65 bounds uncertainty provenance to canonical unknowns only', () =>
   const uncertainty = schema.properties.ResponsePlan.properties.bounded_uncertainties.items;
   assert.equal(uncertainty.allOf[0].then.properties.source.anyOf[1].allOf[1].properties.type.const, 'canonical_fact');
   assert.deepEqual(uncertainty.allOf[1].then.not.required, ['source']);
+});
+
+test('Ticket 65B projects explicit bounded draft material rather than extraction evidence', () => {
+  const text = 'Escribe un mensaje para decirle a mi hermana que llegaré tarde.';
+  const task = conversationalTask('draft', [], [], [{ input_type: 'draft_specification', value: 'un mensaje para decirle a mi hermana que llegaré tarde', origin: 'current_turn' }]);
+  const raw = input([obligation('o-draft', 'conversational_task', { current_turn_evidence: 'Escribe un mensaje', conversational_task: task })], [base('o-draft', { resolution_status: 'deferred', authority: null, source: null, next_stage: 'conversational_generation' })], [], [], context({ text }));
+  const plan = buildResponsePlan(raw);
+  assert.deepEqual(plan.conversational_generation, [{ obligation_id: 'o-draft', operation: 'draft', current_turn_inputs: task.current_turn_inputs, current_turn_constraints: [], artifacts: [] }]);
+  assert.equal(JSON.stringify(plan.conversational_generation).includes('Escribe un mensaje'), false);
+  assert.deepEqual(raw.obligations[0].conversational_task, task);
+});
+
+test('Ticket 65B projects only selected Ticket 60A artifacts in explicit deterministic order', () => {
+  const draft = artifact('ca-draft', 'Borrador con precio antiguo de $99.', 1);
+  const transformed = artifact('ca-transform', 'Versión corta.', 2, { operation: 'transform', lineage: ['ca-draft'] });
+  const summary = artifact('ca-summary', 'Resumen breve.', 3, { operation: 'summarize', lineage: ['ca-draft', 'ca-transform'] });
+  const text = 'Hazlo más corto y luego resúmelos.';
+  const transformTask = conversationalTask('transform', ['ca-transform'], [{ value: 'más corto', origin: 'current_turn' }]);
+  const summarizeTask = conversationalTask('summarize', ['ca-draft', 'ca-summary']);
+  const obligations = [obligation('o-transform', 'conversational_task', { current_turn_evidence: 'Hazlo más corto', conversational_task: transformTask }), obligation('o-summary', 'conversational_task', { current_turn_evidence: 'resúmelos', conversational_task: summarizeTask })];
+  const deferred = id => base(id, { resolution_status: 'deferred', authority: null, source: null, next_stage: 'conversational_generation' });
+  const plan = buildResponsePlan(input(obligations, [deferred('o-transform'), deferred('o-summary')], [], [], context({ text, artifacts: [draft, transformed, summary], history: [{ role: 'assistant', text: 'historial ordinario', occurred_at: '2026-09-01T18:00:00.000Z', source_id: 'm-history', final_visible: true }] })));
+  assert.deepEqual(plan.conversational_generation, [
+    { obligation_id: 'o-transform', operation: 'transform', current_turn_inputs: [], current_turn_constraints: [{ value: 'más corto', origin: 'current_turn' }], artifacts: [{ artifact_id: 'ca-transform', text: 'Versión corta.' }] },
+    { obligation_id: 'o-summary', operation: 'summarize', current_turn_inputs: [], current_turn_constraints: [], artifacts: [{ artifact_id: 'ca-draft', text: 'Borrador con precio antiguo de $99.' }, { artifact_id: 'ca-summary', text: 'Resumen breve.' }] }
+  ]);
+  assert.equal(JSON.stringify(plan.conversational_generation).includes('historial ordinario'), false);
+  assert.deepEqual(plan.canonical_facts, []); assert.deepEqual(plan.policy_outcomes, []); assert.deepEqual(plan.authorized_actions, []);
+});
+
+test('Ticket 65B projects show exactly once and rejects missing, invented, and malformed conversational semantics', () => {
+  const shown = artifact('ca-show', 'Material para mostrar.', 1);
+  const task = conversationalTask('show', ['ca-show']);
+  const raw = input([obligation('o-show', 'conversational_task', { current_turn_evidence: 'Muéstramelo otra vez', conversational_task: task })], [base('o-show', { resolution_status: 'deferred', authority: null, source: null, next_stage: 'conversational_generation' })], [], [], context({ text: 'Muéstramelo otra vez', artifacts: [shown] }));
+  const plan = buildResponsePlan(raw);
+  assert.deepEqual(plan.conversational_generation[0].artifacts, [{ artifact_id: 'ca-show', text: 'Material para mostrar.' }]);
+  assert.equal(responsePlanValid({ ...plan, conversational_generation: [] }), false);
+  assert.equal(responsePlanValid({ ...plan, conversational_generation: [...plan.conversational_generation, plan.conversational_generation[0]] }), false);
+  assert.equal(responsePlanValid({ ...plan, conversational_generation: [{ ...plan.conversational_generation[0], operation: 'draft' }] }), false);
+  const invented = structuredClone(raw); invented.obligations[0].conversational_task.artifact_ids = ['ca-missing'];
+  assert.throws(() => buildResponsePlan(invented), error => error.code === 'RESPONSE_PLAN_OBLIGATION_INVALID');
+  const copiedHistory = structuredClone(raw); copiedHistory.obligations[0].conversational_task.current_turn_inputs = [{ input_type: 'draft_specification', value: 'Material para mostrar.', origin: 'current_turn' }];
+  assert.throws(() => buildResponsePlan(copiedHistory), error => error.code === 'RESPONSE_PLAN_OBLIGATION_INVALID');
+});
+
+test('Ticket 65B keeps a current product fact independent from a selected stale conversational artifact', () => {
+  const selected = artifact('ca-price-draft', 'El precio es $99.', 1);
+  const task = conversationalTask('transform', ['ca-price-draft'], [{ value: 'más corto', origin: 'current_turn' }]);
+  const obligations = [
+    obligation('o-transform', 'conversational_task', { current_turn_evidence: 'Hazlo más corto', conversational_task: task }),
+    obligation('o-price', 'product_fact', { current_turn_evidence: 'cuesta $149' })
+  ];
+  const resolutions = [
+    base('o-transform', { resolution_status: 'deferred', authority: null, source: null, next_stage: 'conversational_generation' }),
+    fact('o-price')
+  ];
+  const plan = buildResponsePlan(input(obligations, resolutions, [], [], context({ text: 'Hazlo más corto y cuesta $149.', artifacts: [selected] })));
+  assert.deepEqual(plan.conversational_generation[0].artifacts, [{ artifact_id: 'ca-price-draft', text: 'El precio es $99.' }]);
+  assert.deepEqual(plan.canonical_facts, [{ obligation_id: 'o-price', source: { type: 'canonical_fact', id: 'offer.price', version: '1' }, factual_payload: { amount: 149, currency: 'MXN' }, allowed_claims: [], prohibited_claims: [] }]);
+  assert.equal(plan.policy_outcomes.length, 0); assert.equal(plan.authorized_actions.length, 0);
 });

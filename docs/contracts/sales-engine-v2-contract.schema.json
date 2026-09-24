@@ -194,7 +194,7 @@
     "SemanticGuidanceGate": {"$ref":"#/$defs/semanticGuidanceGate"},
     "AuthorizedAction": {"$ref":"#/$defs/authorizedAction"},
     "ResponsePlan": {
-      "type":"object", "required":["contract_version","context_id","locale","obligation_ids","required_coverage","canonical_facts","policy_outcomes","permitted_guidance","bounded_uncertainties","clarification_requirements","deferred_obligations","authorized_actions","prohibited_claims","prohibited_actions","question_budget","completion_requirement"], "additionalProperties":false,
+      "type":"object", "required":["contract_version","context_id","locale","obligation_ids","required_coverage","canonical_facts","policy_outcomes","permitted_guidance","conversational_generation","bounded_uncertainties","clarification_requirements","deferred_obligations","authorized_actions","prohibited_claims","prohibited_actions","question_budget","completion_requirement"], "additionalProperties":false,
       "properties": {
         "contract_version":{"const":"2.0"}, "context_id":{"type":"string","minLength":1}, "locale":{"const":"es-MX"},
         "obligation_ids":{"type":"array","items":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"uniqueItems":true},
@@ -221,6 +221,27 @@
             "allOf": [
               {"if": {"properties": {"authority": {"const": "reviewed_knowledge"}}}, "then": {"required": ["retrieved_knowledge_references"], "properties": {"source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"type": {"const": "reviewed_knowledge"}}}]}, "retrieved_knowledge_references": {"minItems": 1}}}},
               {"if": {"properties": {"authority": {"const": "generated_guidance"}}}, "then": {"properties": {"source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"type": {"const": "generated_guidance"}}}]}}}}
+            ]
+          }
+        },
+        "conversational_generation": {
+          "description": "Bounded, non-authoritative customer-expressible material. Exact required_coverage alignment and selected-artifact membership are enforced by the executable ResponsePlan validator and builder.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["obligation_id", "operation", "current_turn_inputs", "current_turn_constraints", "artifacts"],
+            "additionalProperties": false,
+            "properties": {
+              "obligation_id": {"type": "string", "pattern": "^o-[A-Za-z0-9._-]+$"},
+              "operation": {"enum": ["draft", "transform", "summarize", "show"]},
+              "current_turn_inputs": {"type": "array", "items": {"type": "object", "required": ["input_type", "value", "origin"], "additionalProperties": false, "properties": {"input_type": {"const": "draft_specification"}, "value": {"type": "string", "minLength": 1}, "origin": {"const": "current_turn"}}}},
+              "current_turn_constraints": {"type": "array", "items": {"type": "object", "required": ["value", "origin"], "additionalProperties": false, "properties": {"value": {"type": "string", "minLength": 1}, "origin": {"const": "current_turn"}}}},
+              "artifacts": {"type": "array", "items": {"type": "object", "required": ["artifact_id", "text"], "additionalProperties": false, "properties": {"artifact_id": {"type": "string", "pattern": "^ca-[A-Za-z0-9._-]+$"}, "text": {"type": "string", "minLength": 1}}}}
+            },
+            "allOf": [
+              {"if": {"properties": {"operation": {"const": "draft"}}}, "then": {"properties": {"artifacts": {"maxItems": 0}, "current_turn_inputs": {"minItems": 1}}}},
+              {"if": {"properties": {"operation": {"enum": ["transform", "show"]}}}, "then": {"properties": {"artifacts": {"minItems": 1, "maxItems": 1}}}},
+              {"if": {"properties": {"operation": {"const": "summarize"}}}, "then": {"properties": {"artifacts": {"minItems": 1}}}}
             ]
           }
         },
