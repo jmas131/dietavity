@@ -194,7 +194,7 @@
     "SemanticGuidanceGate": {"$ref":"#/$defs/semanticGuidanceGate"},
     "AuthorizedAction": {"$ref":"#/$defs/authorizedAction"},
     "ResponsePlan": {
-      "type":"object", "required":["contract_version","context_id","locale","obligation_ids","required_coverage","canonical_facts","policy_outcomes","permitted_guidance","conversational_generation","bounded_uncertainties","clarification_requirements","deferred_obligations","authorized_actions","prohibited_claims","prohibited_actions","question_budget","completion_requirement"], "additionalProperties":false,
+      "type":"object", "required":["contract_version","context_id","locale","obligation_ids","required_coverage","canonical_facts","policy_outcomes","permitted_guidance","conversational_generation","commercial_semantics","bounded_uncertainties","clarification_requirements","deferred_obligations","authorized_actions","prohibited_claims","prohibited_actions","question_budget","completion_requirement"], "additionalProperties":false,
       "properties": {
         "contract_version":{"const":"2.0"}, "context_id":{"type":"string","minLength":1}, "locale":{"const":"es-MX"},
         "obligation_ids":{"type":"array","items":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"uniqueItems":true},
@@ -243,6 +243,21 @@
               {"if": {"properties": {"operation": {"enum": ["transform", "show"]}}}, "then": {"properties": {"artifacts": {"minItems": 1, "maxItems": 1}}}},
               {"if": {"properties": {"operation": {"const": "summarize"}}}, "then": {"properties": {"artifacts": {"minItems": 1}}}}
             ]
+          }
+        },
+        "commercial_semantics": {
+          "description": "Closed customer-expressible commercial intent. It establishes neither action execution nor destination delivery; exact commercial-coverage alignment is executable-validator enforced.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["obligation_id", "semantics_version", "commercial_intent", "destination"],
+            "additionalProperties": false,
+            "properties": {
+              "obligation_id": {"type": "string", "pattern": "^o-[A-Za-z0-9._-]+$"},
+              "semantics_version": {"const": "ticket-65c-v1"},
+              "commercial_intent": {"enum": ["checkout_offer", "holding_page_offer"]},
+              "destination": {"type": "object", "required": ["status"], "additionalProperties": false, "properties": {"status": {"const": "authorized_to_provide"}}}
+            }
           }
         },
         "bounded_uncertainties":{"type":"array","items":{"type":"object","required":["obligation_id","reason","prohibited_claims"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"reason":{"enum":["canonical_fact_unknown","guidance_gate_indeterminate","support_unresolved","resolver_failure"]},"source":{"anyOf":[{"type":"null"},{"$ref":"#/$defs/source"}]},"prohibited_claims":{"type":"array","items":{"type":"string"}}},"allOf":[{"if":{"properties":{"reason":{"const":"canonical_fact_unknown"}}},"then":{"properties":{"source":{"anyOf":[{"type":"null"},{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"canonical_fact"}}}]}]}}}},{"if":{"properties":{"reason":{"enum":["guidance_gate_indeterminate","support_unresolved","resolver_failure"]}}},"then":{"not":{"required":["source"]}}}]}},

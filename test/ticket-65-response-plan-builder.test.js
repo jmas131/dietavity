@@ -16,6 +16,7 @@ function obligation(id, category = 'product_fact', extra = {}) { return { id, ca
 function base(id, fields) { return { obligation_id: id, allowed_claims: [], prohibited_claims: [], customer_uncertainty_required: false, llm_reasoning_permitted: false, ...fields }; }
 function fact(id) { return base(id, { resolution_status: 'resolved', authority: 'canonical_fact', source: { type: 'canonical_fact', id: 'offer.price', version: '1' }, factual_payload: { amount: 149, currency: 'MXN' } }); }
 function policy(id, authority = 'deterministic_policy', extra = {}) { return base(id, { resolution_status: authority === 'prohibited' ? 'prohibited' : 'resolved', authority, source: { type: 'deterministic_policy', id: 'policy-65', version: '1' }, policy_decision: { reason_code: 'TEST' }, ...extra }); }
+function commercial(id, policyId, actionType) { const action = { action_type: actionType, authorization_source: 'deterministic_policy', authorizing_rule: `${policyId}.v1`, parameters: {}, preconditions: [], constraints: {}, idempotency: { required: true, key_scope: 'inbound_message' }, status: 'authorized' }; return base(id, { resolution_status: 'resolved', authority: 'commercial_authorization', source: { type: 'deterministic_policy', id: policyId, version: '1' }, policy_decision: { outcome: 'authorized', reason_code: 'CHECKOUT_AUTHORIZED' }, action_authorization: action }); }
 function guidance(id, authority = 'generated_guidance') { return base(id, { resolution_status: 'resolved', authority, source: authority === 'generated_guidance' ? { type: authority, id: 'resolver', version: '1', model_run_id: 'run-65', generation_stage: 'bounded_reasoning' } : { type: authority, id: 'resolver', version: '1' }, ...(authority === 'reviewed_knowledge' ? { retrieved_knowledge_references: [{ type: 'reviewed_knowledge', id: 'rk-65', version: '1' }] } : {}), llm_reasoning_permitted: authority === 'generated_guidance', guidance_payload: { semantic_safety_validation_required: true, units: authority === 'reviewed_knowledge' ? [{ unit_type: 'reviewed_information', content: 'Contenido revisado.', reviewed_knowledge_reference_ids: ['rk-65'] }] : [{ unit_type: 'organization', content: 'Primero corta.', bounded_input_ids: ['bi-1'] }] } }); }
 function gate(id, status = 'cleared') { const finding = status === 'blocked' ? { code: 'commercial_claim', severity: 'blocking', unit_index: 0, rationale: 'riesgo' } : status === 'indeterminate' ? { code: 'unsupported_external_fact', severity: 'review_required', unit_index: 0, rationale: 'revisión' } : null; return { obligation_id: id, gate_id: 'semantic-guidance-safety-gate', gate_version: 'ticket-64-v1', gate_status: status, findings: finding ? [finding] : [], assessment_source: { assessment_stage: 'semantic_guidance_safety', assessor_run_id: 'a-65', outcome: 'completed' } }; }
 function input(obligations, resolved, gates = [], authorizedActions = [], contextValue = context()) { return { context: contextValue, obligations, resolvedObligations: resolved, semanticGuidanceGates: gates, authorizedActions }; }
@@ -69,7 +70,7 @@ test('Ticket 65 validates one-to-one identity and semantic-gate alignment fail c
 
 test('Ticket 65 preserves only exact deterministic-policy authorized actions, including reminder timing', () => {
   const action = { action_type: 'schedule_reminder', authorization_source: 'deterministic_policy', authorizing_rule: 'reminder.v1', parameters: { scheduled_for: '2026-09-24T18:00:00.123+05:30' }, preconditions: [], constraints: {}, idempotency: { required: true, key_scope: 'inbound_message' }, status: 'authorized' };
-  const resolution = policy('o-reminder', 'commercial_authorization', { action_authorization: action });
+  const resolution = policy('o-reminder', 'deterministic_policy', { action_authorization: action });
   const raw = input([obligation('o-reminder', 'reminder_request')], [resolution], [], [action]);
   assert.deepEqual(buildResponsePlan(raw).authorized_actions, [action]);
   assert.throws(() => buildResponsePlan({ ...raw, authorizedActions: [] }), error => error.code === 'RESPONSE_PLAN_ACTION_ALIGNMENT_INVALID');
@@ -90,6 +91,8 @@ test('Ticket 65 central schema removes unsafe placeholder fields and closes plan
   assert.deepEqual(definition.properties.question_budget.enum, [0, 1]);
   assert.equal(definition.properties.permitted_guidance.items.properties.semantic_gate.properties.gate_status.const, 'cleared');
   assert.deepEqual(definition.properties.conversational_generation.items.properties.operation.enum, ['draft', 'transform', 'summarize', 'show']);
+  assert.deepEqual(definition.properties.commercial_semantics.items.properties.commercial_intent.enum, ['checkout_offer', 'holding_page_offer']);
+  assert.equal(definition.properties.commercial_semantics.items.properties.semantics_version.const, 'ticket-65c-v1');
   assert.equal(definition.properties.prohibited_actions.uniqueItems, true);
 });
 
@@ -186,4 +189,48 @@ test('Ticket 65B keeps a current product fact independent from a selected stale 
   assert.deepEqual(plan.conversational_generation[0].artifacts, [{ artifact_id: 'ca-price-draft', text: 'El precio es $99.' }]);
   assert.deepEqual(plan.canonical_facts, [{ obligation_id: 'o-price', source: { type: 'canonical_fact', id: 'offer.price', version: '1' }, factual_payload: { amount: 149, currency: 'MXN' }, allowed_claims: [], prohibited_claims: [] }]);
   assert.equal(plan.policy_outcomes.length, 0); assert.equal(plan.authorized_actions.length, 0);
+});
+
+test('Ticket 65C maps only reachable standard checkout and holding-page authorizations to closed commercial semantics', () => {
+  const standard = commercial('o-buy', 'commercial.checkout.standard', 'provide_checkout_destination');
+  const holding = commercial('o-hold', 'commercial.checkout.glp1_canary', 'provide_holding_page_destination');
+  const obligations = [obligation('o-buy', 'commercial_purchase_intent'), obligation('o-hold', 'commercial_purchase_intent')];
+  const raw = input(obligations, [standard, holding], [], [standard.action_authorization, holding.action_authorization]);
+  const before = structuredClone(raw);
+  const plan = buildResponsePlan(raw);
+  assert.deepEqual(plan.required_coverage.map(item => item.handling), ['commercial_handling', 'commercial_handling']);
+  assert.deepEqual(plan.commercial_semantics, [
+    { obligation_id: 'o-buy', semantics_version: 'ticket-65c-v1', commercial_intent: 'checkout_offer', destination: { status: 'authorized_to_provide' } },
+    { obligation_id: 'o-hold', semantics_version: 'ticket-65c-v1', commercial_intent: 'holding_page_offer', destination: { status: 'authorized_to_provide' } }
+  ]);
+  assert.equal(JSON.stringify(plan.commercial_semantics).includes('CHECKOUT_AUTHORIZED'), false);
+  assert.equal(JSON.stringify(plan.commercial_semantics).includes('provide_checkout_destination'), false);
+  assert.equal(JSON.stringify(plan.commercial_semantics).includes('parameters'), false);
+  assert.deepEqual(raw, before); assert.deepEqual(plan.authorized_actions, [standard.action_authorization, holding.action_authorization]);
+});
+
+test('Ticket 65C fails closed for unmapped commercial authorization and standalone plan violations', () => {
+  const known = commercial('o-buy', 'commercial.checkout.standard', 'provide_checkout_destination');
+  const raw = input([obligation('o-buy', 'commercial_purchase_intent')], [known], [], [known.action_authorization]);
+  const plan = buildResponsePlan(raw);
+  assert.equal(responsePlanValid({ ...plan, commercial_semantics: [] }), false);
+  assert.equal(responsePlanValid({ ...plan, commercial_semantics: [...plan.commercial_semantics, plan.commercial_semantics[0]] }), false);
+  assert.equal(responsePlanValid({ ...plan, commercial_semantics: [{ ...plan.commercial_semantics[0], obligation_id: 'o-other' }] }), false);
+  assert.equal(responsePlanValid({ ...plan, commercial_semantics: [{ ...plan.commercial_semantics[0], semantics_version: 'ticket-65c-v2' }] }), false);
+  const { semantics_version, ...withoutVersion } = plan.commercial_semantics[0];
+  assert.equal(responsePlanValid({ ...plan, commercial_semantics: [withoutVersion] }), false);
+  assert.equal(responsePlanValid({ ...plan, commercial_semantics: [{ ...plan.commercial_semantics[0], destination: { status: 'delivered' } }] }), false);
+  const unknown = commercial('o-buy', 'commercial.checkout.unknown', 'provide_checkout_destination');
+  assert.throws(() => buildResponsePlan(input([obligation('o-buy', 'commercial_purchase_intent')], [unknown], [], [unknown.action_authorization])), error => error.code === 'RESPONSE_PLAN_COMMERCIAL_SEMANTICS_INVALID');
+});
+
+test('Ticket 65C keeps product facts and Ticket 65B conversational material independent from purchase semantics', () => {
+  const purchase = commercial('o-buy', 'commercial.checkout.standard', 'provide_checkout_destination');
+  const task = conversationalTask('draft', [], [], [{ input_type: 'draft_specification', value: 'mensaje', origin: 'current_turn' }]);
+  const obligations = [obligation('o-price'), obligation('o-buy', 'commercial_purchase_intent'), obligation('o-draft', 'conversational_task', { conversational_task: task })];
+  const deferred = base('o-draft', { resolution_status: 'deferred', authority: null, source: null, next_stage: 'conversational_generation' });
+  const plan = buildResponsePlan(input(obligations, [fact('o-price'), purchase, deferred], [], [purchase.action_authorization]));
+  assert.equal(plan.canonical_facts.length, 1);
+  assert.deepEqual(plan.commercial_semantics, [{ obligation_id: 'o-buy', semantics_version: 'ticket-65c-v1', commercial_intent: 'checkout_offer', destination: { status: 'authorized_to_provide' } }]);
+  assert.deepEqual(plan.conversational_generation, [{ obligation_id: 'o-draft', operation: 'draft', current_turn_inputs: task.current_turn_inputs, current_turn_constraints: [], artifacts: [] }]);
 });
