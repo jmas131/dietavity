@@ -6,6 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createFactResolver, resolveFactFromFacts } = require('../lib/sales-engine-v2/fact-resolver');
 const { createPolicyResolver } = require('../lib/sales-engine-v2/policy-resolver');
+const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 const { normativeResolvedValid, sourceValid } = require('../lib/sales-engine-v2/resolved-obligation-validator');
 
 const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs', 'contracts', 'sales-engine-v2-contract.schema.json'), 'utf8'));
@@ -163,7 +164,15 @@ test('Ticket 61A maps representative Ticket 58 resolver outputs into the normati
 test('Ticket 61A maps representative Ticket 59 outputs into the normative contract and retains policy provenance', () => {
   const resolve = request => policyResolver.resolvePolicy(request);
   const base = { offer_version: '28d-149-v1', channel: 'whatsapp' };
-  const obligation = (category, subtype) => ({ id: 'o-1', category, subtype, ambiguous: false });
+  const obligation = (category, subtype) => ({
+    id: 'o-1',
+    category,
+    subtype,
+    ambiguous: false,
+    ...(category === 'commercial_purchase_intent'
+      ? deriveCommercialAuthorizationSubject({ campaign: 'standard', offerVersion: base.offer_version })
+      : {})
+  });
   const deterministic = resolve({ obligation: obligation('medication_management', 'dose_change'), context: base });
   const commercial = resolve({ obligation: obligation('commercial_purchase_intent', 'explicit_current_request'), context: { ...base, commercial_state: { current_purchase_request: true, safety_gate: 'clear' } } });
   const prohibited = resolve({ obligation: obligation('commercial_purchase_intent', 'explicit_current_request'), context: { ...base, commercial_state: { current_purchase_request: true, safety_gate: 'clear' } }, requested_action_type: 'create_checkout' });

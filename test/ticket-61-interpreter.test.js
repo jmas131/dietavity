@@ -8,13 +8,14 @@ const { createConversationContext } = require('../lib/sales-engine-v2/memory-ada
 const { interpretConversation } = require('../lib/sales-engine-v2/interpreter');
 const { InterpreterError, validateModelOutput } = require('../lib/sales-engine-v2/interpreter-validator');
 const { MAX_OBLIGATIONS, PROMPT_VERSION } = require('../config/sales-engine-v2/interpreter-prompt');
+const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 
 function context(message, history = [], conversationArtifacts = []) {
   return createConversationContext({
-    currentTurn: { id: 'inbound-61', text: message, received_at: '2026-09-22T12:00:00.000Z' },
+    currentTurn: { id: 'inbound-61', canonical_message_id: '11111111-1111-4111-8111-000000000061', text: message, received_at: '2026-09-22T12:00:00.000Z' },
     memory: history.map((item, index) => ({ source_id: `prior-${index}`, role: item.role, text: item.text, occurred_at: `2026-09-22T11:${String(index).padStart(2, '0')}:00.000Z` })),
     conversationArtifacts,
-    runtimeMetadata: { conversation_id: 'conversation-61', session_id: 'session-61', channel: 'whatsapp' },
+    runtimeMetadata: { conversation_id: 'conversation-61', session_id: 'session-61', channel: 'whatsapp', offer_version: '28d-149-v1', campaign: 'standard' },
   });
 }
 const messageId = suffix => `11111111-1111-4111-8111-${String(suffix).padStart(12, '0')}`;
@@ -32,6 +33,7 @@ test('Ticket 61 fixture matrix is contract and validator coverage, not model sem
     const expected = fixture.obligations.map(obligation => ({ ...obligation,
       ...(obligation.practical_task === undefined ? {} : { practical_task: { ...obligation.practical_task, bounded_inputs: obligation.practical_task.bounded_inputs.map(input => ({ id: `bi-${++fixtureBoundedInputIndex}`, ...input, origin: 'current_turn' })) } }),
       ...(obligation.conversational_task === undefined ? {} : { conversational_task: { ...obligation.conversational_task, current_turn_constraints: obligation.conversational_task.current_turn_constraints.map(constraint => ({ ...constraint, origin: 'current_turn' })), current_turn_inputs: obligation.conversational_task.current_turn_inputs.map(input => ({ ...input, origin: 'current_turn' })) } }),
+      ...(obligation.category === 'commercial_purchase_intent' ? deriveCommercialAuthorizationSubject({ campaign: 'standard', offerVersion: '28d-149-v1' }) : {}),
     }));
     assert.deepEqual(obligations.map(({ id, ...obligation }) => obligation), expected, fixture.name);
     assert.deepEqual(obligations.map(item => item.id), obligations.map((_, index) => `o-${index + 1}`), fixture.name);
@@ -49,6 +51,18 @@ test('Ticket 61 splits the canonical four-obligation current turn without answer
   const obligations = await interpretConversation({ context: context(message), model: fixed(output) });
   assert.deepEqual(obligations.map(item => item.category), ['commercial_purchase_intent', 'product_fact', 'product_fact', 'medication_management']);
   assert.doesNotMatch(JSON.stringify(obligations), /149|supported|authorized|checkout|prescrib|refer/i);
+});
+
+test('Ticket 60B-R derives commercial subjects after model validation without using model order or wording', async () => {
+  const purchase = { category: 'commercial_purchase_intent', subject: 'explicit_current_request', current_turn_evidence: 'Quiero comprar', confidence: 'high', ambiguous: false };
+  const fact = { category: 'product_fact', subject: 'price', current_turn_evidence: 'cuánto cuesta', confidence: 'high', ambiguous: false };
+  const first = await interpretConversation({ context: context('Quiero comprar, ¿cuánto cuesta?'), model: fixed({ obligations: [purchase, fact] }) });
+  const second = await interpretConversation({ context: context('Quiero adquirirlo, ¿cuánto cuesta?'), model: fixed({ obligations: [fact, { ...purchase, current_turn_evidence: 'Quiero adquirirlo', confidence: 'low' }] }) });
+  assert.equal(first[0].authorization_subject_id, second[1].authorization_subject_id);
+  assert.equal(first[0].authorization_subject_version, 'commercial-authorization-subject-v1');
+  assert.notEqual(first[0].id, second[1].id);
+  assert.equal((await interpretConversation({ context: context('Quiero comprar'), model: fixed({ obligations: [purchase, purchase] }) })).length, 1);
+  await errorCode(interpretConversation({ context: context('Quiero comprar'), model: fixed({ obligations: [{ ...purchase, authorization_subject_id: 'cas-' + '0'.repeat(64) }] }) }), 'INTERPRETER_OUTPUT_INVALID');
 });
 
 test('Ticket 61 uses history only to resolve the current affirmative and never manufactures stale obligations', async () => {

@@ -15,7 +15,7 @@ Ticket 60A adds a separate, bounded `conversation_artifacts` projection. Its inp
 | `onboarding_chat_memory.id`, `created_at`, `message.type`, `message.content`/`data.content` | CONVERSATION_HISTORY | Normalized to source ID, role, text, and occurrence time. |
 | `public.messages` final outbound body | CONVERSATION_HISTORY | A future read adapter may supply it as the same normalized shape when it is the durable correction source; this ticket does not query it. |
 | Ticket 17A artifact row + ordered lineage + anchored canonical outbound logical reply | BOUNDED_CONVERSATIONAL_ARTIFACT | Projected only after structural validation and complete logical-reply reconstruction. It is not ordinary history or an authority source. |
-| Incoming provider message ID/body/received time | CURRENT_TURN_INPUT | Required `currentTurn`; never appended as ordinary history. |
+| Reserved inbound `public.messages.id`, provider message ID/body/received time | CURRENT_TURN_INPUT | Required `currentTurn`; canonical ledger UUID is distinct from provider/source identity and never appended as ordinary history. |
 | Reconciled session/conversation ID, session ID, channel, locale, offer version, campaign | TRUSTED_RUNTIME_METADATA | Explicit runtime allowlist only. Campaign is never inferred from text. |
 | Session checkout/valid-confirmation evidence | OPERATIONAL_STATE | Optional trusted `commercial_state.checkout_sent` and `valid_purchase_confirmation`; it is not intent. |
 | Price, duration, payment methods, capabilities | PRODUCT_TRUTH_NOT_MEMORY | Ticket 58 only. |
@@ -34,7 +34,7 @@ The Ticket 57 schema is refined compatibly in `docs/contracts/sales-engine-v2-co
 {
   contract_version: '2.0',
   context_id: '<conversation_id>:<current_message_id>', locale: 'es-MX',
-  current_message: { source_id, role: 'customer', text, occurred_at },
+  current_message: { source_id, canonical_message_id, role: 'customer', text, occurred_at },
   history: [{ source_id, role: 'customer' | 'assistant', text, occurred_at, final_visible? }],
   history_metadata: { ordering: 'occurred_at', history_truncated, retained_prior_turns, retained_prior_characters },
   conversation_artifacts: [{ artifact_id, artifact_type, generation_operation, generation_task_id,
@@ -80,7 +80,7 @@ Ticket 59 remains compatible: its `commercial_state.current_purchase_request` an
 
 ## API and failure semantics
 
-`createConversationContext({ currentTurn, memory, runtimeMetadata, options })` is side-effect free. Production rows can be normalized with `normalizeOnboardingChatMemoryRow`; canonical/harness entries use `normalizeMemoryEntry`.
+`createConversationContext({ currentTurn, memory, runtimeMetadata, options })` is side-effect free. `currentTurn.canonical_message_id` is required and must be the UUID of the already-reserved inbound `public.messages` row; `currentTurn.id` remains a separate source/provider identity. Production rows can be normalized with `normalizeOnboardingChatMemoryRow`; canonical/harness entries use `normalizeMemoryEntry`.
 
 Machine-readable `ConversationContextError.code` values distinguish `CURRENT_TURN_INVALID`, `MEMORY_HISTORY_INVALID`, `MEMORY_ROLE_UNSUPPORTED`, `MEMORY_TIMESTAMP_INVALID`, `MEMORY_ORDER_AMBIGUOUS`, `MEMORY_DUPLICATE_ID`, `CURRENT_TURN_DUPLICATED`, `RUNTIME_METADATA_INVALID`, `MEMORY_ADAPTER_CONFIGURATION_INVALID`, and validator-level context/order errors. Empty memory is valid. Structural failure never silently becomes an empty context.
 

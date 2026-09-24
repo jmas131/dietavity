@@ -9,6 +9,7 @@ const { createPolicyResolver } = require('../lib/sales-engine-v2/policy-resolver
 const { ResolutionOrchestratorError, resolveObligations } = require('../lib/sales-engine-v2/resolution-orchestrator');
 const { resolvedValid } = require('../lib/sales-engine-v2/resolution-orchestrator-validator');
 const { RESOLVED_OBLIGATION_KEYS } = require('../lib/sales-engine-v2/resolved-obligation-validator');
+const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 
 const root = path.join(__dirname, '..');
 const facts = JSON.parse(fs.readFileSync(path.join(root, 'config/sales-engine-v2/product-facts.json'), 'utf8')).facts;
@@ -19,9 +20,9 @@ const asOf = '2026-09-22T00:00:01.000Z';
 const resolvers = () => ({ factResolver: createFactResolver({ facts, membershipDefinitions }), policyResolver: createPolicyResolver({ policies }) });
 
 function context(campaign = 'standard', history = []) {
-  return { contract_version: '2.0', context_id: 'c-1', locale: 'es-MX', current_message: { role: 'customer', text: 'mensaje actual', occurred_at: asOf, source_id: 'm-current' }, history, history_metadata: { ordering: 'occurred_at', history_truncated: false, retained_prior_turns: history.length, retained_prior_characters: 0 }, conversation_artifacts: [], conversation_artifacts_metadata: { ordering: 'occurred_at', artifacts_truncated: false, retained_artifacts: 0, retained_artifact_characters: 0 }, session_state: { session_id: 's-1' }, offer_context: { offer_version: '28d-149-v1' }, customer_state: {}, commercial_state: { checkout_sent: false, valid_purchase_confirmation: false }, metadata: { channel: 'whatsapp', campaign }, authoritative_context: {}, informational_context: { knowledge: [] } };
+  return { contract_version: '2.0', context_id: 'c-1', locale: 'es-MX', current_message: { role: 'customer', text: 'mensaje actual', occurred_at: asOf, source_id: 'm-current', canonical_message_id: '11111111-1111-4111-8111-000000000062' }, history, history_metadata: { ordering: 'occurred_at', history_truncated: false, retained_prior_turns: history.length, retained_prior_characters: 0 }, conversation_artifacts: [], conversation_artifacts_metadata: { ordering: 'occurred_at', artifacts_truncated: false, retained_artifacts: 0, retained_artifact_characters: 0 }, session_state: { session_id: 's-1' }, offer_context: { offer_version: '28d-149-v1' }, customer_state: {}, commercial_state: { checkout_sent: false, valid_purchase_confirmation: false }, metadata: { channel: 'whatsapp', campaign }, authoritative_context: {}, informational_context: { knowledge: [] } };
 }
-function obligation(id, category, subject, attributes = undefined, ambiguous = false) { return { id, category, ...(subject ? { subject } : {}), current_turn_evidence: 'mensaje actual', confidence: 'high', ambiguous, ...(attributes ? { attributes } : {}), ...(category === 'practical_guidance' ? { practical_task: { task_kind: 'knowledge_question', bounded_inputs: [] } } : {}) }; }
+function obligation(id, category, subject, attributes = undefined, ambiguous = false) { return { id, category, ...(subject ? { subject } : {}), current_turn_evidence: 'mensaje actual', confidence: 'high', ambiguous, ...(attributes ? { attributes } : {}), ...(category === 'commercial_purchase_intent' ? deriveCommercialAuthorizationSubject({ campaign: 'standard', offerVersion: '28d-149-v1' }) : {}), ...(category === 'practical_guidance' ? { practical_task: { task_kind: 'knowledge_question', bounded_inputs: [] } } : {}) }; }
 function resolve(obligations, extra = {}) { return resolveObligations({ context: context(), obligations, asOf, ...resolvers(), ...extra }); }
 
 test('Ticket 62 routes canonical facts, payment membership, and unmapped capability independently', () => {
@@ -72,22 +73,34 @@ test('Ticket 62 resolves safety before commercial policy without changing return
 
 test('Ticket 62 produces commercial standard and GLP-1 actions only with a clear current gate', () => {
   const purchase = [obligation('o-buy', 'commercial_purchase_intent', 'explicit_current_request')];
+  const glp1Subject = deriveCommercialAuthorizationSubject({ campaign: 'glp1_validation', offerVersion: '28d-149-v1' });
   const standard = resolve(purchase);
-  const glp1 = resolveObligations({ context: context('glp1_validation'), obligations: purchase, asOf, ...resolvers() });
+  const glp1 = resolveObligations({ context: context('glp1_validation'), obligations: [{ ...purchase[0], ...glp1Subject }], asOf, ...resolvers() });
   assert.equal(standard.authorized_actions[0].action_type, 'provide_checkout_destination');
   assert.equal(glp1.authorized_actions[0].action_type, 'provide_holding_page_destination');
+  assert.notEqual(purchase[0].authorization_subject_id, glp1Subject.authorization_subject_id);
   assert.equal(standard.resolved_obligations[0].source.type, 'deterministic_policy');
 });
 
-test('Ticket 62 passes only injected normalized reminder context to policy', () => {
+test('Ticket 60B-R fails closed for missing, malformed, or context-mismatched commercial subjects', () => {
+  const purchase = obligation('o-buy', 'commercial_purchase_intent', 'explicit_current_request');
+  assert.throws(() => resolve([{ ...purchase, authorization_subject_id: 'cas-short' }]), error => error.code === 'ORCHESTRATION_COMMERCIAL_SUBJECT_INVALID');
+  assert.throws(() => resolve([{ ...purchase, authorization_subject_version: 'commercial-authorization-subject-v2' }]), error => error.code === 'ORCHESTRATION_COMMERCIAL_SUBJECT_INVALID');
+  assert.throws(() => resolveObligations({ context: context('glp1_validation'), obligations: [purchase], asOf, ...resolvers() }), error => error.code === 'ORCHESTRATION_COMMERCIAL_SUBJECT_INVALID');
+  assert.throws(() => resolve([{ ...obligation('o-fact', 'product_fact', 'price'), authorization_subject_id: purchase.authorization_subject_id, authorization_subject_version: purchase.authorization_subject_version }]), error => error.code === 'ORCHESTRATION_OBLIGATION_INVALID');
+  assert.throws(() => resolve([purchase, { ...purchase, id: 'o-buy-duplicate', current_turn_evidence: 'otra evidencia' }]), error => error.code === 'ORCHESTRATION_COMMERCIAL_SUBJECT_DUPLICATE');
+});
+
+test('Ticket 60B-R keeps legacy reminder context dormant and never authorizes scheduling', () => {
   const reminder = [obligation('o-reminder', 'reminder_request', 'explicit')];
   const scheduledFor = '2026-09-23T18:00:00.123+05:30';
   const incomplete = resolve(reminder);
   const complete = resolve(reminder, { reminderContexts: { 'o-reminder': { scheduled_for: scheduledFor, existing_schedule: false } } });
-  assert.equal(incomplete.resolved_obligations[0].resolution_status, 'clarification_required');
-  assert.equal(complete.authorized_actions[0].action_type, 'schedule_reminder');
-  assert.equal(complete.authorized_actions[0].parameters.scheduled_for, scheduledFor);
-  assert.equal(complete.resolved_obligations[0].action_authorization.parameters.scheduled_for, scheduledFor);
+  assert.equal(incomplete.resolved_obligations[0].resolution_status, 'resolved');
+  assert.equal(complete.resolved_obligations[0].resolution_status, 'resolved');
+  assert.equal(complete.resolved_obligations[0].action_authorization, undefined);
+  assert.deepEqual(complete.authorized_actions, []);
+  assert.equal(complete.resolved_obligations[0].policy_decision.reason_code, 'REMINDER_SCHEDULING_OUTSIDE_V2_LAUNCH');
 });
 
 test('Ticket 62 isolates availability failures and passes indeterminate safety to commercial policy', () => {
@@ -191,12 +204,12 @@ test('Ticket 62 rejects malformed Policy Resolver output whole-call', () => {
   assert.throws(() => resolveObligations({ context: context(), obligations: [obligation('o-buy', 'commercial_purchase_intent', 'explicit_current_request')], factResolver: resolvers().factResolver, policyResolver: { resolvePolicy() { return { resolution_status: 'resolved', authority: 'commercial_authorization', source: null, action_authorization: null }; } }, asOf }), error => error instanceof ResolutionOrchestratorError && error.code === 'ORCHESTRATION_OUTPUT_INVALID');
 });
 
-test('Ticket 62 does not deduplicate independently authorized policy actions', () => {
+test('Ticket 60B-R keeps reminder intent independent without adding a launch action', () => {
   const result = resolve([
     obligation('o-buy', 'commercial_purchase_intent', 'explicit_current_request'),
     obligation('o-reminder', 'reminder_request', 'explicit'),
   ], { reminderContexts: { 'o-reminder': { scheduled_for: '2026-09-23T18:00:00.000Z', existing_schedule: false } } });
-  assert.deepEqual(result.authorized_actions.map(value => value.action_type), ['provide_checkout_destination', 'schedule_reminder']);
+  assert.deepEqual(result.authorized_actions.map(value => value.action_type), ['provide_checkout_destination']);
   assert.deepEqual(result.resolved_obligations[0].action_authorization, result.authorized_actions[0]);
-  assert.deepEqual(result.resolved_obligations[1].action_authorization, result.authorized_actions[1]);
+  assert.equal(result.resolved_obligations[1].action_authorization, undefined);
 });

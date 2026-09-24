@@ -6,12 +6,18 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { validateDictionary } = require('../lib/sales-engine-v2/policy-validator');
 const { PolicyResolverError, createPolicyResolver, resolvePolicyFromPolicies } = require('../lib/sales-engine-v2/policy-resolver');
+const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 
 const dictionary = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'sales-engine-v2', 'policies.json'), 'utf8'));
 const resolver = createPolicyResolver({ policies: dictionary.policies });
 const baseContext = { offer_version: '28d-149-v1', channel: 'whatsapp' };
 const obligation = (category, subtype, id = category + '-' + subtype) => ({ id, category, subtype, ambiguous: false });
-const resolve = (category, subtype, context = {}, requested_action_type) => resolver.resolvePolicy({ obligation: obligation(category, subtype), context: { ...baseContext, ...context }, ...(requested_action_type ? { requested_action_type } : {}) });
+const resolve = (category, subtype, context = {}, requested_action_type) => {
+  const policyContext = { ...baseContext, ...context };
+  const value = obligation(category, subtype);
+  if (category === 'commercial_purchase_intent') Object.assign(value, deriveCommercialAuthorizationSubject({ campaign: policyContext.campaign || 'standard', offerVersion: policyContext.offer_version }));
+  return resolver.resolvePolicy({ obligation: value, context: policyContext, ...(requested_action_type ? { requested_action_type } : {}) });
+};
 
 test('Ticket 59 validates its small, versioned policy dictionary', () => {
   assert.equal(validateDictionary(dictionary), dictionary);
@@ -58,18 +64,20 @@ test('Ticket 59 preserves the structured GLP-1 holding-page boundary without raw
   assert.throws(() => resolver.resolvePolicy({ obligation: obligation('commercial_purchase_intent', 'explicit_current_request'), context, customer_message: 'Quiero comprar' }), error => error.code === 'POLICY_REQUEST_INVALID');
 });
 
-test('Ticket 59 authorizes only complete explicit reminders and does not schedule them', () => {
+test('Ticket 60B-R recognizes reminder intent but makes scheduling unavailable in the v2 launch contract', () => {
   const complete = resolve('reminder_request', 'explicit', { reminder: { requested: true, scheduled_for: '2026-09-23T18:00:00.000Z', existing_schedule: false } });
-  assert.equal(complete.action_authorization.action_type, 'schedule_reminder');
-  assert.equal(complete.action_authorization.constraints.side_effect_execution, 'not_performed');
+  assert.equal(complete.resolution_status, 'unsupported');
+  assert.equal(complete.reason_code, 'REMINDER_SCHEDULING_OUTSIDE_V2_LAUNCH');
+  assert.equal(complete.action_authorization, null);
+  assert.deepEqual(complete.required_handling, ['reminder_scheduling_unavailable']);
   for (const context of [
     { reminder: { requested: true, scheduled_for: null } },
     { reminder: { requested: true } },
     {},
   ]) {
     const incomplete = resolve('reminder_request', 'explicit', context);
-    assert.equal(incomplete.resolution_status, 'clarification_required');
-    assert.equal(incomplete.reason_code, 'REMINDER_CONTEXT_INCOMPLETE');
+    assert.equal(incomplete.resolution_status, 'unsupported');
+    assert.equal(incomplete.reason_code, 'REMINDER_SCHEDULING_OUTSIDE_V2_LAUNCH');
     assert.equal(incomplete.action_authorization, null);
   }
   const unsupported = resolve('reminder_request', 'unsupported');
@@ -91,7 +99,7 @@ test('Ticket 59 distinguishes invalid input, clarification, no rule, malformed p
   for (const reminder of [null, { requested: true, scheduled_for: 'not-a-date' }, { requested: true, scheduled_for: 1 }, { requested: true, existing_schedule: 'false' }]) {
     assert.throws(() => resolver.resolvePolicy({ obligation: obligation('reminder_request', 'explicit'), context: { ...baseContext, reminder } }), error => error instanceof PolicyResolverError && error.code === 'POLICY_REQUEST_INVALID');
   }
-  const ambiguous = resolver.resolvePolicy({ obligation: { ...obligation('commercial_purchase_intent', 'explicit_current_request'), ambiguous: true }, context: baseContext });
+  const ambiguous = resolver.resolvePolicy({ obligation: { ...obligation('commercial_purchase_intent', 'explicit_current_request'), ...deriveCommercialAuthorizationSubject({ campaign: 'standard', offerVersion: baseContext.offer_version }), ambiguous: true }, context: baseContext });
   assert.equal(ambiguous.resolution_status, 'clarification_required');
   assert.equal(ambiguous.reason_code, 'OBLIGATION_AMBIGUOUS');
   assert.throws(() => resolvePolicyFromPolicies([{ id: 'bad', version: 1 }], { obligation: obligation('medication_management', 'dose_change'), context: baseContext }), error => error.code === 'POLICY_STORE_MALFORMED');

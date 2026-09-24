@@ -12,7 +12,7 @@ It imports no model, network, provider, persistence, workflow, or runtime clock 
 
 Its validator is intentionally stage-specific. The shared normative `ResolvedObligation` validator also recognizes future `reviewed_knowledge` and `generated_guidance` terminal variants, but Ticket 62 rejects them because it only produces authoritative/deferred outcomes.
 
-`reminderContexts` is optional injected server-normalized per-obligation reminder metadata, keyed by obligation ID. It is only passed to Ticket 59; the orchestrator does not parse `requested_timing_text`. Without a supplied normalized time, the existing Ticket 59 clarification rule applies.
+`reminderContexts` is retained as a dormant compatibility input only. V2 launch never passes it into a policy authorization path and rejects any resulting `schedule_reminder` action. The orchestrator does not parse `requested_timing_text`; reminder intent resolves only to the bounded launch-unavailable handling.
 
 ## Closed routing matrix
 

@@ -122,12 +122,15 @@
       "properties": {
         "id": {"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},
         "category": {"enum":["product_fact","provider_service_fact","practical_guidance","conversational_task","commercial_purchase_intent","reminder_request","medication_management","safety_sensitive_nutrition","clarification","support_account","social_acknowledgement"]},
-        "subject": {"type":"string"}, "current_turn_evidence": {"type":"string","minLength":1}, "confidence": {"enum":["high","medium","low"]}, "ambiguous": {"type":"boolean"}, "attributes": {"type":"object"}, "practical_task":{"$ref":"#/$defs/practicalTask"}, "conversational_task":{"$ref":"#/$defs/conversationalTask"}
+        "subject": {"type":"string"}, "current_turn_evidence": {"type":"string","minLength":1}, "confidence": {"enum":["high","medium","low"]}, "ambiguous": {"type":"boolean"}, "attributes": {"type":"object"}, "practical_task":{"$ref":"#/$defs/practicalTask"}, "conversational_task":{"$ref":"#/$defs/conversationalTask"}, "authorization_subject_version":{"const":"commercial-authorization-subject-v1"}, "authorization_subject_id":{"type":"string","pattern":"^cas-[0-9a-f]{64}$"}
       },
       "allOf":[
         {"if":{"properties":{"category":{"const":"practical_guidance"}}},"then":{"required":["practical_task"]}},
         {"if":{"required":["practical_task"]},"then":{"properties":{"category":{"const":"practical_guidance"}}}},
         {"if":{"properties":{"category":{"const":"conversational_task"}}},"then":{"required":["conversational_task"]}},
+        {"if":{"properties":{"category":{"const":"commercial_purchase_intent"}}},"then":{"required":["authorization_subject_version","authorization_subject_id"]}},
+        {"if":{"required":["authorization_subject_version"]},"then":{"properties":{"category":{"const":"commercial_purchase_intent"}}}},
+        {"if":{"required":["authorization_subject_id"]},"then":{"properties":{"category":{"const":"commercial_purchase_intent"}}}},
         {"if":{"required":["conversational_task"]},"then":{"properties":{"category":{"const":"conversational_task"}}}}
       ]
     },
@@ -180,7 +183,7 @@
       "type": "object", "required": ["contract_version","context_id","locale","current_message","history","history_metadata","conversation_artifacts","conversation_artifacts_metadata","session_state","offer_context","customer_state","commercial_state","metadata","authoritative_context","informational_context"], "additionalProperties": false,
       "properties": {
         "contract_version":{"const":"2.0"},"context_id":{"type":"string"},"locale":{"const":"es-MX"},
-        "current_message":{"allOf":[{"$ref":"#/$defs/historyMessage"},{"properties":{"role":{"const":"customer"}}}]},"history":{"type":"array","items":{"$ref":"#/$defs/historyMessage"}},
+        "current_message":{"type":"object","required":["role","text","occurred_at","source_id","canonical_message_id"],"additionalProperties":false,"properties":{"role":{"const":"customer"},"text":{"type":"string","minLength":1},"occurred_at":{"$ref":"#/$defs/timestamp"},"source_id":{"type":"string","minLength":1},"canonical_message_id":{"type":"string","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}}},"history":{"type":"array","items":{"$ref":"#/$defs/historyMessage"}},
         "history_metadata":{"type":"object","required":["ordering","history_truncated","retained_prior_turns","retained_prior_characters"],"additionalProperties":false,"properties":{"ordering":{"const":"occurred_at"},"history_truncated":{"type":"boolean"},"retained_prior_turns":{"type":"integer","minimum":0},"retained_prior_characters":{"type":"integer","minimum":0}}},
         "conversation_artifacts":{"type":"array","items":{"$ref":"#/$defs/conversationArtifactContext"}},
         "conversation_artifacts_metadata":{"type":"object","required":["ordering","artifacts_truncated","retained_artifacts","retained_artifact_characters"],"additionalProperties":false,"properties":{"ordering":{"const":"occurred_at"},"artifacts_truncated":{"type":"boolean"},"retained_artifacts":{"type":"integer","minimum":0},"retained_artifact_characters":{"type":"integer","minimum":0}}},

@@ -33,14 +33,13 @@ function authorizedReminder(parameters = { offer_version: null, scheduled_for: s
   };
 }
 
-test('Ticket 59A preserves the exact authoritative reminder timestamp and leaves input immutable', () => {
+test('Ticket 60B-R retains Ticket 59A timestamp validation while launch policy never authorizes scheduling', () => {
   const input = request({ reminder: { requested: true, scheduled_for: scheduledFor, existing_schedule: false } });
   const before = structuredClone(input);
   const result = resolver.resolvePolicy(input);
 
-  assert.equal(result.action_authorization.action_type, 'schedule_reminder');
-  assert.equal(result.action_authorization.parameters.scheduled_for, scheduledFor);
-  assert.equal(result.action_authorization.parameters.scheduled_for, input.context.reminder.scheduled_for);
+  assert.equal(result.resolution_status, 'unsupported');
+  assert.equal(result.action_authorization, null);
   assert.deepEqual(input, before);
 });
 
@@ -62,7 +61,7 @@ test('Ticket 59A schema makes scheduled_for required only for schedule_reminder'
 
 test('Ticket 59A cannot manufacture reminder timing from another artifact', () => {
   const missing = resolver.resolvePolicy(request({ reminder: { requested: true, existing_schedule: false } }));
-  assert.equal(missing.resolution_status, 'clarification_required');
+  assert.equal(missing.resolution_status, 'unsupported');
   assert.equal(missing.action_authorization, null);
   for (const scheduled_for of ['not-a-date', '2026-09-23T18:00:00', '2026-02-30T18:00:00Z']) {
     assert.throws(

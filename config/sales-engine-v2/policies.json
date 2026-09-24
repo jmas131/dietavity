@@ -59,25 +59,15 @@
       "when": {"safety_gate": "indeterminate"}
     },
     {
-      "id": "reminder.explicit_complete",
+      "id": "reminder.explicit_launch_unavailable",
       "version": 1,
       "status": "active",
       "category": "reminder_request",
       "subtypes": ["explicit"],
-      "outcome": "authorized",
-      "action_type": "schedule_reminder",
-      "reason_code": "REMINDER_AUTHORIZED",
-      "required_context": ["reminder.requested", "reminder.scheduled_for"]
-    },
-    {
-      "id": "reminder.explicit_incomplete",
-      "version": 1,
-      "status": "active",
-      "category": "reminder_request",
-      "subtypes": ["explicit"],
-      "outcome": "clarification_required",
-      "reason_code": "REMINDER_CONTEXT_INCOMPLETE",
-      "when": {"reminder_scheduled_for": "missing"}
+      "outcome": "unsupported",
+      "reason_code": "REMINDER_SCHEDULING_OUTSIDE_V2_LAUNCH",
+      "required_handling": ["reminder_scheduling_unavailable"],
+      "prohibited_handling": ["reminder_scheduling_claim"]
     },
     {
       "id": "reminder.unsupported",

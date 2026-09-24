@@ -6,6 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createFactResolver, FactResolverError } = require('../lib/sales-engine-v2/fact-resolver');
 const { createPolicyResolver } = require('../lib/sales-engine-v2/policy-resolver');
+const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 
 const root = path.join(__dirname, '..');
 const facts = JSON.parse(fs.readFileSync(path.join(root, 'config/sales-engine-v2/product-facts.json'), 'utf8')).facts;
@@ -15,7 +16,15 @@ const factResolver = createFactResolver({ facts, membershipDefinitions });
 const policyResolver = createPolicyResolver({ policies });
 const atApproval = '2026-09-22T00:00:01.000Z';
 const baseContext = { offer_version: '28d-149-v1', channel: 'whatsapp' };
-const obligation = (id, category, subtype) => ({ id, category, subtype, ambiguous: false });
+const obligation = (id, category, subtype) => ({
+  id,
+  category,
+  subtype,
+  ambiguous: false,
+  ...(category === 'commercial_purchase_intent'
+    ? deriveCommercialAuthorizationSubject({ campaign: 'standard', offerVersion: baseContext.offer_version })
+    : {})
+});
 
 function membership(factKey, candidate, offerVersion = '28d-149-v1') {
   return factResolver.resolveFact({ factKey, offerVersion, scope: {}, asOf: atApproval, query: { operation: 'contains', candidate } });

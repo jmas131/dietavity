@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const { ConversationContextError, validateConversationContext } = require('../lib/sales-engine-v2/conversation-context-validator');
 const { createConversationContext, normalizeOnboardingChatMemoryRow } = require('../lib/sales-engine-v2/memory-adapter');
 
-const currentTurn = { id: 'inbound-3', text: '¿Cuánto cuesta?', received_at: '2026-09-22T12:00:00.000Z' };
+const currentTurn = { id: 'inbound-3', canonical_message_id: '11111111-1111-4111-8111-000000000003', text: '¿Cuánto cuesta?', received_at: '2026-09-22T12:00:00.000Z' };
 const runtimeMetadata = { conversation_id: 'conversation-1', session_id: 'session-opaque-1', channel: 'whatsapp', offer_version: '28d-149-v1', campaign: 'standard', commercial_state: { checkout_sent: false } };
 const entry = (source_id, role, text, occurred_at) => ({ source_id, role, text, occurred_at });
 const productionRow = (id, type, content, created_at) => ({ id, session_id: 'session-opaque-1', created_at, updated_at: created_at, message: { type, content, additional_kwargs: { ignored: 'never visible' } } });
@@ -22,12 +22,21 @@ const artifact = ({ id = 'ca-draft-1', type = 'draft', operation = 'draft', task
 test('Ticket 60 creates an empty, structurally separate canonical ConversationContext', () => {
   const context = createConversationContext({ currentTurn, runtimeMetadata });
   assert.equal(context.context_id, 'conversation-1:inbound-3');
-  assert.deepEqual(context.current_message, { source_id: 'inbound-3', role: 'customer', text: '¿Cuánto cuesta?', occurred_at: '2026-09-22T12:00:00.000Z' });
+  assert.deepEqual(context.current_message, { source_id: 'inbound-3', canonical_message_id: '11111111-1111-4111-8111-000000000003', role: 'customer', text: '¿Cuánto cuesta?', occurred_at: '2026-09-22T12:00:00.000Z' });
   assert.deepEqual(context.history, []);
   assert.deepEqual(context.history_metadata, { ordering: 'occurred_at', history_truncated: false, retained_prior_turns: 0, retained_prior_characters: 0 });
   assert.deepEqual(context.conversation_artifacts, []);
   assert.deepEqual(context.conversation_artifacts_metadata, { ordering: 'occurred_at', artifacts_truncated: false, retained_artifacts: 0, retained_artifact_characters: 0 });
   assert.equal(validateConversationContext(context), null);
+});
+
+test('Ticket 60B-R requires a canonical ledger UUID distinct from the message source ID', () => {
+  const context = createConversationContext({ currentTurn, runtimeMetadata });
+  const retried = createConversationContext({ currentTurn: structuredClone(currentTurn), runtimeMetadata: structuredClone(runtimeMetadata) });
+  assert.equal(context.current_message.canonical_message_id, currentTurn.canonical_message_id);
+  assert.equal(retried.current_message.canonical_message_id, context.current_message.canonical_message_id);
+  errorCode(() => createConversationContext({ currentTurn: { ...currentTurn, canonical_message_id: currentTurn.id }, runtimeMetadata }), 'CURRENT_TURN_INVALID');
+  errorCode(() => createConversationContext({ currentTurn: { id: currentTurn.canonical_message_id, text: currentTurn.text, received_at: currentTurn.received_at }, runtimeMetadata }), 'CURRENT_TURN_INVALID');
 });
 
 test('Ticket 60A projects only valid Ticket 17A draft and summary records, not ordinary assistant history', () => {
