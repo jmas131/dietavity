@@ -299,6 +299,23 @@
         {"if":{"properties":{"authority":{"enum":["canonical_fact","deterministic_policy","commercial_authorization","bounded_unknown","clarification_required","prohibited","resolver_failure"]}}},"then":{"properties":{"llm_reasoning_permitted":{"const":false}}}}
       ]
     },
+    "TurnResult": {
+      "description":"Ticket 68 operational result. response_eligible means eligible for downstream delivery, not delivered.",
+      "type":"object", "additionalProperties":false,
+      "required":["turn_result_version","contract_version","status"],
+      "properties":{
+        "turn_result_version":{"const":"ticket-68-v1"}, "contract_version":{"const":"2.0"}, "context_id":{"type":"string","minLength":1},
+        "status":{"enum":["response_eligible","response_ineligible"]}, "failure_stage":{"type":"string","enum":["context","interpretation","resolution","guidance_resolution","guidance_assessment","artifact_assessment","planning","action_execution","final_composer_input","composer","final_gate"]},
+        "failure_code":{"enum":["context_invalid","interpretation_failed","resolution_failed","guidance_resolution_failed","guidance_assessment_unavailable","artifact_assessment_unavailable","planning_failed","action_execution_unavailable","final_composer_input_failed","composer_unavailable","final_response_assessment_unavailable","final_response_blocked","final_response_binding_invalid"]},
+        "customer_response":{"type":"object","additionalProperties":false,"required":["text","composer_result_version","final_gate_version"],"properties":{"text":{"type":"string","minLength":1},"composer_result_version":{"const":"ticket-66-v1"},"final_gate_version":{"const":"ticket-67-v1"}}},
+        "action_execution_summary":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["action_id","action_type","execution_status"],"properties":{"action_id":{"type":"string","pattern":"^act-[0-9a-f]{64}$"},"action_type":{"enum":["provide_checkout_destination","provide_holding_page_destination"]},"execution_status":{"enum":["succeeded","failed_retryable","failed_terminal","in_progress"]}}}},
+        "stage_trace":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["stage","status"],"properties":{"stage":{"type":"string"},"status":{"enum":["completed","failed"]}}}}
+      },
+      "allOf":[
+        {"if":{"properties":{"status":{"const":"response_eligible"}}},"then":{"required":["context_id","customer_response","action_execution_summary","stage_trace"],"not":{"anyOf":[{"required":["failure_stage"]},{"required":["failure_code"]}]}}},
+        {"if":{"properties":{"status":{"const":"response_ineligible"}}},"then":{"required":["failure_stage","failure_code","stage_trace"],"not":{"required":["customer_response"]}}}
+      ]
+    },
     "retrievedKnowledge": {
       "type": "object", "required": ["source","review_status","domain","retrieved_reference"], "additionalProperties": false,
       "properties": {"source":{"allOf":[{"$ref":"#/$defs/source"},{"properties":{"type":{"const":"reviewed_knowledge"}}}]},"review_status":{"enum":["approved","rejected","expired"]},"domain":{"enum":["nutrition_education","glp1_nutrition","recipe","ingredient_substitution","meal_preparation","faq"]},"retrieved_reference":{"type":"string"},"excerpt":{"type":"string"},"relevance":{"type":"number","minimum":0,"maximum":1},"effective_from":{"$ref":"#/$defs/timestamp"},"reviewed_at":{"$ref":"#/$defs/timestamp"}}
@@ -399,7 +416,8 @@
     "FinalComposerInput": {"$ref":"#/$defs/FinalComposerInput"},
     "ComposerResult": {"$ref":"#/$defs/ComposerResult"},
     "ComposerFailure": {"$ref":"#/$defs/ComposerFailure"},
-    "FinalCustomerResponseGate": {"$ref":"#/$defs/FinalCustomerResponseGate"}
+    "FinalCustomerResponseGate": {"$ref":"#/$defs/FinalCustomerResponseGate"},
+    "TurnResult": {"$ref":"#/$defs/TurnResult"}
   },
   "additionalProperties": false
 }
