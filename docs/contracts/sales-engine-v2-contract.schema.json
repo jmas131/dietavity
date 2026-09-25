@@ -235,6 +235,20 @@
       "type":"object","required":["composer_failure_version","contract_version","context_id","locale","failure_code","model_provenance"],"additionalProperties":false,
       "properties":{"composer_failure_version":{"const":"ticket-66-v1"},"contract_version":{"const":"2.0"},"context_id":{"type":"string","minLength":1},"locale":{"const":"es-MX"},"failure_code":{"const":"COMPOSER_MODEL_UNAVAILABLE"},"model_provenance":{"$ref":"#/$defs/ComposerModelProvenance"}}
     },
+    "FinalCustomerResponseFinding": {
+      "type":"object","required":["code","severity","evidence"],"additionalProperties":false,
+      "properties":{"code":{"enum":["unsupported_product_or_provider_claim","unsupported_commercial_claim","unsupported_practical_guidance","medication_management","diagnosis_or_prescription","unauthorized_action_or_execution_claim","unsupported_payment_claim","delivery_or_receipt_claim","reminder_or_future_action_claim","unauthorized_future_capability_claim","uncertainty_overstatement","withholding_semantic_violation","support_semantic_overstatement","unauthorized_question_or_cta","clarification_semantic_drift","destination_semantic_violation","artifact_or_guidance_reconstruction","authority_escalation","other_semantic_risk"]},"severity":{"const":"blocking"},"evidence":{"type":"object","required":["excerpt","rationale"],"additionalProperties":false,"properties":{"excerpt":{"type":"string","minLength":1,"maxLength":500},"rationale":{"type":"string","minLength":1,"maxLength":500}}}}
+    },
+    "FinalCustomerResponseGate": {
+      "description":"Ticket 67 assesses the exact Ticket 66 candidate against FinalComposerInput. Clearance creates no product, medical, execution, delivery, or action authority.",
+      "type":"object","required":["gate_id","gate_version","context_id","candidate_binding","gate_status","findings","assessment_source"],"additionalProperties":false,
+      "properties":{"gate_id":{"const":"final-customer-response-gate"},"gate_version":{"const":"ticket-67-v1"},"context_id":{"type":"string","minLength":1},"candidate_binding":{"type":"object","required":["version","digest"],"additionalProperties":false,"properties":{"version":{"const":"ticket-67-v1"},"digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}},"gate_status":{"enum":["cleared","blocked","indeterminate"]},"findings":{"type":"array","maxItems":20,"items":{"$ref":"#/$defs/FinalCustomerResponseFinding"}},"assessment_source":{"type":"object","required":["assessment_stage","assessor_run_id","outcome"],"additionalProperties":false,"properties":{"assessment_stage":{"const":"final_customer_response_semantic_validation"},"assessor_run_id":{"type":"string","minLength":1},"outcome":{"enum":["completed","unavailable"]},"failure_code":{"const":"FINAL_RESPONSE_ASSESSOR_UNAVAILABLE"}},"allOf":[{"if":{"properties":{"outcome":{"const":"unavailable"}}},"then":{"required":["failure_code"]}},{"if":{"properties":{"outcome":{"const":"completed"}}},"then":{"not":{"required":["failure_code"]}}}]}},
+      "oneOf":[
+        {"properties":{"gate_status":{"const":"cleared"},"findings":{"maxItems":0},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}}},
+        {"properties":{"gate_status":{"const":"blocked"},"findings":{"minItems":1},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}}},
+        {"properties":{"gate_status":{"const":"indeterminate"},"findings":{"maxItems":0},"assessment_source":{"properties":{"outcome":{"const":"unavailable"},"failure_code":{"const":"FINAL_RESPONSE_ASSESSOR_UNAVAILABLE"}}}}}
+      ]
+    },
     "FinalComposerInput": {
       "description":"Ticket 65E's final bounded semantic envelope for Ticket 66. Cross-stage gate, action-result, and policy-mapping alignment is enforced by the executable builder/validator.",
       "type":"object","required":["composer_input_version","contract_version","context_id","locale","obligation_ids","obligation_outcomes","prohibited_claims","prohibited_actions","question_budget","completion_requirement"],"additionalProperties":false,
@@ -384,7 +398,8 @@
     },
     "FinalComposerInput": {"$ref":"#/$defs/FinalComposerInput"},
     "ComposerResult": {"$ref":"#/$defs/ComposerResult"},
-    "ComposerFailure": {"$ref":"#/$defs/ComposerFailure"}
+    "ComposerFailure": {"$ref":"#/$defs/ComposerFailure"},
+    "FinalCustomerResponseGate": {"$ref":"#/$defs/FinalCustomerResponseGate"}
   },
   "additionalProperties": false
 }
