@@ -8704,6 +8704,40 @@ ALTER TABLE ONLY public.product_fact_authority_records FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records TO service_role;
 
+-- Ticket 72 local reviewed-nutrition authority (not production verification).
+CREATE TABLE public.reviewed_nutrition_knowledge_sets (
+    knowledge_set_id text NOT NULL,
+    knowledge_version text NOT NULL,
+    locale text NOT NULL,
+    status text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT reviewed_nutrition_knowledge_sets_pkey PRIMARY KEY (knowledge_set_id),
+    CONSTRAINT reviewed_nutrition_knowledge_sets_version CHECK ((knowledge_version <> ''::text)),
+    CONSTRAINT reviewed_nutrition_knowledge_sets_locale CHECK ((locale ~ '^[a-z]{2}-[A-Z]{2}$'::text)),
+    CONSTRAINT reviewed_nutrition_knowledge_sets_status CHECK ((status = ANY (ARRAY['draft'::text, 'reviewed_active'::text, 'retired'::text)))
+);
+ALTER TABLE ONLY public.reviewed_nutrition_knowledge_sets FORCE ROW LEVEL SECURITY;
+CREATE UNIQUE INDEX reviewed_nutrition_knowledge_one_active_locale ON public.reviewed_nutrition_knowledge_sets USING btree (locale) WHERE (status = 'reviewed_active'::text);
+CREATE TABLE public.reviewed_nutrition_knowledge_records (
+    knowledge_id text NOT NULL,
+    knowledge_set_id text NOT NULL,
+    knowledge_domain text NOT NULL,
+    topic text NOT NULL,
+    task_kinds jsonb NOT NULL,
+    applicable_input_types jsonb NOT NULL,
+    content text NOT NULL,
+    provenance jsonb NOT NULL,
+    CONSTRAINT reviewed_nutrition_knowledge_records_pkey PRIMARY KEY (knowledge_id, knowledge_set_id),
+    CONSTRAINT reviewed_nutrition_knowledge_id CHECK ((knowledge_id ~ '^[a-z][a-z0-9-]*$'::text)),
+    CONSTRAINT reviewed_nutrition_knowledge_domain CHECK ((knowledge_domain = 'nutrition_practical'::text)),
+    CONSTRAINT reviewed_nutrition_knowledge_topic CHECK ((topic = ANY (ARRAY['food_storage'::text, 'meal_preparation'::text))),
+    CONSTRAINT reviewed_nutrition_knowledge_content CHECK ((content <> ''::text)),
+    CONSTRAINT reviewed_nutrition_knowledge_records_set_fkey FOREIGN KEY (knowledge_set_id) REFERENCES public.reviewed_nutrition_knowledge_sets(knowledge_set_id) ON DELETE RESTRICT
+);
+ALTER TABLE ONLY public.reviewed_nutrition_knowledge_records FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.reviewed_nutrition_knowledge_sets, public.reviewed_nutrition_knowledge_records FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE public.reviewed_nutrition_knowledge_sets, public.reviewed_nutrition_knowledge_records TO service_role;
+
 -- PostgreSQL database dump complete
 --
 

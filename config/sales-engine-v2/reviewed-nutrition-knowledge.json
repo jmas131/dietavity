@@ -1,0 +1,31 @@
+{
+  "authority_contract_version": "ticket-72-v1",
+  "knowledge_sets": [
+    {
+      "knowledge_set_id": "nutrition-practical-es-mx-v1",
+      "knowledge_version": "1",
+      "status": "reviewed_active",
+      "locale": "es-MX",
+      "records": [
+        {
+          "knowledge_id": "rk-food-storage-basics",
+          "knowledge_domain": "nutrition_practical",
+          "topic": "food_storage",
+          "task_kinds": ["knowledge_question"],
+          "applicable_input_types": [],
+          "content": "Para conservar comida cocida, guárdala en un recipiente limpio y cerrado en el refrigerador tan pronto como se haya enfriado lo suficiente para manipularla. Si tienes dudas sobre su estado, es más seguro desecharla.",
+          "provenance": { "source_class": "architectural_seed", "reference": "ticket-63-test-only" }
+        },
+        {
+          "knowledge_id": "rk-meal-preparation-basics",
+          "knowledge_domain": "nutrition_practical",
+          "topic": "meal_preparation",
+          "task_kinds": ["knowledge_question"],
+          "applicable_input_types": [],
+          "content": "Para adelantar la preparación de comidas, puedes separar ingredientes, lavar y cortar verduras, y dejar porciones listas antes de cocinar. Conserva cada preparación según sus necesidades y revisa su estado antes de consumirla.",
+          "provenance": { "source_class": "architectural_seed", "reference": "ticket-63-test-only" }
+        }
+      ]
+    }
+  ]
+}
