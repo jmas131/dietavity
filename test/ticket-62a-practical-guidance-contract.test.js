@@ -10,6 +10,7 @@ const { createPolicyResolver } = require('../lib/sales-engine-v2/policy-resolver
 const { resolveObligations } = require('../lib/sales-engine-v2/resolution-orchestrator');
 const { normativeResolvedValid, practicalGuidanceTerminalValid, RESOLVED_OBLIGATION_KEYS } = require('../lib/sales-engine-v2/resolved-obligation-validator');
 const { resolvedValid: ticket62ResolvedValid } = require('../lib/sales-engine-v2/resolution-orchestrator-validator');
+const { deriveGuidanceAssessmentContextBinding } = require('../lib/sales-engine-v2/guidance-assessment-context');
 
 const root = path.join(__dirname, '..');
 const schema = JSON.parse(fs.readFileSync(path.join(root, 'docs/contracts/sales-engine-v2-contract.schema.json'), 'utf8'));
@@ -23,12 +24,19 @@ function source(type, id = 'source-1') { return type === 'generated_guidance' ? 
 function base(authority, sourceValue) { return { obligation_id: 'o-1', resolution_status: 'resolved', authority, source: sourceValue, allowed_claims: [], prohibited_claims: [], customer_uncertainty_required: false, llm_reasoning_permitted: false }; }
 function payload(unit) { return { semantic_safety_validation_required: true, units: [unit] }; }
 function practicalObligation(id, taskKind, inputCount = 2, firstInputId = 1) { return { id, category: 'practical_guidance', current_turn_evidence: 'mensaje actual', confidence: 'high', ambiguous: false, practical_task: { task_kind: taskKind, bounded_inputs: Array.from({ length: inputCount }, (_, index) => ({ id: `bi-${firstInputId + index}`, input_type: 'preparation_step', value: `paso ${index + 1}`, origin: 'current_turn' })) } }; }
+function bound(result, origin = practicalObligation(result.obligation_id, 'organization'), reviewedKnowledgeItems = []) { return { ...result, assessment_context_binding: deriveGuidanceAssessmentContextBinding({ obligation: origin, terminalResult: result, locale: 'es-MX', reviewedKnowledgeItems }) }; }
 
 test('Ticket 62A schema closes practical task, bounded input, and guidance unit vocabularies', () => {
   assert.deepEqual(schema.$defs.practicalTask.properties.task_kind.enum, ['knowledge_question', 'transformation', 'organization']);
   assert.deepEqual(schema.$defs.boundedInput.properties.input_type.enum, ['meal_name', 'ingredient', 'preparation_step', 'meal_component', 'schedule_constraint', 'time_constraint', 'user_preference']);
   assert.deepEqual(schema.$defs.guidanceUnit.properties.unit_type.enum, ['reviewed_information', 'practical_instruction', 'transformation', 'organization']);
   assert.deepEqual([...RESOLVED_OBLIGATION_KEYS].sort(), Object.keys(schema.$defs.resolvedObligation.properties).sort());
+  const binding = schema.$defs.resolvedObligation.properties.assessment_context_binding;
+  assert.deepEqual(binding.required, ['version', 'digest']);
+  assert.equal(binding.additionalProperties, false);
+  assert.equal(binding.properties.version.const, 'ticket-63a-v1');
+  assert.equal(binding.properties.digest.pattern, '^[0-9a-f]{64}$');
+  assert.match(JSON.stringify(schema.$defs.resolvedObligation.allOf), /assessment_context_binding/);
 });
 
 test('Ticket 62A interpreter distinguishes knowledge, transformation, medication, and provider capability without history extraction', () => {
@@ -50,8 +58,8 @@ test('Ticket 62A interpreter distinguishes knowledge, transformation, medication
 
 test('Ticket 62A validates future reviewed and generated terminal guidance shapes', () => {
   const reference = source('reviewed_knowledge', 'knowledge-1');
-  const reviewed = { ...base('reviewed_knowledge', source('reviewed_knowledge', 'resolution-1')), retrieved_knowledge_references: [reference], guidance_payload: payload({ unit_type: 'reviewed_information', content: 'Contenido sujeto a validación semántica.', reviewed_knowledge_reference_ids: ['knowledge-1'] }) };
-  const generated = { ...base('generated_guidance', source('generated_guidance', 'guidance-1')), llm_reasoning_permitted: true, guidance_payload: payload({ unit_type: 'organization', content: 'Contenido generado sujeto a validación semántica.', bounded_input_ids: ['bi-1', 'bi-2'] }) };
+  const reviewed = bound({ ...base('reviewed_knowledge', source('reviewed_knowledge', 'resolution-1')), retrieved_knowledge_references: [reference], guidance_payload: payload({ unit_type: 'reviewed_information', content: 'Contenido sujeto a validación semántica.', reviewed_knowledge_reference_ids: ['knowledge-1'] }) }, practicalObligation('o-1', 'knowledge_question', 0), [{ id: 'knowledge-1', version: '1', content: 'Contenido sujeto a validación semántica.' }]);
+  const generated = bound({ ...base('generated_guidance', source('generated_guidance', 'guidance-1')), llm_reasoning_permitted: true, guidance_payload: payload({ unit_type: 'organization', content: 'Contenido generado sujeto a validación semántica.', bounded_input_ids: ['bi-1', 'bi-2'] }) });
   assert.equal(normativeResolvedValid(reviewed), true);
   assert.equal(normativeResolvedValid(generated), true);
   assert.equal(ticket62ResolvedValid(reviewed), false);
@@ -75,7 +83,7 @@ test('Ticket 62A keeps deferred Ticket 62 output terminal-payload-free and repre
 
 test('Ticket 62A guidance units require one exclusive grounding mode and expose semantic-gate need', () => {
   const reference = source('reviewed_knowledge', 'knowledge-1');
-  const generatedWithKnowledge = { ...base('generated_guidance', source('generated_guidance')), llm_reasoning_permitted: true, retrieved_knowledge_references: [reference], guidance_payload: payload({ unit_type: 'practical_instruction', content: 'Texto natural no autorizado para producción sin una puerta semántica posterior.', reviewed_knowledge_reference_ids: ['knowledge-1'] }) };
+  const generatedWithKnowledge = bound({ ...base('generated_guidance', source('generated_guidance')), llm_reasoning_permitted: true, retrieved_knowledge_references: [reference], guidance_payload: payload({ unit_type: 'practical_instruction', content: 'Texto natural no autorizado para producción sin una puerta semántica posterior.', reviewed_knowledge_reference_ids: ['knowledge-1'] }) });
   assert.equal(normativeResolvedValid(generatedWithKnowledge), true);
   assert.equal(normativeResolvedValid({ ...generatedWithKnowledge, guidance_payload: { units: generatedWithKnowledge.guidance_payload.units, semantic_safety_validation_required: false } }), false);
   assert.equal(normativeResolvedValid({ ...generatedWithKnowledge, guidance_payload: payload({ unit_type: 'practical_instruction', content: 'x', reviewed_knowledge_reference_ids: ['knowledge-1'], bounded_input_ids: ['bi-1'] }) }), false);
@@ -83,7 +91,7 @@ test('Ticket 62A guidance units require one exclusive grounding mode and expose 
 
 test('Ticket 62A context-aware terminal validation enforces exact bounded-input ownership and task-unit mapping', () => {
   const origin = practicalObligation('o-1', 'organization');
-  const result = { ...base('generated_guidance', source('generated_guidance')), llm_reasoning_permitted: true, guidance_payload: payload({ unit_type: 'organization', content: 'Contenido generado sujeto a validación semántica.', bounded_input_ids: ['bi-1', 'bi-2'] }) };
+  const result = bound({ ...base('generated_guidance', source('generated_guidance')), llm_reasoning_permitted: true, guidance_payload: payload({ unit_type: 'organization', content: 'Contenido generado sujeto a validación semántica.', bounded_input_ids: ['bi-1', 'bi-2'] }) }, origin);
   assert.equal(normativeResolvedValid(result), true);
   assert.equal(practicalGuidanceTerminalValid(origin, result), true);
   assert.equal(practicalGuidanceTerminalValid(origin, { ...result, guidance_payload: payload({ unit_type: 'organization', content: 'x', bounded_input_ids: ['bi-3'] }) }), false);
@@ -102,7 +110,7 @@ test('Ticket 62A context-aware validation accepts globally allocated later IDs a
   ] }, 'Paso A y Paso B');
   const [first, second] = obligations;
   assert.deepEqual([first.practical_task.bounded_inputs[0].id, second.practical_task.bounded_inputs[0].id], ['bi-1', 'bi-2']);
-  const secondResult = { ...base('generated_guidance', source('generated_guidance')), obligation_id: second.id, llm_reasoning_permitted: true, guidance_payload: payload({ unit_type: 'organization', content: 'Contenido generado sujeto a validación semántica.', bounded_input_ids: ['bi-2'] }) };
+  const secondResult = bound({ ...base('generated_guidance', source('generated_guidance')), obligation_id: second.id, llm_reasoning_permitted: true, guidance_payload: payload({ unit_type: 'organization', content: 'Contenido generado sujeto a validación semántica.', bounded_input_ids: ['bi-2'] }) }, second);
   assert.equal(practicalGuidanceTerminalValid(second, secondResult), true);
   const firstResultUsingSibling = { ...secondResult, obligation_id: first.id };
   assert.equal(practicalGuidanceTerminalValid(first, firstResultUsingSibling), false);
@@ -111,7 +119,7 @@ test('Ticket 62A context-aware validation accepts globally allocated later IDs a
 test('Ticket 62A context-aware validation preserves reviewed knowledge and Ticket 62 stage boundaries', () => {
   const origin = practicalObligation('o-1', 'knowledge_question', 0);
   const reference = source('reviewed_knowledge', 'knowledge-1');
-  const reviewed = { ...base('reviewed_knowledge', source('reviewed_knowledge', 'resolution-1')), retrieved_knowledge_references: [reference], guidance_payload: payload({ unit_type: 'reviewed_information', content: 'Contenido sujeto a validación semántica.', reviewed_knowledge_reference_ids: ['knowledge-1'] }) };
+  const reviewed = bound({ ...base('reviewed_knowledge', source('reviewed_knowledge', 'resolution-1')), retrieved_knowledge_references: [reference], guidance_payload: payload({ unit_type: 'reviewed_information', content: 'Contenido sujeto a validación semántica.', reviewed_knowledge_reference_ids: ['knowledge-1'] }) }, origin, [{ id: 'knowledge-1', version: '1', content: 'Contenido sujeto a validación semántica.' }]);
   assert.equal(practicalGuidanceTerminalValid(origin, reviewed), true);
   assert.equal(ticket62ResolvedValid(reviewed), false);
 });

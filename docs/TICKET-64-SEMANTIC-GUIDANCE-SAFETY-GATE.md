@@ -1,6 +1,6 @@
 # Ticket 64 — Semantic Guidance Safety Gate
 
-Ticket 64 adds a central `SemanticGuidanceGate` artifact and does not alter `ResolvedObligation`. It accepts only a context-valid, resolved Ticket 63 practical-guidance terminal result with `reviewed_knowledge` or `generated_guidance` authority and `semantic_safety_validation_required: true`.
+Ticket 64 adds a central `SemanticGuidanceGate` artifact and does not alter `ResolvedObligation`. It accepts only a context-valid, resolved Ticket 63 practical-guidance terminal result with `reviewed_knowledge` or `generated_guidance` authority and `semantic_safety_validation_required: true`. Ticket 63A requires the terminal result's `assessment_context_binding` to exactly match the bounded semantic input that Ticket 64 will assess; a mismatch fails closed before the assessor is called.
 
 The injected assessor receives only task/locale, guidance units, result authority and source, plus either owned bounded inputs or exact aligned reviewed items. It returns `{ findings: [{ code, unit_index, rationale }] }`; it cannot return severity, a gate status, policy, facts, rewrites, or actions. The deterministic mapping is blocking for product/provider, commercial, medication-management, diagnosis/prescription, unauthorized-action, and reviewed-knowledge-contradiction findings; all other closed codes require review. No finding clears, any blocking finding blocks, and review-only findings are indeterminate.
 

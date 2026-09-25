@@ -7,6 +7,8 @@ const assert = require('node:assert/strict');
 const { createReviewedKnowledgeStore, ReviewedKnowledgeStoreError } = require('../lib/sales-engine-v2/reviewed-knowledge-store');
 const { PracticalGuidanceResolverError, resolvePracticalGuidance } = require('../lib/sales-engine-v2/practical-guidance-resolver');
 const { practicalGuidanceTerminalValid } = require('../lib/sales-engine-v2/resolved-obligation-validator');
+const { normativeResolvedValid } = require('../lib/sales-engine-v2/resolved-obligation-validator');
+const { GUIDANCE_ASSESSMENT_BINDING_VERSION, bindingMatches, bindingValid, deriveGuidanceAssessmentContextBinding } = require('../lib/sales-engine-v2/guidance-assessment-context');
 const { REVIEWED_KNOWLEDGE_ROUTING } = require('../config/sales-engine-v2/practical-guidance-routing');
 
 const corpus = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config/sales-engine-v2/reviewed-knowledge.json'), 'utf8'));
@@ -58,6 +60,53 @@ test('Ticket 63 direct reviewed resolution has exact provenance and never calls 
   assert.equal(called, false);
   assert.equal(practicalGuidanceTerminalValid(origin, result), true);
   assert.equal('action_authorization' in result, false);
+  assert.deepEqual(Object.keys(result.assessment_context_binding).sort(), ['digest', 'version']);
+  assert.equal(result.assessment_context_binding.version, GUIDANCE_ASSESSMENT_BINDING_VERSION);
+  assert.equal(bindingValid(result.assessment_context_binding), true);
+});
+
+test('Ticket 63A binds exactly the durable semantic assessment context, without storing it in the terminal result', () => {
+  const origin = obligation('o-binding', 'organization', 'cooking_order', [currentInput('bi-4'), currentInput('bi-5', 'hornear pollo')]);
+  const result = resolvePracticalGuidance(input(origin, { modelRunId: 'run-binding', reasoningModel() { return { units: [{ unit_type: 'organization', content: 'Primero corta y después hornea.', bounded_input_ids: ['bi-4', 'bi-5'] }] }; } }));
+  const context = { obligation: origin, terminalResult: result, locale: 'es-MX' };
+  assert.equal(bindingMatches(context, result.assessment_context_binding), true);
+  assert.deepEqual(deriveGuidanceAssessmentContextBinding(context), result.assessment_context_binding);
+  for (const changed of [
+    { ...origin, subject: 'different_subject' },
+    { ...origin, practical_task: { ...origin.practical_task, bounded_inputs: [{ ...origin.practical_task.bounded_inputs[0], value: 'cortar distinto' }, origin.practical_task.bounded_inputs[1]] } },
+    { ...origin, practical_task: { ...origin.practical_task, bounded_inputs: [{ ...origin.practical_task.bounded_inputs[0], input_type: 'ingredient' }, origin.practical_task.bounded_inputs[1]] } },
+    { ...origin, practical_task: { ...origin.practical_task, bounded_inputs: [...origin.practical_task.bounded_inputs].reverse() } },
+  ]) assert.equal(bindingMatches({ ...context, obligation: changed }, result.assessment_context_binding), false);
+  assert.equal(bindingMatches({ ...context, locale: 'en-US' }, result.assessment_context_binding), false);
+  assert.equal(bindingMatches({ ...context, terminalResult: { ...result, guidance_payload: { ...result.guidance_payload, units: [{ ...result.guidance_payload.units[0], content: 'Texto distinto.' }] } } }, result.assessment_context_binding), false);
+  assert.equal(JSON.stringify(result).includes('material actual'), false);
+  assert.deepEqual(Object.keys(result.assessment_context_binding).sort(), ['digest', 'version']);
+  assert.deepEqual(deriveGuidanceAssessmentContextBinding({ ...context, workflow_attempt: 'ignored' }), result.assessment_context_binding);
+});
+
+test('Ticket 63A reviewed-content bindings are exact, while unknown and failed outcomes carry no assessment binding', () => {
+  const reviewedOrigin = obligation('o-reviewed-binding', 'knowledge_question');
+  const reviewed = resolvePracticalGuidance(input(reviewedOrigin));
+  const item = corpus.items.find(value => value.id === 'rk-food-storage-basics');
+  assert.equal(bindingMatches({ obligation: reviewedOrigin, terminalResult: reviewed, locale: 'es-MX', reviewedKnowledgeItems: [item] }, reviewed.assessment_context_binding), true);
+  assert.equal(bindingMatches({ obligation: reviewedOrigin, terminalResult: reviewed, locale: 'es-MX', reviewedKnowledgeItems: [{ ...item, content: 'Contenido distinto.' }] }, reviewed.assessment_context_binding), false);
+  assert.equal(bindingMatches({ obligation: reviewedOrigin, terminalResult: reviewed, locale: 'es-MX', reviewedKnowledgeItems: [{ ...item, id: 'rk-different' }] }, reviewed.assessment_context_binding), false);
+  assert.equal(bindingMatches({ obligation: reviewedOrigin, terminalResult: reviewed, locale: 'es-MX', reviewedKnowledgeItems: [{ ...item, version: 2 }] }, reviewed.assessment_context_binding), false);
+  for (const result of [resolvePracticalGuidance(input(obligation('o-none', 'knowledge_question', 'unmapped_subject'))), resolvePracticalGuidance(input(obligation('o-failed', 'knowledge_question'), { knowledgeStore: unavailableStore() }))]) assert.equal('assessment_context_binding' in result, false);
+});
+
+test('Ticket 63A closes terminal binding shape/version parity without making the digest authority', () => {
+  const origin = obligation('o-contract', 'organization', 'cooking_order', [currentInput()]);
+  const result = resolvePracticalGuidance(input(origin, { modelRunId: 'run-contract', reasoningModel() { return { units: [{ unit_type: 'organization', content: 'Ordena el paso.', bounded_input_ids: ['bi-1'] }] }; } }));
+  assert.equal(normativeResolvedValid(result), true);
+  for (const terminal of [
+    (() => { const { assessment_context_binding, ...rest } = result; return rest; })(),
+    { ...result, assessment_context_binding: { ...result.assessment_context_binding, version: 'unknown' } },
+    { ...result, assessment_context_binding: { ...result.assessment_context_binding, digest: 'f'.repeat(63) } },
+    { ...result, assessment_context_binding: { ...result.assessment_context_binding, extra: true } },
+  ]) assert.equal(normativeResolvedValid(terminal), false);
+  const unknown = resolvePracticalGuidance(input(obligation('o-unknown-contract', 'knowledge_question', 'unmapped_subject')));
+  assert.equal(normativeResolvedValid({ ...unknown, assessment_context_binding: result.assessment_context_binding }), false);
 });
 
 test('Ticket 63 gives truthful unknown outcomes for unmapped and missing reviewed knowledge, and localizes only store unavailability', () => {

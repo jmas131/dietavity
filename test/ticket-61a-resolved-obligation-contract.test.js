@@ -8,6 +8,7 @@ const { createFactResolver, resolveFactFromFacts } = require('../lib/sales-engin
 const { createPolicyResolver } = require('../lib/sales-engine-v2/policy-resolver');
 const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 const { normativeResolvedValid, sourceValid } = require('../lib/sales-engine-v2/resolved-obligation-validator');
+const { deriveGuidanceAssessmentContextBinding } = require('../lib/sales-engine-v2/guidance-assessment-context');
 
 const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs', 'contracts', 'sales-engine-v2-contract.schema.json'), 'utf8'));
 const facts = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'sales-engine-v2', 'product-facts.json'), 'utf8')).facts;
@@ -48,6 +49,11 @@ function resolvedContractValid(value) {
 
 function resolved(authority, source, resolution_status = 'resolved') {
   return { obligation_id: 'o-1', resolution_status, authority, source, allowed_claims: [], prohibited_claims: [], customer_uncertainty_required: authority === 'bounded_unknown' };
+}
+
+function generatedBinding(result) {
+  const obligation = { id: result.obligation_id, category: 'practical_guidance', current_turn_evidence: 'contenido', confidence: 'high', ambiguous: false, practical_task: { task_kind: 'organization', bounded_inputs: [{ id: 'bi-1', input_type: 'preparation_step', value: 'contenido', origin: 'current_turn' }] } };
+  return { ...result, assessment_context_binding: deriveGuidanceAssessmentContextBinding({ obligation, terminalResult: result, locale: 'es-MX' }) };
 }
 
 function deferred(next_stage) {
@@ -114,7 +120,7 @@ test('Ticket 65A shared source validation matches all six central provenance cla
   for (const value of [{ ...conversational, model_run_id: '' }, (() => { const { model_run_id, ...rest } = conversational; return rest; })(), (() => { const { generation_stage, ...rest } = conversational; return rest; })(), { ...conversational, generation_stage: 'bounded_reasoning' }, { ...conversational, generation_stage: 'other' }, { ...conversational, extra: true }]) assert.equal(sourceValid(value, 'conversational_generation'), false, JSON.stringify(value));
   assert.equal(normativeResolvedValid({ ...resolved('conversational_generation', conversational), llm_reasoning_permitted: false }), true);
   assert.equal(normativeResolvedValid({ ...resolved('conversational_generation', generated), llm_reasoning_permitted: false }), false);
-  const generatedResolved = { ...resolved('generated_guidance', generated), llm_reasoning_permitted: true, guidance_payload: { semantic_safety_validation_required: true, units: [{ unit_type: 'organization', content: 'Contenido generado.', bounded_input_ids: ['bi-1'] }] } };
+  const generatedResolved = generatedBinding({ ...resolved('generated_guidance', generated), llm_reasoning_permitted: true, guidance_payload: { semantic_safety_validation_required: true, units: [{ unit_type: 'organization', content: 'Contenido generado.', bounded_input_ids: ['bi-1'] }] } });
   assert.equal(normativeResolvedValid(generatedResolved), true);
   assert.equal(normativeResolvedValid({ ...generatedResolved, source: conversational }), false);
   assert.match(JSON.stringify(schema.$defs.source.allOf), /conversational_generation/);

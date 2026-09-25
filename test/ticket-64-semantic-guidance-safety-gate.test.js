@@ -6,12 +6,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { assessSemanticGuidance, assessmentInput } = require('../lib/sales-engine-v2/semantic-guidance-safety-gate');
 const { semanticGuidanceGateValid } = require('../lib/sales-engine-v2/semantic-guidance-safety-validator');
+const { deriveGuidanceAssessmentContextBinding } = require('../lib/sales-engine-v2/guidance-assessment-context');
 
 const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs/contracts/sales-engine-v2-contract.schema.json'), 'utf8'));
 function origin(taskKind = 'organization', id = 'o-64') { return { id, category: 'practical_guidance', subject: 'cooking_order', current_turn_evidence: 'cortar verduras y hornear pollo', confidence: 'high', ambiguous: false, practical_task: { task_kind: taskKind, bounded_inputs: taskKind === 'knowledge_question' ? [] : [{ id: 'bi-1', input_type: 'preparation_step', value: 'cortar verduras', origin: 'current_turn' }, { id: 'bi-2', input_type: 'preparation_step', value: 'hornear pollo', origin: 'current_turn' }] } }; }
 function generated(taskKind = 'organization', id = 'o-64', content = 'Primero corta las verduras y después hornea el pollo.') { return { obligation_id: id, resolution_status: 'resolved', authority: 'generated_guidance', source: { type: 'generated_guidance', id: 'practical-guidance-resolver', version: 'ticket-63-v1', model_run_id: 'reasoning-run', generation_stage: 'bounded_reasoning' }, allowed_claims: [], prohibited_claims: [], customer_uncertainty_required: false, llm_reasoning_permitted: true, guidance_payload: { semantic_safety_validation_required: true, units: [{ unit_type: taskKind, content, bounded_input_ids: ['bi-1', 'bi-2'] }] } }; }
 function reviewed(id = 'o-64') { return { obligation_id: id, resolution_status: 'resolved', authority: 'reviewed_knowledge', source: { type: 'reviewed_knowledge', id: 'practical-guidance-resolver', version: 'ticket-63-v1' }, allowed_claims: [], prohibited_claims: [], customer_uncertainty_required: false, llm_reasoning_permitted: false, retrieved_knowledge_references: [{ type: 'reviewed_knowledge', id: 'rk-1', version: '1' }], guidance_payload: { semantic_safety_validation_required: true, units: [{ unit_type: 'reviewed_information', content: 'Guarda la comida en un recipiente limpio y cerrado.', reviewed_knowledge_reference_ids: ['rk-1'] }] } }; }
-function request(overrides = {}) { return { originatingObligation: origin(), terminalResult: generated(), locale: 'es-MX', reviewedKnowledgeItems: [], assessorRunId: 'assessor-run-64', semanticAssessor() { return { findings: [] }; }, ...overrides }; }
+function request(overrides = {}) {
+  const value = { originatingObligation: origin(), terminalResult: generated(), locale: 'es-MX', reviewedKnowledgeItems: [], assessorRunId: 'assessor-run-64', semanticAssessor() { return { findings: [] }; }, ...overrides };
+  try {
+    if (['reviewed_knowledge', 'generated_guidance'].includes(value.terminalResult.authority)) value.terminalResult = { ...value.terminalResult, assessment_context_binding: deriveGuidanceAssessmentContextBinding({ obligation: value.originatingObligation, terminalResult: value.terminalResult, locale: value.locale, reviewedKnowledgeItems: value.reviewedKnowledgeItems }) };
+  } catch { /* Intentionally malformed terminal fixtures remain malformed. */ }
+  return value;
+}
 function finding(code) { return { findings: [{ code, unit_index: 0, rationale: 'Hallazgo estructurado de prueba.' }] }; }
 function gate({ status = 'cleared', findings = [], outcome = 'completed', failureCode } = {}) { return { obligation_id: 'o-64', gate_id: 'semantic-guidance-safety-gate', gate_version: 'ticket-64-v1', gate_status: status, findings, assessment_source: { assessment_stage: 'semantic_guidance_safety', assessor_run_id: 'assessor-run-64', outcome, ...(failureCode ? { failure_code: failureCode } : {}) } }; }
 function gateFinding(severity) { return { code: severity === 'blocking' ? 'commercial_claim' : 'unsupported_external_fact', severity, unit_index: 0, rationale: 'Hallazgo estructurado de prueba.' }; }
@@ -110,6 +117,15 @@ test('Ticket 64 aligns reviewed items exactly and minimizes assessor input', () 
   const reviewedInput = assessmentInput({ ...request({ originatingObligation: origin('knowledge_question'), terminalResult: reviewed(), reviewedKnowledgeItems: [item] }), reviewedKnowledgeItems: [item] });
   assert.deepEqual(Object.keys(reviewedInput).sort(), ['authority', 'guidance_units', 'locale', 'obligation_id', 'reviewed_knowledge_items', 'source', 'subject', 'task_kind']);
   assert.deepEqual(reviewedInput.reviewed_knowledge_items, [item]);
+});
+
+test('Ticket 63A refuses to assess a terminal result when its durable context binding no longer matches', () => {
+  const baseline = request();
+  assert.throws(() => assessSemanticGuidance({ ...baseline, originatingObligation: { ...baseline.originatingObligation, subject: 'different_subject' } }), error => error.code === 'SEMANTIC_GUIDANCE_CONTEXT_BINDING_MISMATCH');
+  assert.throws(() => assessSemanticGuidance({ ...baseline, terminalResult: { ...baseline.terminalResult, guidance_payload: { ...baseline.terminalResult.guidance_payload, units: [{ ...baseline.terminalResult.guidance_payload.units[0], content: 'Texto modificado.' }] } } }), error => error.code === 'SEMANTIC_GUIDANCE_CONTEXT_BINDING_MISMATCH');
+  const item = { id: 'rk-1', version: 1, content: 'Guarda la comida en un recipiente limpio y cerrado.' };
+  const reviewedRequest = request({ originatingObligation: origin('knowledge_question'), terminalResult: reviewed(), reviewedKnowledgeItems: [item] });
+  assert.throws(() => assessSemanticGuidance({ ...reviewedRequest, reviewedKnowledgeItems: [{ ...item, content: 'Contenido modificado.' }] }), error => error.code === 'SEMANTIC_GUIDANCE_CONTEXT_BINDING_MISMATCH');
 });
 
 test('Ticket 64 never mutates source artifacts and structurally bad Ticket 63 prose is not self-cleared', () => {
