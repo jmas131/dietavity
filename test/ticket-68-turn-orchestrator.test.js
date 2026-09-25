@@ -6,7 +6,7 @@ const { createConversationContext } = require('../lib/sales-engine-v2/memory-ada
 const { createFactResolver } = require('../lib/sales-engine-v2/fact-resolver');
 const { createPolicyResolver } = require('../lib/sales-engine-v2/policy-resolver');
 const { createReviewedKnowledgeStore } = require('../lib/sales-engine-v2/reviewed-knowledge-store');
-const { runSalesEngineV2Turn, turnResultValid, FAILURE_STAGES, executeLaunchActions, launchCardinalitySupported } = require('../lib/sales-engine-v2/turn-orchestrator');
+const { artifactOutputIntentCompanion, runSalesEngineV2Turn, turnResultValid, FAILURE_STAGES, executeLaunchActions, launchCardinalitySupported } = require('../lib/sales-engine-v2/turn-orchestrator');
 const facts = require('../config/sales-engine-v2/product-facts.json');
 const membership = require('../config/sales-engine-v2/fact-membership.json');
 const policies = require('../config/sales-engine-v2/policies.json');
@@ -113,6 +113,16 @@ test('Ticket 68 routes draft and reproduction operations through Ticket 64A with
     const value = await runSalesEngineV2Turn({ conversationContext: context(text, operation === 'draft' ? [] : [source]), dependencies: deps, runContext: fullRunContext });
     assert.equal(value.status, 'response_eligible'); if (findings.length) assert.equal(seen.obligation_outcomes[0].artifacts.length, 0);
   }
+});
+
+test('Ticket 68 privately preserves pre-composition artifact output intent only for an eligible response', async () => {
+  const obligations = [{ category: 'conversational_task', subject: 'draft', current_turn_evidence: 'un mensaje', confidence: 'high', ambiguous: false, attributes: { task_operation: 'draft' }, conversational_task: { operation: 'draft', artifact_ids: [], current_turn_constraints: [], current_turn_inputs: [{ input_type: 'draft_specification', value: 'un mensaje' }] } }];
+  const value = await runSalesEngineV2Turn({ conversationContext: context('un mensaje'), dependencies: canonicalDependencies(obligations), runContext: fullRunContext });
+  assert.equal(value.status, 'response_eligible'); assert.equal(Object.hasOwn(value, 'artifact_output_intents'), false);
+  const companion = artifactOutputIntentCompanion(value); assert.equal(companion.length, 1); assert.match(companion[0].artifact_id, /^ca-[0-9a-f]{64}$/);
+  companion[0].artifact_id = 'ca-forged'; assert.notEqual(artifactOutputIntentCompanion(value)[0].artifact_id, 'ca-forged');
+  const blocked = await runSalesEngineV2Turn({ conversationContext: context('un mensaje'), dependencies: canonicalDependencies(obligations, { finalFindings: [{ code: 'other_semantic_risk', evidence: { excerpt: 'Gracias.', rationale: 'blocked' } }] }), runContext: fullRunContext });
+  assert.equal(blocked.status, 'response_ineligible'); assert.equal(artifactOutputIntentCompanion(blocked), null);
 });
 
 test('Ticket 68 executes one canonical commercial action before composition and reuses its durable result', async () => {

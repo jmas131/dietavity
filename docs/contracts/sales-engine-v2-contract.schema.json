@@ -249,6 +249,12 @@
         {"properties":{"gate_status":{"const":"indeterminate"},"findings":{"maxItems":0},"assessment_source":{"properties":{"outcome":{"const":"unavailable"},"failure_code":{"const":"FINAL_RESPONSE_ASSESSOR_UNAVAILABLE"}}}}}
       ]
     },
+    "ConversationalArtifactOutputIntent": {
+      "description":"Ticket 65B.1 prospective, application-side persistence identity. It contains no customer text and establishes neither persistence nor delivery.",
+      "type":"object","required":["contract_version","artifact_id","generation_task_id","artifact_type","generation_operation","ordered_lineage_artifact_ids","identity_binding"],"additionalProperties":false,
+      "properties":{"contract_version":{"const":"ticket-65b1-v1"},"artifact_id":{"type":"string","pattern":"^ca-[0-9a-f]{64}$"},"generation_task_id":{"type":"string","pattern":"^cgt-[0-9a-f]{64}$"},"artifact_type":{"enum":["draft","summary"]},"generation_operation":{"enum":["draft","transform","summarize"]},"ordered_lineage_artifact_ids":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^ca-[A-Za-z0-9._-]+$"}},"identity_binding":{"type":"string","pattern":"^caob-[0-9a-f]{64}$"}},
+      "allOf":[{"if":{"properties":{"generation_operation":{"const":"draft"}}},"then":{"properties":{"artifact_type":{"const":"draft"},"ordered_lineage_artifact_ids":{"maxItems":0}}}},{"if":{"properties":{"generation_operation":{"const":"transform"}}},"then":{"properties":{"artifact_type":{"const":"draft"},"ordered_lineage_artifact_ids":{"minItems":1}}}},{"if":{"properties":{"generation_operation":{"const":"summarize"}}},"then":{"properties":{"artifact_type":{"const":"summary"},"ordered_lineage_artifact_ids":{"minItems":1}}}}]
+    },
     "FinalComposerInput": {
       "description":"Ticket 65E's final bounded semantic envelope for Ticket 66. Cross-stage gate, action-result, and policy-mapping alignment is enforced by the executable builder/validator.",
       "type":"object","required":["composer_input_version","contract_version","context_id","locale","obligation_ids","obligation_outcomes","prohibited_claims","prohibited_actions","question_budget","completion_requirement"],"additionalProperties":false,
@@ -413,6 +419,7 @@
         "authorized_actions":{"type":"array","items":{"$ref":"#/$defs/authorizedAction"}}, "prohibited_claims":{"type":"array","items":{"type":"object","required":["obligation_id","claim"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"claim":{"type":"string","minLength":1}}}}, "prohibited_actions":{"type":"array","items":{"enum":["create_checkout","provide_checkout_destination","provide_holding_page_destination","schedule_reminder","persist_commercial_transition","update_conversation_state"]},"uniqueItems":true}, "question_budget":{"enum":[0,1]}, "completion_requirement":{"const":"cover_all_required_items"}
       }
     },
+    "ConversationalArtifactOutputIntent": {"$ref":"#/$defs/ConversationalArtifactOutputIntent"},
     "FinalComposerInput": {"$ref":"#/$defs/FinalComposerInput"},
     "ComposerResult": {"$ref":"#/$defs/ComposerResult"},
     "ComposerFailure": {"$ref":"#/$defs/ComposerFailure"},
