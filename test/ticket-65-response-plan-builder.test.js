@@ -100,6 +100,25 @@ test('Ticket 65A.0 gives Ticket 63 practical bounded_unknown its own terminal un
   assert.equal(responsePlanValid({ ...plan, bounded_uncertainties: [{ ...plan.bounded_uncertainties[0], reason: 'unknown_reason' }, plan.bounded_uncertainties[1]] }), false);
 });
 
+test('Ticket 65A.1 completes every practical-guidance obligation before the final plan', () => {
+  const practical = obligation('o-practical-final', 'practical_guidance');
+  const unknown = base('o-practical-final', { resolution_status: 'unknown', authority: 'bounded_unknown', source: null, customer_uncertainty_required: true });
+  const failure = base('o-practical-final', { resolution_status: 'failed', authority: 'resolver_failure', source: null });
+  for (const [terminal, handling, reason] of [[unknown, 'express_uncertainty', 'practical_guidance_unknown'], [failure, 'resolution_unavailable', 'resolver_failure']]) {
+    const plan = buildResponsePlan(input([practical], [terminal]));
+    assert.deepEqual(plan.required_coverage, [{ obligation_id: 'o-practical-final', handling }]);
+    assert.deepEqual(plan.bounded_uncertainties, [{ obligation_id: 'o-practical-final', reason, prohibited_claims: [] }]);
+    assert.deepEqual(plan.permitted_guidance, []);
+    assert.deepEqual(plan.deferred_obligations, []);
+  }
+  const intermediate = base('o-practical-final', { resolution_status: 'deferred', authority: null, source: null, next_stage: 'reviewed_knowledge_or_reasoning' });
+  assert.throws(() => buildResponsePlan(input([practical], [intermediate])), error => error.code === 'RESPONSE_PLAN_PRACTICAL_GUIDANCE_INCOMPLETE');
+  assert.throws(() => buildResponsePlan(input([practical], [unknown], [gate('o-practical-final')])), error => error.code === 'RESPONSE_PLAN_GATE_ALIGNMENT_INVALID');
+  const terminal = guidance('o-practical-final');
+  assert.throws(() => buildResponsePlan(input([practical], [terminal])), error => error.code === 'RESPONSE_PLAN_GATE_ALIGNMENT_INVALID');
+  assert.throws(() => buildResponsePlan(input([practical], [terminal], [gate(terminal), gate(terminal)])), error => error.code === 'RESPONSE_PLAN_GATE_IDS_DUPLICATE');
+});
+
 test('Ticket 65 validates one-to-one identity and semantic-gate alignment fail closed', () => {
   const raw = input([obligation('o-1')], [fact('o-1')]);
   for (const bad of [{ ...raw, obligations: [obligation('o-1'), obligation('o-1')] }, { ...raw, resolvedObligations: [] }, { ...raw, resolvedObligations: [fact('o-other')] }, { ...raw, semanticGuidanceGates: [gate('o-1')] }, input([obligation('o-guide', 'practical_guidance')], [guidance('o-guide')])]) assert.throws(() => buildResponsePlan(bad), error => error instanceof ResponsePlanError);
@@ -131,10 +150,13 @@ test('Ticket 65 central schema removes unsafe placeholder fields and closes plan
   assert.deepEqual(definition.properties.question_budget.enum, [0, 1]);
   assert.equal(definition.properties.permitted_guidance.items.properties.semantic_gate.properties.gate_version.const, 'ticket-64b-v1');
   assert.equal(definition.properties.permitted_guidance.items.properties.semantic_gate.properties.gate_status.const, 'cleared');
+  assert.equal(definition.properties.required_coverage.items.properties.handling.enum.includes('deferred_practical_guidance'), false);
+  assert.equal(definition.properties.deferred_obligations.items.properties.next_stage.enum.includes('reviewed_knowledge_or_reasoning'), false);
   assert.deepEqual(definition.properties.conversational_generation.items.properties.operation.enum, ['draft', 'transform', 'summarize', 'show']);
   assert.deepEqual(definition.properties.commercial_semantics.items.properties.commercial_intent.enum, ['checkout_offer', 'holding_page_offer']);
   assert.equal(definition.properties.commercial_semantics.items.properties.semantics_version.const, 'ticket-65c-v1');
   assert.equal(definition.properties.prohibited_actions.uniqueItems, true);
+  assert.equal(responsePlanValid({ ...buildResponsePlan(input([obligation('o-social', 'social_acknowledgement')], [base('o-social', { resolution_status: 'deferred', authority: null, source: null, next_stage: 'response_composition' })])), required_coverage: [{ obligation_id: 'o-social', handling: 'deferred_practical_guidance' }] }), false);
 });
 
 test('Ticket 65 schema conditionally couples permitted-guidance authority, provenance, and reviewed references', () => {
