@@ -216,6 +216,25 @@
         {"if":{"properties":{"directive":{"const":"requested_content_cannot_be_reproduced_now"}}},"then":{"properties":{"allowed_claims":{"const":["requested_content_unavailable_in_current_response"]},"prohibited_claims":{"const":["withheld_artifact_content","indeterminate_reason_or_failure_claim","artifact_safety_or_policy_claim","product_or_provider_claim","permanent_or_future_availability_claim","retry_or_future_success_claim"]}}}}
       ]
     },
+    "ComposerModelProvenance": {
+      "type":"object","required":["type","generation_stage","model_run_id"],"additionalProperties":false,
+      "properties":{"type":{"const":"conversational_generation"},"generation_stage":{"const":"composer"},"model_run_id":{"type":"string","minLength":1}}
+    },
+    "ComposerResult": {
+      "description":"Ticket 66 candidate customer language. Runtime validation additionally compares coverage and destination evidence against the excluded FinalComposerInput. Natural-language semantic entailment is a Ticket 67 responsibility.",
+      "type":"object","required":["composer_result_version","contract_version","context_id","locale","response_text","covered_obligation_ids","expressed_destination_refs","model_provenance"],"additionalProperties":false,
+      "properties":{
+        "composer_result_version":{"const":"ticket-66-v1"},"contract_version":{"const":"2.0"},"context_id":{"type":"string","minLength":1},"locale":{"const":"es-MX"},"response_text":{"type":"string","minLength":1},
+        "covered_obligation_ids":{"type":"array","items":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"uniqueItems":true},
+        "expressed_destination_refs":{"type":"array","items":{"type":"object","required":["obligation_id","action_id","kind","url"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"action_id":{"type":"string","pattern":"^act-[0-9a-f]{64}$"},"kind":{"enum":["checkout","holding_page"]},"url":{"type":"string","format":"uri"}}}},
+        "model_provenance":{"$ref":"#/$defs/ComposerModelProvenance"}
+      }
+    },
+    "ComposerFailure": {
+      "description":"Ticket 66 bounded adapter/model availability failure. It contains no customer text or raw error detail.",
+      "type":"object","required":["composer_failure_version","contract_version","context_id","locale","failure_code","model_provenance"],"additionalProperties":false,
+      "properties":{"composer_failure_version":{"const":"ticket-66-v1"},"contract_version":{"const":"2.0"},"context_id":{"type":"string","minLength":1},"locale":{"const":"es-MX"},"failure_code":{"const":"COMPOSER_MODEL_UNAVAILABLE"},"model_provenance":{"$ref":"#/$defs/ComposerModelProvenance"}}
+    },
     "FinalComposerInput": {
       "description":"Ticket 65E's final bounded semantic envelope for Ticket 66. Cross-stage gate, action-result, and policy-mapping alignment is enforced by the executable builder/validator.",
       "type":"object","required":["composer_input_version","contract_version","context_id","locale","obligation_ids","obligation_outcomes","prohibited_claims","prohibited_actions","question_budget","completion_requirement"],"additionalProperties":false,
@@ -363,7 +382,9 @@
         "authorized_actions":{"type":"array","items":{"$ref":"#/$defs/authorizedAction"}}, "prohibited_claims":{"type":"array","items":{"type":"object","required":["obligation_id","claim"],"additionalProperties":false,"properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"claim":{"type":"string","minLength":1}}}}, "prohibited_actions":{"type":"array","items":{"enum":["create_checkout","provide_checkout_destination","provide_holding_page_destination","schedule_reminder","persist_commercial_transition","update_conversation_state"]},"uniqueItems":true}, "question_budget":{"enum":[0,1]}, "completion_requirement":{"const":"cover_all_required_items"}
       }
     },
-    "FinalComposerInput": {"$ref":"#/$defs/FinalComposerInput"}
+    "FinalComposerInput": {"$ref":"#/$defs/FinalComposerInput"},
+    "ComposerResult": {"$ref":"#/$defs/ComposerResult"},
+    "ComposerFailure": {"$ref":"#/$defs/ComposerFailure"}
   },
   "additionalProperties": false
 }
