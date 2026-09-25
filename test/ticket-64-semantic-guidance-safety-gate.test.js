@@ -5,8 +5,9 @@ const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { assessSemanticGuidance, assessmentInput } = require('../lib/sales-engine-v2/semantic-guidance-safety-gate');
-const { semanticGuidanceGateValid } = require('../lib/sales-engine-v2/semantic-guidance-safety-validator');
+const { gateMatchesTerminalResult, semanticGuidanceGateValid } = require('../lib/sales-engine-v2/semantic-guidance-safety-validator');
 const { deriveGuidanceAssessmentContextBinding } = require('../lib/sales-engine-v2/guidance-assessment-context');
+const { deriveTerminalGuidanceBinding } = require('../lib/sales-engine-v2/terminal-guidance-binding');
 
 const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs/contracts/sales-engine-v2-contract.schema.json'), 'utf8'));
 function origin(taskKind = 'organization', id = 'o-64') { return { id, category: 'practical_guidance', subject: 'cooking_order', current_turn_evidence: 'cortar verduras y hornear pollo', confidence: 'high', ambiguous: false, practical_task: { task_kind: taskKind, bounded_inputs: taskKind === 'knowledge_question' ? [] : [{ id: 'bi-1', input_type: 'preparation_step', value: 'cortar verduras', origin: 'current_turn' }, { id: 'bi-2', input_type: 'preparation_step', value: 'hornear pollo', origin: 'current_turn' }] } }; }
@@ -20,7 +21,7 @@ function request(overrides = {}) {
   return value;
 }
 function finding(code) { return { findings: [{ code, unit_index: 0, rationale: 'Hallazgo estructurado de prueba.' }] }; }
-function gate({ status = 'cleared', findings = [], outcome = 'completed', failureCode } = {}) { return { obligation_id: 'o-64', gate_id: 'semantic-guidance-safety-gate', gate_version: 'ticket-64-v1', gate_status: status, findings, assessment_source: { assessment_stage: 'semantic_guidance_safety', assessor_run_id: 'assessor-run-64', outcome, ...(failureCode ? { failure_code: failureCode } : {}) } }; }
+function gate({ status = 'cleared', findings = [], outcome = 'completed', failureCode, terminalResult = request().terminalResult } = {}) { return { obligation_id: terminalResult.obligation_id, gate_id: 'semantic-guidance-safety-gate', gate_version: 'ticket-64b-v1', terminal_guidance_binding: deriveTerminalGuidanceBinding(terminalResult), gate_status: status, findings, assessment_source: { assessment_stage: 'semantic_guidance_safety', assessor_run_id: 'assessor-run-64', outcome, ...(failureCode ? { failure_code: failureCode } : {}) } }; }
 function gateFinding(severity) { return { code: severity === 'blocking' ? 'commercial_claim' : 'unsupported_external_fact', severity, unit_index: 0, rationale: 'Hallazgo estructurado de prueba.' }; }
 
 test('Ticket 64 central schema and executable artifact close the semantic gate contract', () => {
@@ -37,6 +38,8 @@ test('Ticket 64 central schema and executable artifact close the semantic gate c
   assert.equal(schema.$defs.semanticGuidanceGate.oneOf[2].properties.findings.contains.properties.severity.const, 'review_required');
   assert.equal(schema.$defs.semanticGuidanceGate.oneOf[2].not.properties.findings.contains.properties.severity.const, 'blocking');
   assert.equal(schema.$defs.semanticGuidanceGate.oneOf[3].properties.findings.maxItems, 0);
+  assert.equal(schema.$defs.semanticGuidanceGate.properties.gate_version.const, 'ticket-64b-v1');
+  assert.equal(schema.$defs.semanticGuidanceGate.properties.terminal_guidance_binding.properties.version.const, 'ticket-64b-v1');
   const result = assessSemanticGuidance(request());
   assert.equal(result.gate_status, 'cleared');
   assert.equal(semanticGuidanceGateValid(result), true);
@@ -126,6 +129,43 @@ test('Ticket 63A refuses to assess a terminal result when its durable context bi
   const item = { id: 'rk-1', version: 1, content: 'Guarda la comida en un recipiente limpio y cerrado.' };
   const reviewedRequest = request({ originatingObligation: origin('knowledge_question'), terminalResult: reviewed(), reviewedKnowledgeItems: [item] });
   assert.throws(() => assessSemanticGuidance({ ...reviewedRequest, reviewedKnowledgeItems: [{ ...item, content: 'Contenido modificado.' }] }), error => error.code === 'SEMANTIC_GUIDANCE_CONTEXT_BINDING_MISMATCH');
+});
+
+test('Ticket 64B binds every gate outcome to the exact terminal guidance result', () => {
+  const value = request();
+  const cleared = assessSemanticGuidance(value);
+  const blocked = assessSemanticGuidance({ ...value, semanticAssessor() { return finding('commercial_claim'); } });
+  const indeterminate = assessSemanticGuidance({ ...value, semanticAssessor() { return finding('unsupported_external_fact'); } });
+  const unavailable = assessSemanticGuidance({ ...value, semanticAssessor() { const error = new Error('down'); error.code = 'SEMANTIC_ASSESSOR_UNAVAILABLE'; throw error; } });
+  for (const item of [cleared, blocked, indeterminate, unavailable]) {
+    assert.equal(semanticGuidanceGateValid(item), true);
+    assert.equal(gateMatchesTerminalResult(item, value.terminalResult), true);
+  }
+  const changed = { ...value.terminalResult, guidance_payload: { ...value.terminalResult.guidance_payload, units: [{ ...value.terminalResult.guidance_payload.units[0], content: 'Texto sustituido.' }] } };
+  assert.equal(gateMatchesTerminalResult(cleared, changed), false);
+  const unit = value.terminalResult.guidance_payload.units[0];
+  const twoUnits = { ...value.terminalResult, guidance_payload: { ...value.terminalResult.guidance_payload, units: [unit, { ...unit, content: 'Segundo paso.', bounded_input_ids: ['bi-2'] }] } };
+  const baselineBinding = deriveTerminalGuidanceBinding(twoUnits);
+  for (const terminal of [
+    { ...twoUnits, guidance_payload: { ...twoUnits.guidance_payload, units: [...twoUnits.guidance_payload.units].reverse() } },
+    { ...twoUnits, guidance_payload: { ...twoUnits.guidance_payload, units: [{ ...unit, unit_type: 'transformation' }, twoUnits.guidance_payload.units[1]] } },
+    { ...twoUnits, guidance_payload: { ...twoUnits.guidance_payload, units: [{ ...unit, bounded_input_ids: ['bi-2'] }, twoUnits.guidance_payload.units[1]] } },
+    { ...twoUnits, source: { ...twoUnits.source, id: 'other-resolver' } },
+    { ...twoUnits, source: { ...twoUnits.source, version: '2' } },
+    { ...twoUnits, source: { ...twoUnits.source, model_run_id: 'other-run' } },
+    { ...twoUnits, assessment_context_binding: { ...twoUnits.assessment_context_binding, digest: 'a'.repeat(64) } },
+  ]) assert.notDeepEqual(deriveTerminalGuidanceBinding(terminal), baselineBinding);
+  assert.equal(gateMatchesTerminalResult({ ...cleared, obligation_id: 'o-other' }, value.terminalResult), false);
+  for (const forged of [
+    { ...cleared, terminal_guidance_binding: { ...cleared.terminal_guidance_binding, version: 'unknown' } },
+    { ...cleared, terminal_guidance_binding: { ...cleared.terminal_guidance_binding, digest: 'f'.repeat(63) } },
+    (() => { const { terminal_guidance_binding, ...legacy } = cleared; return legacy; })(),
+  ]) assert.equal(semanticGuidanceGateValid(forged), false);
+  const reviewedItem = { id: 'rk-1', version: 1, content: 'Guarda la comida en un recipiente limpio y cerrado.' };
+  const reviewedValue = request({ originatingObligation: origin('knowledge_question'), terminalResult: reviewed(), reviewedKnowledgeItems: [reviewedItem] });
+  const reviewedGate = assessSemanticGuidance(reviewedValue);
+  assert.equal(gateMatchesTerminalResult(reviewedGate, reviewedValue.terminalResult), true);
+  assert.notDeepEqual(deriveTerminalGuidanceBinding({ ...reviewedValue.terminalResult, retrieved_knowledge_references: [{ ...reviewedValue.terminalResult.retrieved_knowledge_references[0], version: '2' }] }), deriveTerminalGuidanceBinding(reviewedValue.terminalResult));
 });
 
 test('Ticket 64 never mutates source artifacts and structurally bad Ticket 63 prose is not self-cleared', () => {

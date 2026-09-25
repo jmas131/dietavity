@@ -108,8 +108,8 @@
       "allOf":[{"if":{"properties":{"outcome":{"const":"unavailable"}}},"then":{"required":["failure_code"]}},{"if":{"properties":{"outcome":{"const":"completed"}}},"then":{"not":{"required":["failure_code"]}}}]
     },
     "semanticGuidanceGate": {
-      "type":"object", "required":["obligation_id","gate_id","gate_version","gate_status","findings","assessment_source"], "additionalProperties":false,
-      "properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"gate_id":{"const":"semantic-guidance-safety-gate"},"gate_version":{"const":"ticket-64-v1"},"gate_status":{"enum":["cleared","blocked","indeterminate"]},"findings":{"type":"array","items":{"$ref":"#/$defs/semanticGuidanceFinding"}},"assessment_source":{"$ref":"#/$defs/semanticGuidanceAssessmentSource"}},
+      "type":"object", "required":["obligation_id","gate_id","gate_version","terminal_guidance_binding","gate_status","findings","assessment_source"], "additionalProperties":false,
+      "properties":{"obligation_id":{"type":"string","pattern":"^o-[A-Za-z0-9._-]+$"},"gate_id":{"const":"semantic-guidance-safety-gate"},"gate_version":{"const":"ticket-64b-v1"},"terminal_guidance_binding":{"type":"object","required":["version","digest"],"additionalProperties":false,"properties":{"version":{"const":"ticket-64b-v1"},"digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}},"gate_status":{"enum":["cleared","blocked","indeterminate"]},"findings":{"type":"array","items":{"$ref":"#/$defs/semanticGuidanceFinding"}},"assessment_source":{"$ref":"#/$defs/semanticGuidanceAssessmentSource"}},
       "oneOf":[
         {"title":"completed assessment with no findings clears","properties":{"gate_status":{"const":"cleared"},"findings":{"maxItems":0},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}}},
         {"title":"completed assessment with a blocking finding blocks","properties":{"gate_status":{"const":"blocked"},"findings":{"contains":{"properties":{"severity":{"const":"blocking"}}}},"assessment_source":{"properties":{"outcome":{"const":"completed"}}}}},
@@ -278,7 +278,7 @@
               ]},
               "guidance_payload": {"$ref": "#/$defs/guidancePayload"},
               "retrieved_knowledge_references": {"type": "array", "items": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"type": {"const": "reviewed_knowledge"}}}]}},
-              "semantic_gate": {"type": "object", "required": ["gate_id", "gate_version", "gate_status"], "additionalProperties": false, "properties": {"gate_id": {"const": "semantic-guidance-safety-gate"}, "gate_version": {"const": "ticket-64-v1"}, "gate_status": {"const": "cleared"}}}
+              "semantic_gate": {"type": "object", "required": ["gate_id", "gate_version", "gate_status"], "additionalProperties": false, "properties": {"gate_id": {"const": "semantic-guidance-safety-gate"}, "gate_version": {"const": "ticket-64b-v1"}, "gate_status": {"const": "cleared"}}}
             },
             "allOf": [
               {"if": {"properties": {"authority": {"const": "reviewed_knowledge"}}}, "then": {"required": ["retrieved_knowledge_references"], "properties": {"source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"type": {"const": "reviewed_knowledge"}}}]}, "retrieved_knowledge_references": {"minItems": 1}}}},

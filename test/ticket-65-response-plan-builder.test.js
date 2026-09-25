@@ -9,6 +9,7 @@ const { UNCERTAINTY_REASONS, responsePlanValid } = require('../lib/sales-engine-
 const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 const { deriveAuthorizedActionIdentity } = require('../lib/sales-engine-v2/authorized-action-identity');
 const { deriveGuidanceAssessmentContextBinding } = require('../lib/sales-engine-v2/guidance-assessment-context');
+const { deriveTerminalGuidanceBinding } = require('../lib/sales-engine-v2/terminal-guidance-binding');
 
 const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs/contracts/sales-engine-v2-contract.schema.json'), 'utf8'));
 const at = '2026-09-23T18:00:00.000Z';
@@ -25,7 +26,7 @@ function guidance(id, authority = 'generated_guidance') {
   const sourceObligation = obligation(id, 'practical_guidance', authority === 'reviewed_knowledge' ? { practical_task: { task_kind: 'knowledge_question', bounded_inputs: [] } } : {});
   return { ...result, assessment_context_binding: deriveGuidanceAssessmentContextBinding({ obligation: sourceObligation, terminalResult: result, locale: 'es-MX', reviewedKnowledgeItems: authority === 'reviewed_knowledge' ? [{ id: 'rk-65', version: '1', content: 'Contenido revisado.' }] : [] }) };
 }
-function gate(id, status = 'cleared') { const finding = status === 'blocked' ? { code: 'commercial_claim', severity: 'blocking', unit_index: 0, rationale: 'riesgo' } : status === 'indeterminate' ? { code: 'unsupported_external_fact', severity: 'review_required', unit_index: 0, rationale: 'revisión' } : null; return { obligation_id: id, gate_id: 'semantic-guidance-safety-gate', gate_version: 'ticket-64-v1', gate_status: status, findings: finding ? [finding] : [], assessment_source: { assessment_stage: 'semantic_guidance_safety', assessor_run_id: 'a-65', outcome: 'completed' } }; }
+function gate(value, status = 'cleared') { const terminal = typeof value === 'string' ? guidance(value) : value; const finding = status === 'blocked' ? { code: 'commercial_claim', severity: 'blocking', unit_index: 0, rationale: 'riesgo' } : status === 'indeterminate' ? { code: 'unsupported_external_fact', severity: 'review_required', unit_index: 0, rationale: 'revisión' } : null; return { obligation_id: terminal.obligation_id, gate_id: 'semantic-guidance-safety-gate', gate_version: 'ticket-64b-v1', terminal_guidance_binding: deriveTerminalGuidanceBinding(terminal), gate_status: status, findings: finding ? [finding] : [], assessment_source: { assessment_stage: 'semantic_guidance_safety', assessor_run_id: 'a-65', outcome: 'completed' } }; }
 function input(obligations, resolved, gates = [], authorizedActions = [], contextValue = context()) { return { context: contextValue, obligations, resolvedObligations: resolved, semanticGuidanceGates: gates, authorizedActions }; }
 
 test('Ticket 65 builds a closed, deterministic plan for facts, policy, unknown, clarification, and cleared guidance', () => {
@@ -50,8 +51,20 @@ test('Ticket 65 blocks or bounds unsafe guidance without leaking its natural-lan
   }
 });
 
+test('Ticket 64B prevents Ticket 65 from treating an unbound or substituted same-obligation gate as clearance', () => {
+  const terminal = guidance('o-bound');
+  const raw = input([obligation('o-bound', 'practical_guidance')], [terminal], [gate(terminal)]);
+  assert.equal(buildResponsePlan(raw).permitted_guidance.length, 1);
+  const substituted = { ...terminal, guidance_payload: { ...terminal.guidance_payload, units: [{ ...terminal.guidance_payload.units[0], content: 'Texto sustituido.' }] } };
+  assert.throws(() => buildResponsePlan(input([obligation('o-bound', 'practical_guidance')], [substituted], [gate(terminal)])), error => error.code === 'RESPONSE_PLAN_GATE_TERMINAL_BINDING_INVALID');
+  const { terminal_guidance_binding, ...legacyGate } = gate(terminal);
+  assert.throws(() => buildResponsePlan(input([obligation('o-bound', 'practical_guidance')], [terminal], [legacyGate])), error => error.code === 'RESPONSE_PLAN_GATE_INVALID');
+  for (const status of ['blocked', 'indeterminate']) assert.equal(buildResponsePlan(input([obligation('o-bound', 'practical_guidance')], [terminal], [gate(terminal, status)])).permitted_guidance.length, 0);
+});
+
 test('Ticket 65 permits reviewed guidance, accepts an empty upstream obligation set, and caps multiple clarifications at one question', () => {
-  const reviewedPlan = buildResponsePlan(input([obligation('o-reviewed', 'practical_guidance')], [guidance('o-reviewed', 'reviewed_knowledge')], [gate('o-reviewed')]));
+  const reviewedTerminal = guidance('o-reviewed', 'reviewed_knowledge');
+  const reviewedPlan = buildResponsePlan(input([obligation('o-reviewed', 'practical_guidance')], [reviewedTerminal], [gate(reviewedTerminal)]));
   assert.equal(reviewedPlan.permitted_guidance[0].authority, 'reviewed_knowledge');
   const empty = buildResponsePlan(input([], []));
   assert.deepEqual(empty.obligation_ids, []); assert.equal(empty.question_budget, 0); assert.equal(responsePlanValid(empty), true);
@@ -116,6 +129,7 @@ test('Ticket 65 central schema removes unsafe placeholder fields and closes plan
   assert.equal(Object.hasOwn(definition.properties, 'resolved_obligations'), false);
   assert.equal(Object.hasOwn(definition.properties, 'permitted_reasoning'), false);
   assert.deepEqual(definition.properties.question_budget.enum, [0, 1]);
+  assert.equal(definition.properties.permitted_guidance.items.properties.semantic_gate.properties.gate_version.const, 'ticket-64b-v1');
   assert.equal(definition.properties.permitted_guidance.items.properties.semantic_gate.properties.gate_status.const, 'cleared');
   assert.deepEqual(definition.properties.conversational_generation.items.properties.operation.enum, ['draft', 'transform', 'summarize', 'show']);
   assert.deepEqual(definition.properties.commercial_semantics.items.properties.commercial_intent.enum, ['checkout_offer', 'holding_page_offer']);
@@ -139,7 +153,8 @@ test('Ticket 65 executable validator rejects guidance authority laundering and m
   const generatedPlan = buildResponsePlan(input([obligation('o-generated', 'practical_guidance')], [guidance('o-generated')], [gate('o-generated')]));
   assert.equal(responsePlanValid(generatedPlan), true);
   assert.equal(responsePlanValid({ ...generatedPlan, permitted_guidance: [{ ...generatedPlan.permitted_guidance[0], authority: 'reviewed_knowledge' }] }), false);
-  const reviewedPlan = buildResponsePlan(input([obligation('o-reviewed', 'practical_guidance')], [guidance('o-reviewed', 'reviewed_knowledge')], [gate('o-reviewed')]));
+  const reviewedTerminal = guidance('o-reviewed', 'reviewed_knowledge');
+  const reviewedPlan = buildResponsePlan(input([obligation('o-reviewed', 'practical_guidance')], [reviewedTerminal], [gate(reviewedTerminal)]));
   assert.equal(responsePlanValid(reviewedPlan), true);
   assert.equal(responsePlanValid({ ...reviewedPlan, permitted_guidance: [{ ...reviewedPlan.permitted_guidance[0], authority: 'generated_guidance' }] }), false);
   const { retrieved_knowledge_references, ...withoutReferences } = reviewedPlan.permitted_guidance[0];

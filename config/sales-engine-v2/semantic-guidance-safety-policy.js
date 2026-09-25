@@ -1,7 +1,7 @@
 'use strict';
 
 const GATE_ID = 'semantic-guidance-safety-gate';
-const GATE_VERSION = 'ticket-64-v1';
+const GATE_VERSION = 'ticket-64b-v1';
 const ASSESSMENT_STAGE = 'semantic_guidance_safety';
 const FINDING_SEVERITIES = Object.freeze({
   unsupported_external_fact: 'review_required',
