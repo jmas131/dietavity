@@ -255,6 +255,17 @@
       "properties":{"contract_version":{"const":"ticket-65b1-v1"},"artifact_id":{"type":"string","pattern":"^ca-[0-9a-f]{64}$"},"generation_task_id":{"type":"string","pattern":"^cgt-[0-9a-f]{64}$"},"artifact_type":{"enum":["draft","summary"]},"generation_operation":{"enum":["draft","transform","summarize"]},"ordered_lineage_artifact_ids":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^ca-[A-Za-z0-9._-]+$"}},"identity_binding":{"type":"string","pattern":"^caob-[0-9a-f]{64}$"}},
       "allOf":[{"if":{"properties":{"generation_operation":{"const":"draft"}}},"then":{"properties":{"artifact_type":{"const":"draft"},"ordered_lineage_artifact_ids":{"maxItems":0}}}},{"if":{"properties":{"generation_operation":{"const":"transform"}}},"then":{"properties":{"artifact_type":{"const":"draft"},"ordered_lineage_artifact_ids":{"minItems":1}}}},{"if":{"properties":{"generation_operation":{"const":"summarize"}}},"then":{"properties":{"artifact_type":{"const":"summary"},"ordered_lineage_artifact_ids":{"minItems":1}}}}]
     },
+    "PostGateDeliveryManifest": {
+      "description":"Ticket 68A persistence-integrity companion. It establishes neither reservation, persistence, transport, nor delivery.",
+      "type":"object","required":["contract_version","context_id","canonical_inbound_message_id","conversation_context_binding","final_composer_input_binding","composer_result_binding","ticket67_candidate_binding","final_gate_binding","eligible_response_binding","eligible_turn_binding","logical_reply_key","artifact_projection"],"additionalProperties":false,
+      "properties":{
+        "contract_version":{"const":"ticket-68a-v1"},"context_id":{"type":"string","minLength":1},"canonical_inbound_message_id":{"type":"string","pattern":"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+        "conversation_context_binding":{"type":"string","pattern":"^pgctx-[0-9a-f]{64}$"},"final_composer_input_binding":{"type":"string","pattern":"^pgfci-[0-9a-f]{64}$"},"composer_result_binding":{"type":"string","pattern":"^pgcr-[0-9a-f]{64}$"},
+        "ticket67_candidate_binding":{"type":"object","required":["version","digest"],"additionalProperties":false,"properties":{"version":{"const":"ticket-67-v1"},"digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}},
+        "final_gate_binding":{"type":"string","pattern":"^pgfg-[0-9a-f]{64}$"},"eligible_response_binding":{"type":"string","pattern":"^pgrsp-[0-9a-f]{64}$"},"eligible_turn_binding":{"type":"string","pattern":"^pgturn-[0-9a-f]{64}$"},"logical_reply_key":{"type":"string","pattern":"^lrk-[0-9a-f]{64}$"},
+        "artifact_projection":{"type":["null","object"],"required":["artifact_id","artifact_type","generation_operation","generation_task_id","ordered_lineage_artifact_ids"],"additionalProperties":false,"properties":{"artifact_id":{"type":"string","pattern":"^ca-[0-9a-f]{64}$"},"artifact_type":{"enum":["draft","summary"]},"generation_operation":{"enum":["draft","transform","summarize"]},"generation_task_id":{"type":"string","pattern":"^cgt-[0-9a-f]{64}$"},"ordered_lineage_artifact_ids":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^ca-[A-Za-z0-9._-]+$"}}},"allOf":[{"if":{"properties":{"generation_operation":{"const":"draft"}}},"then":{"properties":{"artifact_type":{"const":"draft"},"ordered_lineage_artifact_ids":{"maxItems":0}}}},{"if":{"properties":{"generation_operation":{"const":"transform"}}},"then":{"properties":{"artifact_type":{"const":"draft"},"ordered_lineage_artifact_ids":{"minItems":1}}}},{"if":{"properties":{"generation_operation":{"const":"summarize"}}},"then":{"properties":{"artifact_type":{"const":"summary"},"ordered_lineage_artifact_ids":{"minItems":1}}}}]}
+      }
+    },
     "FinalComposerInput": {
       "description":"Ticket 65E's final bounded semantic envelope for Ticket 66. Cross-stage gate, action-result, and policy-mapping alignment is enforced by the executable builder/validator.",
       "type":"object","required":["composer_input_version","contract_version","context_id","locale","obligation_ids","obligation_outcomes","prohibited_claims","prohibited_actions","question_budget","completion_requirement"],"additionalProperties":false,
@@ -420,6 +431,7 @@
       }
     },
     "ConversationalArtifactOutputIntent": {"$ref":"#/$defs/ConversationalArtifactOutputIntent"},
+    "PostGateDeliveryManifest": {"$ref":"#/$defs/PostGateDeliveryManifest"},
     "FinalComposerInput": {"$ref":"#/$defs/FinalComposerInput"},
     "ComposerResult": {"$ref":"#/$defs/ComposerResult"},
     "ComposerFailure": {"$ref":"#/$defs/ComposerFailure"},
