@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { buildResponsePlan } = require('../lib/sales-engine-v2/response-plan-builder');
-const { buildFinalComposerInput, finalComposerInputValid } = require('../lib/sales-engine-v2/final-composer-input');
+const { buildFinalComposerInput, finalComposerInputValid, WITHHOLDING_EXPRESSION_VERSION } = require('../lib/sales-engine-v2/final-composer-input');
 const { bindings, constraintDigest } = require('../lib/sales-engine-v2/artifact-reproduction-safety-validator');
 const { deriveCommercialAuthorizationSubject } = require('../lib/sales-engine-v2/commercial-authorization-subject');
 const { deriveAuthorizedActionIdentity } = require('../lib/sales-engine-v2/authorized-action-identity');
@@ -49,7 +49,8 @@ test('Ticket 65E admits only a cleared exact reproduction gate and never promote
 });
 
 test('Ticket 65E removes blocked or indeterminate reproduction bodies and rejects draft gates', () => {
-  for (const status of ['blocked', 'indeterminate']) { const { plan, gate, source } = transformPlan(status); const input = buildFinalComposerInput({ responsePlan: plan, artifactReproductionGates: [gate] }); assert.equal(input.obligation_outcomes[0].artifacts.length, 0); assert.equal(JSON.stringify(input).includes(source.text), false); }
+  const directive = { blocked: 'requested_content_cannot_be_reproduced', indeterminate: 'requested_content_cannot_be_reproduced_now' };
+  for (const status of ['blocked', 'indeterminate']) { const { plan, gate, source } = transformPlan(status); const input = buildFinalComposerInput({ responsePlan: plan, artifactReproductionGates: [gate] }); assert.equal(input.obligation_outcomes[0].artifacts.length, 0); assert.equal(JSON.stringify(input).includes(source.text), false); assert.equal(input.obligation_outcomes[0].customer_expression.directive, directive[status]); assert.equal(input.obligation_outcomes[0].customer_expression.semantics_version, WITHHOLDING_EXPRESSION_VERSION); }
   const task = { operation: 'draft', artifact_ids: [], current_turn_inputs: [{ input_type: 'draft_specification', value: 'mensaje', origin: 'current_turn' }], current_turn_constraints: [] };
   const obligation = { id: 'o-draft', category: 'conversational_task', current_turn_evidence: 'mensaje', confidence: 'high', ambiguous: false, conversational_task: task };
   const plan = buildResponsePlan({ context: context({ text: 'mensaje' }), obligations: [obligation], resolvedObligations: [base('o-draft', { resolution_status: 'deferred', authority: null, source: null, next_stage: 'conversational_generation' })], semanticGuidanceGates: [], authorizedActions: [] });
@@ -60,9 +61,39 @@ test('Ticket 65E removes blocked or indeterminate reproduction bodies and reject
 test('Ticket 65E covers every bounded practical terminal state without leaking withheld guidance', () => {
   const cleared = buildFinalComposerInput({ responsePlan: practicalPlan() }).obligation_outcomes[0];
   assert.equal(cleared.type, 'permitted_guidance'); assert.equal(cleared.guidance_payload.units[0].content, 'Primero corta.');
-  for (const [status, type] of [['blocked', 'guidance_withheld_safety'], ['indeterminate', 'bounded_uncertainty']]) { const input = buildFinalComposerInput({ responsePlan: practicalPlan(status) }); assert.equal(input.obligation_outcomes[0].type, type); assert.equal(JSON.stringify(input).includes('Primero corta.'), false); }
+  for (const [status, type] of [['blocked', 'guidance_withheld_safety'], ['indeterminate', 'bounded_uncertainty']]) { const input = buildFinalComposerInput({ responsePlan: practicalPlan(status) }); assert.equal(input.obligation_outcomes[0].type, type); assert.equal(JSON.stringify(input).includes('Primero corta.'), false); if (status === 'blocked') assert.equal(input.obligation_outcomes[0].customer_expression.directive, 'guidance_cannot_be_provided_safely'); }
   const obligation = { id: 'o-unknown', category: 'practical_guidance', current_turn_evidence: 'cortar', confidence: 'high', ambiguous: false, practical_task: { task_kind: 'organization', bounded_inputs: [{ id: 'bi-1', input_type: 'preparation_step', value: 'cortar', origin: 'current_turn' }] } };
   for (const [resolution_status, authority, reason] of [['unknown', 'bounded_unknown', 'practical_guidance_unknown'], ['failed', 'resolver_failure', 'resolver_failure']]) { const resolved = base('o-unknown', { resolution_status, authority, source: null, customer_uncertainty_required: authority === 'bounded_unknown' }); const plan = buildResponsePlan({ context: context({ text: 'cortar' }), obligations: [obligation], resolvedObligations: [resolved], semanticGuidanceGates: [], authorizedActions: [] }); assert.equal(buildFinalComposerInput({ responsePlan: plan }).obligation_outcomes[0].reason, reason); }
+});
+
+test('Ticket 65E.1 requires exact closed withholding expressions and keeps withheld bodies absent', () => {
+  const blockedGuidance = buildFinalComposerInput({ responsePlan: practicalPlan('blocked') });
+  const blockedReproduction = buildFinalComposerInput({ responsePlan: transformPlan('blocked').plan, artifactReproductionGates: [transformPlan('blocked').gate] });
+  const indeterminateReproduction = buildFinalComposerInput({ responsePlan: transformPlan('indeterminate').plan, artifactReproductionGates: [transformPlan('indeterminate').gate] });
+  const mutate = (input, expression) => expression === null
+    ? (() => { const { customer_expression, ...outcome } = input.obligation_outcomes[0]; return { ...input, obligation_outcomes: [outcome] }; })()
+    : { ...input, obligation_outcomes: [{ ...input.obligation_outcomes[0], customer_expression: expression }] };
+  const guidanceExpression = blockedGuidance.obligation_outcomes[0].customer_expression;
+  for (const forged of [null, { ...guidanceExpression, directive: 'requested_content_cannot_be_reproduced' }, { ...guidanceExpression, allowed_claims: [] }, { ...guidanceExpression, prohibited_claims: [...guidanceExpression.prohibited_claims].reverse() }, { ...guidanceExpression, extra: true }]) assert.equal(finalComposerInputValid(mutate(blockedGuidance, forged)), false);
+  const blocked = blockedReproduction.obligation_outcomes[0]; const indeterminate = indeterminateReproduction.obligation_outcomes[0];
+  assert.equal(blocked.artifacts.length, 0); assert.equal(indeterminate.artifacts.length, 0);
+  for (const forged of [null, indeterminate.customer_expression, { ...blocked, artifacts: [{ artifact_id: 'ca-injected', text: 'contenido oculto' }] }]) {
+    const value = forged?.artifacts ? { ...blockedReproduction, obligation_outcomes: [forged] } : mutate(blockedReproduction, forged);
+    assert.equal(finalComposerInputValid(value), false);
+  }
+  for (const forged of [null, blocked.customer_expression, { ...indeterminate, artifacts: [{ artifact_id: 'ca-injected', text: 'contenido oculto' }] }]) {
+    const value = forged?.artifacts ? { ...indeterminateReproduction, obligation_outcomes: [forged] } : mutate(indeterminateReproduction, forged);
+    assert.equal(finalComposerInputValid(value), false);
+  }
+});
+
+test('Ticket 65E.1 forbids withholding expressions on draft and cleared reproduction', () => {
+  const { plan, gate } = transformPlan(); const cleared = buildFinalComposerInput({ responsePlan: plan, artifactReproductionGates: [gate] });
+  const draftTask = { operation: 'draft', artifact_ids: [], current_turn_inputs: [{ input_type: 'draft_specification', value: 'mensaje', origin: 'current_turn' }], current_turn_constraints: [] };
+  const obligation = { id: 'o-draft', category: 'conversational_task', current_turn_evidence: 'mensaje', confidence: 'high', ambiguous: false, conversational_task: draftTask };
+  const draft = buildFinalComposerInput({ responsePlan: buildResponsePlan({ context: context({ text: 'mensaje' }), obligations: [obligation], resolvedObligations: [base('o-draft', { resolution_status: 'deferred', authority: null, source: null, next_stage: 'conversational_generation' })], semanticGuidanceGates: [], authorizedActions: [] }) });
+  const expression = buildFinalComposerInput({ responsePlan: practicalPlan('blocked') }).obligation_outcomes[0].customer_expression;
+  for (const input of [cleared, draft]) assert.equal(finalComposerInputValid({ ...input, obligation_outcomes: [{ ...input.obligation_outcomes[0], customer_expression: expression }] }), false);
 });
 
 test('Ticket 65E requires exactly one valid reproduction gate for every show, transform, and summarize task', () => {
@@ -129,7 +160,10 @@ test('Ticket 65E central schema exposes the same closed envelope vocabulary and 
   const variants = definition.properties.obligation_outcomes.items.oneOf;
   const conversation = variants.find(value => value.properties?.type?.const === 'conversational_generation');
   assert.deepEqual(conversation.properties.safety_outcome.enum, ['generation_allowed', 'reproduction_allowed', 'reproduction_blocked', 'reproduction_indeterminate']);
-  assert.equal(conversation.allOf.length, 5);
+  assert.equal(conversation.allOf.length, 6);
+  assert.equal(conversation.properties.customer_expression.$ref, '#/$defs/WithholdingExpression');
+  assert.equal(schema.$defs.WithholdingExpression.properties.semantics_version.const, 'ticket-65e1-v1');
+  assert.equal(schema.$defs.WithholdingExpression.allOf.length, 3);
   const policy = variants.find(value => value.properties?.type?.const === 'policy_expression');
   assert.equal(policy.properties.policy_expression.properties.semantics_version.const, 'ticket-65e-policy-v1');
   assert.equal(policy.properties.policy_expression.allOf.length, 3);
