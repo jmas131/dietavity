@@ -8656,6 +8656,54 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 ALTER EVENT TRIGGER pgrst_drop_watch OWNER TO supabase_admin;
 
 --
+-- Ticket 71 local schema addition (not evidence of production installation).
+CREATE FUNCTION public.product_fact_authority_value_is_valid(target_value_type text, target_value jsonb) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  SELECT CASE target_value_type
+    WHEN 'boolean' THEN jsonb_typeof(target_value) = 'boolean'
+    WHEN 'integer' THEN jsonb_typeof(target_value) = 'number' AND trunc((target_value #>> '{}')::numeric) = (target_value #>> '{}')::numeric
+    WHEN 'money' THEN jsonb_typeof(target_value) = 'object' AND jsonb_typeof(target_value -> 'amount') = 'number' AND (target_value ->> 'amount')::numeric >= 0 AND jsonb_typeof(target_value -> 'currency') = 'string' AND length(target_value ->> 'currency') = 3 AND target_value ->> 'currency' = upper(target_value ->> 'currency')
+    WHEN 'enum' THEN jsonb_typeof(target_value) = 'string' AND target_value #>> '{}' <> ''
+    WHEN 'enum_set' THEN jsonb_typeof(target_value) = 'array' AND jsonb_array_length(target_value) > 0 AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(target_value) AS item WHERE jsonb_typeof(item) <> 'string' OR item #>> '{}' = '') AND (SELECT count(*) = count(DISTINCT item #>> '{}') FROM jsonb_array_elements(target_value) AS item)
+    WHEN 'object' THEN jsonb_typeof(target_value) = 'object'
+    WHEN 'text' THEN jsonb_typeof(target_value) = 'string'
+    ELSE false END;
+$$;
+CREATE TABLE public.product_fact_authority_sets (
+    authority_set_id text NOT NULL,
+    authority_version text NOT NULL,
+    scope jsonb NOT NULL,
+    scope_key text GENERATED ALWAYS AS ((scope)::text) STORED,
+    status text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT product_fact_authority_sets_pkey PRIMARY KEY (authority_set_id),
+    CONSTRAINT product_fact_authority_sets_scope_typed CHECK (((scope = '{"scope_type":"provider"}'::jsonb) OR ((scope ? 'scope_type'::text) AND ((scope ->> 'scope_type'::text) = 'offer_version'::text) AND (scope ? 'offer_version'::text) AND (jsonb_typeof((scope -> 'offer_version'::text)) = 'string'::text) AND (jsonb_object_length(scope) = 2)))),
+    CONSTRAINT product_fact_authority_sets_status CHECK ((status = ANY (ARRAY['draft'::text, 'reviewed_active'::text, 'retired'::text))),
+    CONSTRAINT product_fact_authority_sets_version CHECK ((authority_version <> ''::text))
+);
+ALTER TABLE ONLY public.product_fact_authority_sets FORCE ROW LEVEL SECURITY;
+CREATE UNIQUE INDEX product_fact_authority_one_active_scope ON public.product_fact_authority_sets USING btree (scope_key) WHERE (status = 'reviewed_active'::text);
+CREATE TABLE public.product_fact_authority_records (
+    fact_id text NOT NULL,
+    authority_set_id text NOT NULL,
+    fact_key text NOT NULL,
+    state text NOT NULL,
+    value_type text NOT NULL,
+    value jsonb,
+    CONSTRAINT product_fact_authority_records_pkey PRIMARY KEY (fact_id),
+    CONSTRAINT product_fact_authority_record_unique_key UNIQUE (authority_set_id, fact_key),
+    CONSTRAINT product_fact_authority_record_key CHECK ((fact_key ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$'::text)),
+    CONSTRAINT product_fact_authority_record_state CHECK ((state = ANY (ARRAY['known_true'::text, 'known_false'::text, 'unknown'::text, 'not_applicable'::text))),
+    CONSTRAINT product_fact_authority_record_value_type CHECK ((value_type = ANY (ARRAY['boolean'::text, 'integer'::text, 'money'::text, 'enum'::text, 'enum_set'::text, 'object'::text, 'text'::text))),
+    CONSTRAINT product_fact_authority_record_unknown_value CHECK ((state <> ALL (ARRAY['unknown'::text, 'not_applicable'::text])) OR (value IS NULL)),
+    CONSTRAINT product_fact_authority_record_known_value CHECK ((state <> ALL (ARRAY['known_true'::text, 'known_false'::text])) OR ((value IS NOT NULL) AND public.product_fact_authority_value_is_valid(value_type, value))),
+    CONSTRAINT product_fact_authority_records_authority_set_id_fkey FOREIGN KEY (authority_set_id) REFERENCES public.product_fact_authority_sets(authority_set_id) ON DELETE RESTRICT
+);
+ALTER TABLE ONLY public.product_fact_authority_records FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records TO service_role;
+
 -- PostgreSQL database dump complete
 --
 

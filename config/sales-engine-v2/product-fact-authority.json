@@ -1,0 +1,35 @@
+{
+  "authority_contract_version": "ticket-71-v1",
+  "authority_sets": [
+    {
+      "authority_set_id": "standard-28d-149-v1",
+      "authority_version": "1",
+      "status": "reviewed_active",
+      "scope": {"scope_type": "offer_version", "offer_version": "28d-149-v1"},
+      "facts": [
+        {"fact_id":"pf-standard-price","fact_key":"offer.price","state":"known_true","value_type":"money","value":{"amount":149,"currency":"MXN"}},
+        {"fact_id":"pf-standard-duration","fact_key":"offer.duration_days","state":"known_true","value_type":"integer","value":28},
+        {"fact_id":"pf-standard-billing","fact_key":"offer.billing_model","state":"known_true","value_type":"enum","value":"one_time"},
+        {"fact_id":"pf-standard-subscription","fact_key":"offer.subscription","state":"known_false","value_type":"boolean","value":false},
+        {"fact_id":"pf-standard-renewal","fact_key":"offer.automatic_renewal","state":"known_false","value_type":"boolean","value":false},
+        {"fact_id":"pf-standard-meals","fact_key":"offer.meals","state":"known_true","value_type":"enum_set","value":["breakfast","lunch","dinner","snack"]},
+        {"fact_id":"pf-standard-personalization","fact_key":"offer.personalization_after_verified_payment","state":"known_true","value_type":"boolean","value":true},
+        {"fact_id":"pf-standard-portal","fact_key":"service.portal_delivery","state":"known_true","value_type":"boolean","value":true},
+        {"fact_id":"pf-standard-whatsapp","fact_key":"service.whatsapp_support","state":"known_true","value_type":"enum_set","value":["recipes","meal_ideas","practical_guidance","restaurant_guidance"]},
+        {"fact_id":"pf-standard-payments","fact_key":"payment.supported_methods","state":"known_true","value_type":"enum_set","value":["credit_card","debit_card","oxxo","apple_pay"]},
+        {"fact_id":"pf-standard-refund","fact_key":"offer.public_refund_policy","state":"unknown","value_type":"object","value":null}
+      ]
+    },
+    {
+      "authority_set_id": "dietavity-provider-boundaries-v1",
+      "authority_version": "1",
+      "status": "reviewed_active",
+      "scope": {"scope_type": "provider"},
+      "facts": [
+        {"fact_id":"pf-provider-glp1-sale","fact_key":"service.glp1_medication_sale","state":"known_false","value_type":"boolean","value":false},
+        {"fact_id":"pf-provider-glp1-delivery","fact_key":"service.glp1_medication_delivery","state":"known_false","value_type":"boolean","value":false},
+        {"fact_id":"pf-provider-glp1-prescription","fact_key":"service.glp1_medication_prescription","state":"known_false","value_type":"boolean","value":false}
+      ]
+    }
+  ]
+}
