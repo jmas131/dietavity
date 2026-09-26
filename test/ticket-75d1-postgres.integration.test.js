@@ -1,6 +1,6 @@
 'use strict';
 // Disposable-loopback only: never infer or contact a Supabase/production URL.
-const { spawnSync } = require('node:child_process'); const path = require('node:path'); const test = require('node:test'); const assert = require('node:assert/strict');
+const { spawn, spawnSync } = require('node:child_process'); const path = require('node:path'); const test = require('node:test'); const assert = require('node:assert/strict');
 const { approvedResponseDigest, reservationBinding } = require('../lib/sales-engine-v2/approved-reply-reservation-binding');
 const { COMPLETE_INBOUND_SQL } = require('../lib/session-ordering');
 const url = process.env.LOCAL_SUPABASE_DB_URL; const psql = process.env.PSQL_BIN || '/opt/homebrew/opt/libpq/bin/psql'; const root = path.join(__dirname, '..');
@@ -8,6 +8,7 @@ const m17a = path.join(root, 'database/migrations/20260923_ticket_17a_typed_conv
 const m37a = path.join(root, 'database/migrations/20260904_ticket_37a_historical_reopen.sql');
 const local = value => /^postgres(?:ql)?:\/\/[^@]+@127\.0\.0\.1(?::\d+)?\//.test(value || '');
 function run(sql) { const r = spawnSync(psql, [url, '-X', '-v', 'ON_ERROR_STOP=1'], { input: sql, encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout; }
+function runConcurrent(sql) { return new Promise((resolve) => { const child = spawn(psql, [url, '-X', '-v', 'ON_ERROR_STOP=1'], { stdio: ['pipe', 'pipe', 'pipe'] }); let out = ''; let err = ''; child.stdout.on('data', data => { out += data; }); child.stderr.on('data', data => { err += data; }); child.on('close', status => resolve({ status, out, err })); child.stdin.end(sql); }); }
 function request(overrides = {}) { const text = 'Texto aprobado exacto\r\n🙂'; const value = { contract_version: 'ticket-75d1-v1', canonical_inbound_message_id: '11111111-1111-4111-8111-000000007501', session_id: 't75d1', processing_owner: 'owner', logical_reply_key: `lrk-${'a'.repeat(64)}`, eligible_response_binding: `pgrsp-${'b'.repeat(64)}`, approved_response_text: text, approved_response_digest: approvedResponseDigest(text), parts: [{ part_index: 1, part_count: 2, body: 'parte uno' }, { part_index: 2, part_count: 2, body: 'parte dos' }], artifact_projection: null, ...overrides }; value.reservation_binding = reservationBinding(value); return value; }
 function literal(value) { return JSON.stringify(value).replaceAll("'", "''"); }
 test('T75D.1 real PostgreSQL normal/idempotent/conflict/rollback/ACL/recovery matrix', { skip: !url ? 'LOCAL_SUPABASE_DB_URL is required' : false }, () => {
@@ -68,4 +69,27 @@ test('T75D.1 PostgreSQL enforces claims, atomic artifacts, recovery, completion,
   `);
   const complete = COMPLETE_INBOUND_SQL.replace('$1::jsonb', `'${literal({ inbound_message_id: '11111111-1111-4111-8111-000000007502', processing_owner: 'owner' })}'::jsonb`);
   run(`UPDATE public.messages SET delivery_status='accepted', provider_message_sid='SM77777777777777777777777777777777', metadata=metadata || '{"provider_acceptance_evidence":"message_sid"}'::jsonb WHERE in_reply_to_id='11111111-1111-4111-8111-000000007502'; ${complete};`);
+});
+
+test('T75D.1 uses independent overlapping PostgreSQL sessions for identical, conflicting, multipart, and lost-response races', { skip: !url ? 'LOCAL_SUPABASE_DB_URL is required' : false }, async () => {
+  assert.equal(local(url), true, 'refuses non-loopback database URL');
+  const artifact = { artifact_id: `ca-${'e'.repeat(64)}`, artifact_type: 'draft', generation_operation: 'draft', generation_task_id: `cgt-${'f'.repeat(64)}`, ordered_lineage_artifact_ids: [] };
+  const identical = request({ canonical_inbound_message_id: '11111111-1111-4111-8111-000000007507', session_id: 't75d1-race-identical', artifact_projection: artifact }); identical.reservation_binding = reservationBinding(identical);
+  const winner = request({ canonical_inbound_message_id: '11111111-1111-4111-8111-000000007508', session_id: 't75d1-race-conflict' }); winner.reservation_binding = reservationBinding(winner);
+  const loser = request({ canonical_inbound_message_id: '11111111-1111-4111-8111-000000007508', session_id: 't75d1-race-conflict', approved_response_text: 'Otro aprobado', parts: [{ part_index: 1, part_count: 2, body: 'otro uno' }, { part_index: 2, part_count: 2, body: 'otro dos' }] }); loser.approved_response_digest = approvedResponseDigest(loser.approved_response_text); loser.reservation_binding = reservationBinding(loser);
+  run(`INSERT INTO public.messages(id,direction,session_id,provider,provider_message_sid,processing_order,processing_owner,processing_lease_until,metadata) VALUES ('11111111-1111-4111-8111-000000007507','inbound','t75d1-race-identical','twilio','SM77777777777777777777777777777771',8,'owner',now()+interval '10 minutes','{}'),('11111111-1111-4111-8111-000000007508','inbound','t75d1-race-conflict','twilio','SM88888888888888888888888888888881',9,'owner',now()+interval '10 minutes','{}');`);
+  // Both sessions wait on the same transaction-scoped start barrier. Once the
+  // parent releases it, both are already connected and contend in PostgreSQL.
+  const barrier = runConcurrent(`BEGIN; SELECT pg_advisory_xact_lock(75001); SELECT pg_sleep(0.35); COMMIT;`);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  const call = payload => runConcurrent(`BEGIN; SELECT pg_advisory_xact_lock_shared(75001); SELECT public.reserve_v2_approved_logical_reply('${literal(payload)}'::jsonb); COMMIT;`);
+  const [sameA, sameB] = await Promise.all([call(identical), call(identical)]); await barrier;
+  assert.equal(sameA.status, 0, sameA.err); assert.equal(sameB.status, 0, sameB.err);
+  const [differentA, differentB] = await Promise.all([call(winner), call(loser)]);
+  assert.equal([differentA.status, differentB.status].filter(status => status === 0).length, 1);
+  assert.match(`${differentA.err}${differentB.err}`, /V2_REPLY_RESERVATION_CONFLICT/);
+  run(`DO $$ BEGIN
+    IF (SELECT count(*) FROM public.messages WHERE in_reply_to_id='11111111-1111-4111-8111-000000007507') <> 2 OR (SELECT count(*) FROM public.conversation_artifacts WHERE artifact_id='${artifact.artifact_id}') <> 1 THEN RAISE EXCEPTION 'identical race duplicated state'; END IF;
+    IF (SELECT count(*) FROM public.messages WHERE in_reply_to_id='11111111-1111-4111-8111-000000007508') <> 2 OR (SELECT count(DISTINCT metadata->>'v2_reservation_binding') FROM public.messages WHERE in_reply_to_id='11111111-1111-4111-8111-000000007508') <> 1 THEN RAISE EXCEPTION 'conflict race mixed state'; END IF;
+  END $$; SELECT public.reserve_v2_approved_logical_reply('${literal(identical)}'::jsonb);`);
 });
