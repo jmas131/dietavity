@@ -1,5 +1,11 @@
 # Ticket75D.0 — Atomic V2 Reply Reservation Design
 
+> **Binding correction (Ticket75D.0A):** the former requirement for PostgreSQL
+> to recompute Ticket68A's `logical_reply_key` is superseded by
+> [the SQL-verifiable approved-reply binding](TICKET-75D0A-SQL-VERIFIABLE-APPROVED-REPLY-BINDING.md).
+> `logical_reply_key` remains Ticket68A's semantic-manifest identity; T75D.1
+> must recompute the distinct bounded `reservation_binding` instead.
+
 ## Determination
 
 **DISCOVERY_COMPLETE_READY_FOR_T75D_1.** This is a repository-only design. No migration, schema, workflow, recovery implementation, production connection, or delivery action was made.
