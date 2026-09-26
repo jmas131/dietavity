@@ -14,6 +14,10 @@ const {
   FACT_RECORD_COLUMNS,
   KNOWLEDGE_SET_COLUMNS,
   KNOWLEDGE_RECORD_COLUMNS,
+  ARTIFACT_COLUMNS,
+  ARTIFACT_LINEAGE_COLUMNS,
+  ARTIFACT_MESSAGE_COLUMNS,
+  MAX_ARTIFACT_ROOTS,
   createSupabaseCanonicalReader,
 } = require('../lib/sales-engine-v2/supabase-canonical-reader');
 
@@ -24,7 +28,7 @@ function fakeSupabase(responses) {
   return {
     calls,
     from(table) {
-      const response = (responses[table] || []).shift();
+      const response = (responses[table] || []).shift() || ok([]);
       const call = { table, actions: [] };
       calls.push(call);
       const query = {
@@ -89,6 +93,8 @@ test('T75B.1a readContext projects bounded, timestamp-ordered history and exact 
   assert.equal(action(call(client, 'onboarding_chat_memory'), 'select')[1], LEGACY_HISTORY_COLUMNS);
   assert.deepEqual(action(call(client, 'onboarding_chat_memory'), 'limit'), ['limit', HISTORY_QUERY_LIMIT]);
   assert.equal(action(call(client, 'onboarding_sessions'), 'select')[1], SESSION_COLUMNS);
+  assert.equal(action(call(client, 'conversation_artifacts'), 'select')[1], ARTIFACT_COLUMNS);
+  assert.deepEqual(action(call(client, 'conversation_artifacts'), 'limit'), ['limit', MAX_ARTIFACT_ROOTS + 1]);
 });
 
 test('T75B.1a reader normalizes database failures and aborts without exposing database errors', async () => {
