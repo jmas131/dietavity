@@ -8,6 +8,7 @@ const facts = require('../config/sales-engine-v2/product-fact-authority.json');
 const knowledge = require('../config/sales-engine-v2/reviewed-nutrition-knowledge.json');
 const { createCanonicalInputAdapter, createCanonicalClaimVerifier } = require('../lib/sales-engine-v2/canonical-input-adapters');
 const { createClaimedTurnComposition } = require('../lib/sales-engine-v2/claimed-turn-composition');
+const { createApprovedDeliveryReservation, prepareApprovedPhysicalParts } = require('../lib/sales-engine-v2/approved-delivery-reservation');
 const { createClaimedTurnRuntime, createReplayGuard, createRouteAuthorizer, AUDIENCE, CONTRACT_VERSION, responseValid } = require('../lib/sales-engine-v2/claimed-turn-runtime');
 
 const inbound = '11111111-1111-4111-8111-000000000075';
@@ -15,7 +16,7 @@ const request = mode => ({ contract_version: CONTRACT_VERSION, canonical_inbound
 function authorityRows() { return facts.authority_sets.flatMap(set => set.facts.map(fact => ({ ...fact, authority_set_id: set.authority_set_id, authority_version: set.authority_version, status: set.status, scope: set.scope }))); }
 function reader({ text = 'Gracias', campaign = 'standard', offer = '28d-149-v1' } = {}) { return { async readClaim() { return { id: inbound, direction: 'inbound', session_id: 'session-75c3', processing_owner: 'owner-75c3', processing_lease_until: '2026-09-26T12:05:00.000Z', processing_completed_at: null, has_outbound_reply: false }; }, async readContext() { return { currentTurn: { id: 'SM75C3', canonical_message_id: inbound, text, received_at: '2026-09-26T12:00:00.000Z' }, memory: [], conversationArtifacts: [], runtimeMetadata: { conversation_id: 'conversation-75c3', session_id: 'session-75c3', channel: 'whatsapp', ...(offer === null ? {} : { offer_version: offer }), campaign } }; }, async readFactAuthority() { return authorityRows(); }, async readKnowledgeAuthority() { return knowledge.knowledge_sets.map(set => ({ ...set, created_at: '2026-09-01T00:00:00.000Z', records: set.records })); } }; }
 function stages(kind = 'social_acknowledgement') { return { interpreterAdapter: async () => ({ obligations: [{ category: kind, ...(kind === 'commercial_purchase_intent' ? { subject: 'explicit_current_request' } : {}), current_turn_evidence: kind === 'commercial_purchase_intent' ? 'quiero comprar' : 'Gracias', confidence: 'high', ambiguous: false }] }), boundedReasoningAdapter: () => ({ units: [] }), semanticGuidanceAssessor: () => ({ findings: [] }), artifactReproductionAssessor: () => ({ findings: [] }), composerAdapter: input => ({ segments: input.input.obligation_outcomes.map(item => ({ obligation_id: item.obligation_id, text: 'Gracias.' })) }), finalResponseAssessor: () => ({ findings: [] }) }; }
-async function bundle(options) { const inputAdapter = createCanonicalInputAdapter({ reader: reader(options), now: () => '2026-09-26T12:00:00.000Z' }); return inputAdapter.build({ request: request('shadow'), claim: { canonical_inbound_message_id: inbound }, signal: undefined }); }
+async function bundle(options) { const inputAdapter = createCanonicalInputAdapter({ reader: reader(options), now: () => '2026-09-26T12:00:00.000Z' }); return inputAdapter.build({ request: request('shadow'), claim: { canonical_inbound_message_id: inbound, session_id: 'session-75c3', processing_owner: 'owner-75c3', processing_lease_until: '2026-09-26T12:05:00.000Z' }, signal: undefined }); }
 
 test('T75C.3 composes canonical input through Ticket68 and Ticket68A without delivery side effects', async () => {
   const composition = createClaimedTurnComposition({ stageAdapters: stages() });
@@ -41,6 +42,31 @@ test('T75C.3 live action uses the injected Ticket65D executor path only after co
   const calls = []; const composition = createClaimedTurnComposition({ stageAdapters: stages('commercial_purchase_intent'), actionReservationStore: { async reserve(input) { calls.push('reserve'); return { state: 'acquired', action_id: input.action_id, execution_key: input.execution_key }; }, async succeed() { calls.push('succeed'); }, async fail() { calls.push('fail'); } }, actionProviders: { async createCheckoutDestination({ execution_key }) { calls.push(`provider:${execution_key.slice(0, 4)}`); return { kind: 'checkout', url: 'https://checkout.stripe.com/c/t75c3' }; } } });
   const output = await composition.run({ canonicalInput: await bundle({ text: 'quiero comprar' }), mode: 'live', invocationIdentity: 'cti-live', signal: undefined });
   assert.equal(output.status, 'response_eligible'); assert.deepEqual(calls.map(value => value.split(':')[0]), ['reserve', 'provider', 'succeed']);
+});
+
+test('T75D.2 live composition reserves once and returns only RPC durable physical rows', async () => {
+  const calls = []; const durableRows = [{ id: '00000000-0000-4000-8000-000000000901', body: 'Durable body', idempotency_key: 'reply:SM:paid', metadata: { part_index: 1, part_count: 1 } }];
+  const reservation = createApprovedDeliveryReservation({ reservationAdapter: { async reserve(input) { calls.push(input); return { state: 'reserved_new', physical_logical_reply_key: 'reply:SM:paid', messages: durableRows }; } } });
+  const composition = createClaimedTurnComposition({ stageAdapters: stages(), approvedDeliveryReservation: reservation });
+  const output = await composition.run({ canonicalInput: await bundle(), mode: 'live', invocationIdentity: 'cti-d2', signal: undefined });
+  assert.equal(calls.length, 1); assert.equal(calls[0].approved_response_text, output.turn_result.customer_response.text);
+  assert.deepEqual(output.delivery.reservation, { state: 'reserved_new', physical_logical_reply_key: 'reply:SM:paid', messages: [{ id: durableRows[0].id, body: durableRows[0].body, idempotency_key: durableRows[0].idempotency_key, part_index: 1, part_count: 1 }] });
+  assert.notEqual(output.delivery.reservation.messages[0].body, calls[0].parts[0].body, 'handoff is returned by the RPC, not locally prepared');
+});
+
+test('T75D.2 preparation is deterministic, preserves exact source bytes, retries one prepared request, and shadow/ineligible reserve nothing', async () => {
+  const exact = '  Texto aprobado\r\n🙂  ';
+  assert.deepEqual(prepareApprovedPhysicalParts(exact), prepareApprovedPhysicalParts(exact));
+  const calls = []; const adapter = { async reserve(input) { calls.push(input); if (calls.length === 1) throw new Error('timeout'); return { state: 'reserved_existing', physical_logical_reply_key: 'reply:SM:paid', messages: [{ id: '00000000-0000-4000-8000-000000000902', body: 'durable', idempotency_key: 'reply:SM:paid', metadata: { part_index: 1, part_count: 1 } }] }; } };
+  const reservation = createApprovedDeliveryReservation({ reservationAdapter: adapter });
+  let interpreted = 0; const stageAdapters = stages(); const originalInterpreter = stageAdapters.interpreterAdapter; stageAdapters.interpreterAdapter = async (...args) => { interpreted += 1; return originalInterpreter(...args); };
+  const composition = createClaimedTurnComposition({ stageAdapters, approvedDeliveryReservation: reservation }); const input = await bundle();
+  await assert.rejects(() => composition.run({ canonicalInput: input, mode: 'live', invocationIdentity: 'cti-retry', signal: undefined }), /reservation_unavailable/);
+  const retry = await composition.run({ canonicalInput: input, mode: 'live', invocationIdentity: 'cti-retry', signal: undefined });
+  assert.equal(retry.delivery.reservation.state, 'reserved_existing'); assert.strictEqual(calls[0], calls[1]); assert.equal(calls.length, 2); assert.equal(interpreted, 1, 'same-identity reservation retry must not re-run Ticket68');
+  const shadow = await composition.run({ canonicalInput: input, mode: 'shadow', invocationIdentity: 'cti-shadow-d2', signal: undefined }); assert.equal(shadow.delivery.reservation, undefined);
+  const blocked = createClaimedTurnComposition({ stageAdapters: { ...stages(), finalResponseAssessor: () => ({ findings: [{ code: 'other_semantic_risk', evidence: { excerpt: 'x', rationale: 'x' } }] }) }, approvedDeliveryReservation: reservation });
+  const ineligible = await blocked.run({ canonicalInput: input, mode: 'live', invocationIdentity: 'cti-ineligible-d2', signal: undefined }); assert.equal(ineligible.status, 'response_ineligible'); assert.equal(calls.length, 2);
 });
 
 test('T75C.3 claimed runtime returns only a bounded eligible result and remains deadline fail-closed', async () => {

@@ -7,3 +7,9 @@ The function derives `reply:<inbound provider SID>:paid`, writes ordered pending
 `lib/sales-engine-v2/approved-reply-reservation-adapter.js` is the sole Node-side adapter. It validates the closed request and calls the RPC. It has no Twilio, workflow, provider, or completion behavior. n8n remains transport-only for returned reserved rows.
 
 The migration is forward-only, has no production action, and grants execution only to `service_role`; it grants no table mutation.
+
+## Ticket75D.2 composition closure
+
+For a configured **live** claimed turn, `claimed-turn-composition` builds the Ticket68A manifest, uses the existing WhatsApp formatter to prepare explicit physical parts, builds the existing closed D.0A/D.0B request, and invokes the narrow Node reservation adapter. Semantic `response_eligible` remains a Ticket68 result; `delivery.reservation` is a separate durable handoff and is present only after the RPC returns `reserved_new` or `reserved_existing`.
+
+The exact Ticket67-cleared response is passed unchanged as `approved_response_text`; physical parts never reconstruct or replace it. An unavailable reservation retains the prepared immutable request by invocation identity for an exact retry and does not authorize transport, fallback prose, or semantic regeneration. Shadow and ineligible turns never call reservation. The handoff is deliberately bounded to reservation state, physical logical key, and RPC-returned ordered `{ id, body, idempotency_key, part_index, part_count }` rows. T75E alone will make an inactive n8n artifact consume those already-reserved rows for transport.
