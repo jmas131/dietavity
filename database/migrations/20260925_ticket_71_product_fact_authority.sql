@@ -29,7 +29,11 @@ CREATE TABLE IF NOT EXISTS public.product_fact_authority_sets (
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT product_fact_authority_sets_scope_typed CHECK (
     (scope = '{"scope_type":"provider"}'::jsonb)
-    OR (scope ? 'scope_type' AND scope ->> 'scope_type' = 'offer_version' AND scope ? 'offer_version' AND jsonb_typeof(scope -> 'offer_version') = 'string' AND jsonb_object_length(scope) = 2)
+    OR (jsonb_typeof(scope) = 'object'
+        AND scope ?& ARRAY['scope_type', 'offer_version']
+        AND scope ->> 'scope_type' = 'offer_version'
+        AND jsonb_typeof(scope -> 'offer_version') = 'string'
+        AND (scope - 'scope_type' - 'offer_version') = '{}'::jsonb)
   ),
   CONSTRAINT product_fact_authority_sets_status CHECK (status IN ('draft', 'reviewed_active', 'retired')),
   CONSTRAINT product_fact_authority_sets_version CHECK (authority_version <> '')
@@ -56,7 +60,7 @@ ALTER TABLE public.product_fact_authority_sets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_fact_authority_sets FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.product_fact_authority_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_fact_authority_records FORCE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT, INSERT ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records TO service_role;
 
 -- Activation is explicit and transactional. A reviewed set is immutable in

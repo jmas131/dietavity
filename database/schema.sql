@@ -8678,7 +8678,7 @@ CREATE TABLE public.product_fact_authority_sets (
     status text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT product_fact_authority_sets_pkey PRIMARY KEY (authority_set_id),
-    CONSTRAINT product_fact_authority_sets_scope_typed CHECK (((scope = '{"scope_type":"provider"}'::jsonb) OR ((scope ? 'scope_type'::text) AND ((scope ->> 'scope_type'::text) = 'offer_version'::text) AND (scope ? 'offer_version'::text) AND (jsonb_typeof((scope -> 'offer_version'::text)) = 'string'::text) AND (jsonb_object_length(scope) = 2)))),
+    CONSTRAINT product_fact_authority_sets_scope_typed CHECK (((scope = '{"scope_type":"provider"}'::jsonb) OR ((jsonb_typeof(scope) = 'object'::text) AND (scope ?& ARRAY['scope_type'::text, 'offer_version'::text]) AND ((scope ->> 'scope_type'::text) = 'offer_version'::text) AND (jsonb_typeof((scope -> 'offer_version'::text)) = 'string'::text) AND (((scope - 'scope_type'::text) - 'offer_version'::text) = '{}'::jsonb)))),
     CONSTRAINT product_fact_authority_sets_status CHECK ((status = ANY (ARRAY['draft'::text, 'reviewed_active'::text, 'retired'::text))),
     CONSTRAINT product_fact_authority_sets_version CHECK ((authority_version <> ''::text))
 );
@@ -8701,7 +8701,7 @@ CREATE TABLE public.product_fact_authority_records (
     CONSTRAINT product_fact_authority_records_authority_set_id_fkey FOREIGN KEY (authority_set_id) REFERENCES public.product_fact_authority_sets(authority_set_id) ON DELETE RESTRICT
 );
 ALTER TABLE ONLY public.product_fact_authority_records FORCE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT, INSERT ON TABLE public.product_fact_authority_sets, public.product_fact_authority_records TO service_role;
 
 -- Ticket 72 local reviewed-nutrition authority (not production verification).
@@ -8735,7 +8735,7 @@ CREATE TABLE public.reviewed_nutrition_knowledge_records (
     CONSTRAINT reviewed_nutrition_knowledge_records_set_fkey FOREIGN KEY (knowledge_set_id) REFERENCES public.reviewed_nutrition_knowledge_sets(knowledge_set_id) ON DELETE RESTRICT
 );
 ALTER TABLE ONLY public.reviewed_nutrition_knowledge_records FORCE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE public.reviewed_nutrition_knowledge_sets, public.reviewed_nutrition_knowledge_records FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.reviewed_nutrition_knowledge_sets, public.reviewed_nutrition_knowledge_records FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT, INSERT ON TABLE public.reviewed_nutrition_knowledge_sets, public.reviewed_nutrition_knowledge_records TO service_role;
 
 -- PostgreSQL database dump complete
