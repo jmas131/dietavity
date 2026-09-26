@@ -12,6 +12,7 @@ const {
   createPortalDeadline,
   portalRequestTimeoutMs
 } = require('./lib/portal-deadline');
+const { createClaimedTurnRuntime } = require('./lib/sales-engine-v2/claimed-turn-runtime');
 
 const app = express();
 
@@ -24,6 +25,10 @@ app.use(express.urlencoded({
   limit: '32kb',
   parameterLimit: 100
 }));
+
+// Ticket75A is an internal-only, disabled-by-default skeleton. It has no
+// customer route, database verifier, pipeline, action, reservation or sender.
+app.post('/internal/sales-engine-v2/claimed-turn', createClaimedTurnRuntime());
 
 app.set('view engine', 'ejs');
 
