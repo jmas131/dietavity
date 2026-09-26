@@ -77,26 +77,26 @@ BEGIN
   preimage := 'a9[' || 's' || octet_length(convert_to('ticket-75d0a-approved-reply-reservation-v1','UTF8')) || ':ticket-75d0a-approved-reply-reservation-v1'
     || 's' || octet_length(convert_to('ticket-75d0a-reservation-binding-v1','UTF8')) || ':ticket-75d0a-reservation-binding-v1'
     || 's36:' || lower(p->>'canonical_inbound_message_id')
-    || 's' || octet_length(convert_to(p->>'session_id','UTF8')) || ':' || p->>'session_id'
-    || 's' || octet_length(convert_to(p->>'logical_reply_key','UTF8')) || ':' || p->>'logical_reply_key'
-    || 's' || octet_length(convert_to(p->>'eligible_response_binding','UTF8')) || ':' || p->>'eligible_response_binding'
-    || 's64:' || p->>'approved_response_digest'
+    || 's' || octet_length(convert_to(p->>'session_id','UTF8')) || ':' || (p->>'session_id')
+    || 's' || octet_length(convert_to(p->>'logical_reply_key','UTF8')) || ':' || (p->>'logical_reply_key')
+    || 's' || octet_length(convert_to(p->>'eligible_response_binding','UTF8')) || ':' || (p->>'eligible_response_binding')
+    || 's64:' || (p->>'approved_response_digest')
     || 'a' || part_count || '[';
   FOR i IN 1..part_count LOOP
     part := p->'parts'->(i - 1);
     preimage := preimage || 'a3[s' || octet_length(convert_to(i::text,'UTF8')) || ':' || i::text
       || 's' || octet_length(convert_to(part_count::text,'UTF8')) || ':' || part_count::text
-      || 's' || octet_length(convert_to(part->>'body','UTF8')) || ':' || part->>'body' || ']';
+      || 's' || octet_length(convert_to(part->>'body','UTF8')) || ':' || (part->>'body') || ']';
   END LOOP;
   preimage := preimage || ']';
   IF jsonb_typeof(p->'artifact_projection') = 'null' THEN
     preimage := preimage || 'z';
   ELSE
     preimage := preimage || 'a5['
-      || 's' || octet_length(convert_to(p->'artifact_projection'->>'artifact_id','UTF8')) || ':' || p->'artifact_projection'->>'artifact_id'
-      || 's' || octet_length(convert_to(p->'artifact_projection'->>'artifact_type','UTF8')) || ':' || p->'artifact_projection'->>'artifact_type'
-      || 's' || octet_length(convert_to(p->'artifact_projection'->>'generation_operation','UTF8')) || ':' || p->'artifact_projection'->>'generation_operation'
-      || 's' || octet_length(convert_to(p->'artifact_projection'->>'generation_task_id','UTF8')) || ':' || p->'artifact_projection'->>'generation_task_id'
+      || 's' || octet_length(convert_to(p->'artifact_projection'->>'artifact_id','UTF8')) || ':' || (p->'artifact_projection'->>'artifact_id')
+      || 's' || octet_length(convert_to(p->'artifact_projection'->>'artifact_type','UTF8')) || ':' || (p->'artifact_projection'->>'artifact_type')
+      || 's' || octet_length(convert_to(p->'artifact_projection'->>'generation_operation','UTF8')) || ':' || (p->'artifact_projection'->>'generation_operation')
+      || 's' || octet_length(convert_to(p->'artifact_projection'->>'generation_task_id','UTF8')) || ':' || (p->'artifact_projection'->>'generation_task_id')
       || 'a' || jsonb_array_length(p->'artifact_projection'->'ordered_lineage_artifact_ids') || '[';
     FOR part IN SELECT value FROM jsonb_array_elements(p->'artifact_projection'->'ordered_lineage_artifact_ids') LOOP
       preimage := preimage || 's' || octet_length(convert_to(part #>> '{}','UTF8')) || ':' || (part #>> '{}');
@@ -126,7 +126,7 @@ BEGIN
     SELECT jsonb_agg(jsonb_build_object('id',id,'body',body,'assistant_response',assistant_response,'idempotency_key',idempotency_key,'metadata',metadata,'delivery_status',delivery_status) ORDER BY (metadata->>'part_index')::integer) INTO existing_parts
     FROM public.messages WHERE in_reply_to_id = inbound.id AND direction = 'outbound';
     IF (SELECT count(*) FROM public.messages WHERE in_reply_to_id = inbound.id AND direction = 'outbound') <> part_count
-       OR EXISTS (SELECT 1 FROM public.messages m WHERE m.in_reply_to_id=inbound.id AND m.direction='outbound' AND (m.session_id IS DISTINCT FROM inbound.session_id OR m.assistant_response IS DISTINCT FROM p->>'approved_response_text' OR m.delivery_status <> 'pending' OR m.provider_message_sid IS NOT NULL OR m.metadata->>'v2_reservation_binding' IS DISTINCT FROM computed_binding OR m.metadata->>'v2_logical_reply_key' IS DISTINCT FROM p->>'logical_reply_key' OR m.metadata->>'eligible_response_binding' IS DISTINCT FROM p->>'eligible_response_binding' OR m.metadata->>'recovery_source_hash' IS DISTINCT FROM source_hash))
+       OR EXISTS (SELECT 1 FROM public.messages m WHERE m.in_reply_to_id=inbound.id AND m.direction='outbound' AND (m.session_id IS DISTINCT FROM inbound.session_id OR m.assistant_response IS DISTINCT FROM p->>'approved_response_text' OR m.delivery_status <> 'pending' OR m.provider_message_sid IS NOT NULL OR m.metadata->>'v2_reservation_binding' IS DISTINCT FROM computed_binding OR m.metadata->>'v2_logical_reply_key' IS DISTINCT FROM p->>'logical_reply_key' OR m.metadata->>'eligible_response_binding' IS DISTINCT FROM p->>'eligible_response_binding' OR m.metadata->>'v2_approved_response_digest' IS DISTINCT FROM source_hash))
        OR EXISTS (SELECT 1 FROM generate_series(1,part_count) n WHERE NOT EXISTS (SELECT 1 FROM public.messages m WHERE m.in_reply_to_id=inbound.id AND m.direction='outbound' AND m.metadata->'part_index'=to_jsonb(n) AND m.metadata->'part_count'=to_jsonb(part_count) AND m.body IS NOT DISTINCT FROM p->'parts'->(n-1)->>'body' AND m.idempotency_key IS NOT DISTINCT FROM CASE WHEN n=1 THEN physical_key ELSE physical_key || ':part:' || lpad(n::text,3,'0') END)) THEN
       RAISE EXCEPTION 'V2_REPLY_RESERVATION_CONFLICT';
     END IF;
@@ -138,7 +138,7 @@ BEGIN
 
   FOR i IN 1..part_count LOOP
     INSERT INTO public.messages (session_id,direction,body,message_kind,provider,idempotency_key,in_reply_to_id,delivery_status,metadata,assistant_response)
-    VALUES (inbound.session_id,'outbound',p->'parts'->(i-1)->>'body','paid_ai','twilio',CASE WHEN i=1 THEN physical_key ELSE physical_key || ':part:' || lpad(i::text,3,'0') END,inbound.id,'pending',jsonb_build_object('logical_reply_key',physical_key,'part_index',i,'part_count',part_count,'recovery_source_hash',source_hash,'recovery_body_hash',encode(digest(convert_to(p->'parts'->(i-1)->>'body','UTF8'),'sha256'),'hex'),'v2_logical_reply_key',p->>'logical_reply_key','eligible_response_binding',p->>'eligible_response_binding','approved_response_digest',source_hash,'v2_reservation_binding',computed_binding),p->>'approved_response_text');
+    VALUES (inbound.session_id,'outbound',p->'parts'->(i-1)->>'body','paid_ai','twilio',CASE WHEN i=1 THEN physical_key ELSE physical_key || ':part:' || lpad(i::text,3,'0') END,inbound.id,'pending',jsonb_build_object('logical_reply_key',physical_key,'part_index',i,'part_count',part_count,'v2_approved_response_digest',source_hash,'v2_body_sha256',encode(digest(convert_to(p->'parts'->(i-1)->>'body','UTF8'),'sha256'),'hex'),'v2_logical_reply_key',p->>'logical_reply_key','eligible_response_binding',p->>'eligible_response_binding','approved_response_digest',source_hash,'v2_reservation_binding',computed_binding),p->>'approved_response_text');
   END LOOP;
   IF jsonb_typeof(p->'artifact_projection') = 'object' THEN
     artifact_input := jsonb_build_object('contract_version','1.0','artifact_id',p->'artifact_projection'->>'artifact_id','artifact_type',p->'artifact_projection'->>'artifact_type','generation_operation',p->'artifact_projection'->>'generation_operation','generation_task_id',p->'artifact_projection'->>'generation_task_id','logical_reply_key',physical_key,'anchor_message_id',(SELECT id FROM public.messages WHERE in_reply_to_id=inbound.id AND direction='outbound' AND metadata->'part_index'='1'::jsonb),'lineage',p->'artifact_projection'->'ordered_lineage_artifact_ids');
