@@ -5,6 +5,12 @@
 > [the SQL-verifiable approved-reply binding](TICKET-75D0A-SQL-VERIFIABLE-APPROVED-REPLY-BINDING.md).
 > `logical_reply_key` remains Ticket68A's semantic-manifest identity; T75D.1
 > must recompute the distinct bounded `reservation_binding` instead.
+>
+> **Recovery-source correction (Ticket75D.0B):** T75D.1's closed request also
+> carries `approved_response_text`, sourced only from Ticket68's post-Ticket67
+> eligible `customer_response.text`. SQL verifies its exact UTF-8 SHA-256
+> against the already-bound `approved_response_digest` before persisting it as
+> `assistant_response`; it never reconstructs source text from parts.
 
 ## Determination
 

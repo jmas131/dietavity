@@ -125,6 +125,10 @@ delivery/provider evidence, or credentials. It still uses the existing
 physical recovery key (`reply:<inbound-SID>:paid` and per-part suffixes), never
 repurposing it as Ticket68A's semantic key.
 
+Ticket75D.0B adds the exact `approved_response_text` required by existing
+recovery. It is not a new binding input: SQL hashes its exact UTF-8 bytes and
+compares it with the already-bound `approved_response_digest`.
+
 ## Cross-runtime proof
 
 `test/ticket-75d0a-approved-reply-reservation-binding.test.js` supplies
