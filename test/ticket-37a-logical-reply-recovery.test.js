@@ -8,6 +8,7 @@ const recovery = require('../lib/reply-recovery');
 const ordering = require('../lib/session-ordering');
 const { ERROR_HANDLER_SQL } = require('../lib/global-error-handler');
 const { RECOVERY_FUNCTIONS_SQL } = require('../lib/reply-recovery-sql');
+const { FUNCTION_NAMES, recoveryFunctionsSynchronized } = require('../lib/recovery-function-schema-sync');
 const delivery = require('../lib/twilio-delivery');
 const fixture = require('../test-support/ticket-37a-fixture');
 const root = path.resolve(__dirname, '..');
@@ -77,9 +78,21 @@ test('every current transport completion path embeds the exact canonical predica
   assert.deepEqual(found.sort(), ['Claim Next Session Inbound', 'Insert Error Log (Error Handler)', 'Mark Session Inbound Complete']);
 });
 
-test('generated migration and schema embed the backend function source exactly', () => {
+test('generated migration and schema synchronize both backend recovery functions semantically', () => {
   assert.ok(fs.readFileSync(path.join(root, 'database/migrations/20260904_ticket_37a_historical_reopen.sql'), 'utf8').includes(RECOVERY_FUNCTIONS_SQL));
-  assert.ok(fs.readFileSync(path.join(root, 'database/schema.sql'), 'utf8').includes(RECOVERY_FUNCTIONS_SQL));
+  const schema = fs.readFileSync(path.join(root, 'database/schema.sql'), 'utf8');
+  assert.equal(recoveryFunctionsSynchronized({ canonicalSql: RECOVERY_FUNCTIONS_SQL, schemaSql: schema }), true);
+  assert.deepEqual(FUNCTION_NAMES, ['prepare_whatsapp_reply_recovery', 'claim_whatsapp_reply_recovery_part']);
+});
+
+test('recovery schema synchronization ignores pg_dump declaration formatting but rejects meaningful function drift', () => {
+  const schema = fs.readFileSync(path.join(root, 'database/schema.sql'), 'utf8');
+  const formattingOnly = schema.replace(/CREATE FUNCTION public\.prepare_whatsapp_reply_recovery\(p jsonb\) RETURNS SETOF public\.messages\s+LANGUAGE plpgsql SECURITY DEFINER\s+SET search_path TO 'pg_catalog', 'public'/, 'CREATE OR REPLACE FUNCTION public.prepare_whatsapp_reply_recovery(p jsonb) RETURNS SETOF public.messages LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public');
+  assert.equal(recoveryFunctionsSynchronized({ canonicalSql: RECOVERY_FUNCTIONS_SQL, schemaSql: formattingOnly }), true);
+  const changedLock = schema.replace('PERFORM pg_advisory_xact_lock(hashtextextended(session_key, 17));', 'PERFORM pg_advisory_xact_lock(hashtextextended(session_key, 18));');
+  assert.equal(recoveryFunctionsSynchronized({ canonicalSql: RECOVERY_FUNCTIONS_SQL, schemaSql: changedLock }), false);
+  const changedFifo = schema.replace('earlier.processing_order < inbound.processing_order', 'earlier.processing_order <= inbound.processing_order');
+  assert.equal(recoveryFunctionsSynchronized({ canonicalSql: RECOVERY_FUNCTIONS_SQL, schemaSql: changedFifo }), false);
 });
 
 test('normal new multipart reservation is atomic and refuses existing siblings', () => {
