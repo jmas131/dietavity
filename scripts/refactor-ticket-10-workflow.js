@@ -1244,10 +1244,34 @@ const v2RouteSwitch = {
   parameters: { rules: { values: ['legacy', 'v2_shadow', 'v2_live'].map((value, index) => ({ conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 }, conditions: [{ id: `75e10000-0000-4000-8000-00000000000${index + 3}`, leftValue: '={{ $json.v2_route }}', rightValue: value, operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } })), }, options: { fallbackOutput: 'extra' } },
   notes: 'Legacy makes no Node call. Shadow invokes Node but rejoins legacy. Live never falls through to legacy.',
 };
+const assertionConfig = mode => ({ name: `Prepare V2 ${mode === 'shadow' ? 'Shadow' : 'Live'} Assertion`, id: `75g3c000-0000-4000-8000-0000000000${mode === 'shadow' ? '01' : '08'}`, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-720, mode === 'shadow' ? 16 : 256], onError: 'continueRegularOutput', parameters: { jsCode: `const configured = ['SALES_ENGINE_V2_ASSERTION_ISSUER','SALES_ENGINE_V2_ASSERTION_CLIENT_ID','SALES_ENGINE_V2_ASSERTION_KID'].every(name => /^[A-Za-z0-9._:-]{1,128}$/.test(String($env[name] || '')));
+return [{ json: { v2_assertion_status: configured ? 'ready' : 'failed', v2_assertion_failure: configured ? undefined : 'signing_unavailable' } }];` }, notes: 'Ticket75G.3C configuration gate. It handles only bounded non-secret signing configuration and never contains key material.' });
+const assertionConfigSwitch = mode => ({
+  name: `Route V2 ${mode === 'shadow' ? 'Shadow' : 'Live'} Assertion Configuration`, id: `75g3c000-0000-4000-8000-0000000000${mode === 'shadow' ? '02' : '09'}`, type: 'n8n-nodes-base.if', typeVersion: 2.2, position: [-640, mode === 'shadow' ? 16 : 256],
+  parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 }, conditions: [{ leftValue: '={{ $json.v2_assertion_status }}', rightValue: 'ready', operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } },
+  notes: 'Missing or malformed non-secret signing configuration makes zero Node calls.',
+});
+const assertionJti = mode => ({ name: `Generate V2 ${mode === 'shadow' ? 'Shadow' : 'Live'} Assertion JTI`, id: `75g3c000-0000-4000-8000-0000000000${mode === 'shadow' ? '03' : '10'}`, type: 'n8n-nodes-base.crypto', typeVersion: 1, position: [-560, mode === 'shadow' ? 16 : 256], onError: 'continueRegularOutput', parameters: { action: 'generate', encodingType: 'uuid', dataPropertyName: 'v2_assertion_jti' }, notes: 'Generates a fresh cryptographically random UUID JWT ID. It has no access to the signing key.' });
+const assertionJtiSwitch = mode => ({
+  name: `Route V2 ${mode === 'shadow' ? 'Shadow' : 'Live'} Assertion JTI`, id: `75g3c000-0000-4000-8000-0000000000${mode === 'shadow' ? '04' : '11'}`, type: 'n8n-nodes-base.if', typeVersion: 2.2, position: [-400, mode === 'shadow' ? 16 : 256],
+  parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 }, conditions: [{ leftValue: '={{ $json.v2_assertion_jti }}', rightValue: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', operator: { type: 'string', operation: 'regex' } }], combinator: 'and' } },
+  notes: 'Only a fresh UUID may enter the native JWT signer. A generation failure stays on the bounded no-call branch.',
+});
+const assertionSigner = mode => ({ name: `Mint V2 ${mode === 'shadow' ? 'Shadow' : 'Live'} RS256 Assertion`, id: `75g3c000-0000-4000-8000-0000000000${mode === 'shadow' ? '05' : '12'}`, type: 'n8n-nodes-base.jwt', typeVersion: 1, position: [-240, mode === 'shadow' ? 16 : 256], onError: 'continueRegularOutput', parameters: { operation: 'sign', useJson: true, claimsJson: `={{ { iss: $env.SALES_ENGINE_V2_ASSERTION_ISSUER, aud: 'dietavity.sales-engine-v2.claimed-turn', client_id: $env.SALES_ENGINE_V2_ASSERTION_CLIENT_ID, jti: $json.v2_assertion_jti, iat: Math.floor($now.toSeconds()), nbf: Math.floor($now.toSeconds()) - 5, exp: Math.floor($now.toSeconds()) + 60 } }}`, headerClaims: '{}', options: { algorithm: 'RS256', kid: '={{ $env.SALES_ENGINE_V2_ASSERTION_KID }}' } }, credentials: { jwtAuth: { id: '__T75G3C_RS256_SIGNING_CREDENTIAL__', name: 'T75G3C RS256 assertion signer (configure before activation)' } }, notes: 'Native n8n JWT signer. The PEM private key exists only in encrypted jwtAuth credential storage; no key or assertion is embedded in this workflow definition.' });
+const signedAssertion = mode => ({ name: `Validate V2 ${mode === 'shadow' ? 'Shadow' : 'Live'} Signed Assertion`, id: `75g3c000-0000-4000-8000-0000000000${mode === 'shadow' ? '06' : '13'}`, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-80, mode === 'shadow' ? 16 : 256], onError: 'continueRegularOutput', parameters: { jsCode: `const token = typeof $json.token === 'string' ? $json.token : '';
+if (!/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(token) || token.length > 8192) return [{ json: { v2_assertion_status: 'failed', v2_assertion_failure: 'signing_unavailable' } }];
+return [{ json: { v2_assertion_status: 'ready', v2_assertion: token } }];` }, notes: 'Drops all signer input and reports only a bounded signing status. A valid assertion is retained solely for the immediate Authorization request header.' });
+const assertionSwitch = mode => ({
+  name: `Route V2 ${mode === 'shadow' ? 'Shadow' : 'Live'} Signed Assertion`, id: `75g3c000-0000-4000-8000-0000000000${mode === 'shadow' ? '07' : '14'}`, type: 'n8n-nodes-base.if', typeVersion: 2.2, position: [80, mode === 'shadow' ? 16 : 256],
+  parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 }, conditions: [{ leftValue: '={{ $json.v2_assertion_status }}', rightValue: 'ready', operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } },
+  notes: 'A signing failure prevents the Node request. Shadow rejoins legacy; live remains fail-closed.',
+});
+const shadowSigningFailure = { name: 'Classify V2 Shadow Signing Failure', id: '75g3c000-0000-4000-8000-000000000015', type: 'n8n-nodes-base.code', typeVersion: 2, position: [240, 112], parameters: { jsCode: `return [{ json: { shadow_v2_signing_status: 'failed', shadow_v2_failure_class: 'signing_unavailable' } }];` }, notes: 'Bounded shadow-only operational classification. It contains no token, key, exception body, or customer data and deterministically rejoins legacy.' };
+const liveSigningFailure = { name: 'Fail V2 Live Signing', id: '75g3c000-0000-4000-8000-000000000016', type: 'n8n-nodes-base.code', typeVersion: 2, position: [240, 352], parameters: { jsCode: `throw new Error('T75G3C_V2_LIVE_ASSERTION_SIGNING_UNAVAILABLE');` }, notes: 'Future live remains fail-closed: a signing failure makes zero Node calls and never enters legacy.' };
 const v2Request = (name, mode, position) => ({
   name, id: `75e10000-0000-4000-8000-0000000000${mode === 'shadow' ? '06' : '07'}`, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position,
   ...(mode === 'shadow' ? { onError: 'continueRegularOutput' } : {}),
-  parameters: { method: 'POST', url: '={{ $env.SALES_ENGINE_V2_CLAIMED_TURN_URL || \'http://127.0.0.1:3000/internal/sales-engine-v2/claimed-turn\' }}', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth', sendBody: true, specifyBody: 'json', jsonBody: `={{ {
+  parameters: { method: 'POST', url: '={{ $env.SALES_ENGINE_V2_CLAIMED_TURN_URL || \'http://127.0.0.1:3000/internal/sales-engine-v2/claimed-turn\' }}', authentication: 'none', sendHeaders: true, headerParameters: { parameters: [{ name: 'Authorization', value: "={{ 'Bearer ' + $json.v2_assertion }}" }] }, sendBody: true, specifyBody: 'json', jsonBody: `={{ {
   contract_version: 'ticket-75-claimed-turn-v1',
   canonical_inbound_message_id: $('Claim Next Session Inbound').item.json.id,
   session_id: $('Claim Next Session Inbound').item.json.session_id,
@@ -1258,10 +1282,7 @@ const v2Request = (name, mode, position) => ({
   mode: '${mode}',
   workflow_execution_id: $execution.id
 } }}`, options: {} },
-  // Placeholder identity is a configuration seam, not a key/token. Activation
-  // requires managed short-lived RS256 assertion signing and rotation.
-  credentials: { httpHeaderAuth: { id: '__T75E_RS256_SERVICE_ASSERTION__', name: 'T75E RS256 service assertion (configure before activation)' } },
-  notes: 'Ticket75E.1 inactive internal-call seam. Credential must inject a short-lived RS256 Bearer assertion; no key or token is stored here. No timeout is asserted until T75G verifies the production envelope.',
+  notes: 'Ticket75G.3C internal call. A fresh native-JWT RS256 assertion is supplied only in this Authorization header; no static bearer credential, key, or token is stored here. No timeout is asserted until T75G verifies the production envelope.',
 });
 const normalizeShadow = { name: 'Normalize V2 Shadow Outcome', id: '75g3b000-0000-4000-8000-000000000001', type: 'n8n-nodes-base.code', typeVersion: 2, position: [-420, 96], onError: 'continueRegularOutput', parameters: { jsCode: `const result = $input.first().json;
 const only = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => keys.has(key));
@@ -1308,15 +1329,44 @@ const shadowDiagnostic = v2DiagnosticBuilder({ name: 'Build V2 Shadow Structural
 const diagnosticRecorders = [
   v2DiagnosticRecorder({ name: 'Record V2 Shadow Structural Diagnostic', id: '75f20000-0000-4000-8000-000000000004', position: [0, 16] }),
 ];
-workflow.nodes.push(v2Route, v2RouteSwitch, v2Request('Invoke V2 Shadow Claimed Turn', 'shadow', [-420, 16]), v2Request('Invoke V2 Live Claimed Turn', 'live', [-420, 256]), normalizeShadow, validateLive, shadowDiagnostic, ...diagnosticRecorders);
+const shadowAssertionConfig = assertionConfig('shadow');
+const shadowAssertionConfigSwitch = assertionConfigSwitch('shadow');
+const shadowAssertionJti = assertionJti('shadow');
+const shadowAssertionJtiSwitch = assertionJtiSwitch('shadow');
+const shadowAssertionSigner = assertionSigner('shadow');
+const shadowSignedAssertion = signedAssertion('shadow');
+const shadowAssertionSwitch = assertionSwitch('shadow');
+const liveAssertionConfig = assertionConfig('live');
+const liveAssertionConfigSwitch = assertionConfigSwitch('live');
+const liveAssertionJti = assertionJti('live');
+const liveAssertionJtiSwitch = assertionJtiSwitch('live');
+const liveAssertionSigner = assertionSigner('live');
+const liveSignedAssertion = signedAssertion('live');
+const liveAssertionSwitch = assertionSwitch('live');
+workflow.nodes.push(v2Route, v2RouteSwitch, shadowAssertionConfig, shadowAssertionConfigSwitch, shadowAssertionJti, shadowAssertionJtiSwitch, shadowAssertionSigner, shadowSignedAssertion, shadowAssertionSwitch, shadowSigningFailure, liveAssertionConfig, liveAssertionConfigSwitch, liveAssertionJti, liveAssertionJtiSwitch, liveAssertionSigner, liveSignedAssertion, liveAssertionSwitch, liveSigningFailure, v2Request('Invoke V2 Shadow Claimed Turn', 'shadow', [240, 16]), v2Request('Invoke V2 Live Claimed Turn', 'live', [240, 256]), normalizeShadow, validateLive, shadowDiagnostic, ...diagnosticRecorders);
 workflow.connections['Route Session Claim State'].main[0] = [{ node: v2Route.name, type: 'main', index: 0 }];
 workflow.connections[v2Route.name] = { main: [[{ node: v2RouteSwitch.name, type: 'main', index: 0 }]] };
 workflow.connections[v2RouteSwitch.name] = { main: [
   [{ node: 'Get User from Supabase', type: 'main', index: 0 }],
-  [{ node: 'Invoke V2 Shadow Claimed Turn', type: 'main', index: 0 }],
-  [{ node: 'Invoke V2 Live Claimed Turn', type: 'main', index: 0 }],
+  [{ node: shadowAssertionConfig.name, type: 'main', index: 0 }],
+  [{ node: liveAssertionConfig.name, type: 'main', index: 0 }],
   [],
 ] };
+workflow.connections[shadowAssertionConfig.name] = { main: [[{ node: shadowAssertionConfigSwitch.name, type: 'main', index: 0 }]] };
+workflow.connections[shadowAssertionConfigSwitch.name] = { main: [[{ node: shadowAssertionJti.name, type: 'main', index: 0 }], [{ node: shadowSigningFailure.name, type: 'main', index: 0 }]] };
+workflow.connections[shadowAssertionJti.name] = { main: [[{ node: shadowAssertionJtiSwitch.name, type: 'main', index: 0 }]] };
+workflow.connections[shadowAssertionJtiSwitch.name] = { main: [[{ node: shadowAssertionSigner.name, type: 'main', index: 0 }], [{ node: shadowSigningFailure.name, type: 'main', index: 0 }]] };
+workflow.connections[shadowAssertionSigner.name] = { main: [[{ node: shadowSignedAssertion.name, type: 'main', index: 0 }]] };
+workflow.connections[shadowSignedAssertion.name] = { main: [[{ node: shadowAssertionSwitch.name, type: 'main', index: 0 }]] };
+workflow.connections[shadowAssertionSwitch.name] = { main: [[{ node: 'Invoke V2 Shadow Claimed Turn', type: 'main', index: 0 }], [{ node: shadowSigningFailure.name, type: 'main', index: 0 }]] };
+workflow.connections[shadowSigningFailure.name] = { main: [[{ node: 'Get User from Supabase', type: 'main', index: 0 }]] };
+workflow.connections[liveAssertionConfig.name] = { main: [[{ node: liveAssertionConfigSwitch.name, type: 'main', index: 0 }]] };
+workflow.connections[liveAssertionConfigSwitch.name] = { main: [[{ node: liveAssertionJti.name, type: 'main', index: 0 }], [{ node: liveSigningFailure.name, type: 'main', index: 0 }]] };
+workflow.connections[liveAssertionJti.name] = { main: [[{ node: liveAssertionJtiSwitch.name, type: 'main', index: 0 }]] };
+workflow.connections[liveAssertionJtiSwitch.name] = { main: [[{ node: liveAssertionSigner.name, type: 'main', index: 0 }], [{ node: liveSigningFailure.name, type: 'main', index: 0 }]] };
+workflow.connections[liveAssertionSigner.name] = { main: [[{ node: liveSignedAssertion.name, type: 'main', index: 0 }]] };
+workflow.connections[liveSignedAssertion.name] = { main: [[{ node: liveAssertionSwitch.name, type: 'main', index: 0 }]] };
+workflow.connections[liveAssertionSwitch.name] = { main: [[{ node: 'Invoke V2 Live Claimed Turn', type: 'main', index: 0 }], [{ node: liveSigningFailure.name, type: 'main', index: 0 }]] };
 workflow.connections['Invoke V2 Shadow Claimed Turn'] = { main: [[{ node: normalizeShadow.name, type: 'main', index: 0 }]] };
 workflow.connections[normalizeShadow.name] = { main: [[{ node: 'Get User from Supabase', type: 'main', index: 0 }, { node: shadowDiagnostic.name, type: 'main', index: 0 }]] };
 workflow.connections[shadowDiagnostic.name] = { main: [[{ node: 'Record V2 Shadow Structural Diagnostic', type: 'main', index: 0 }]] };

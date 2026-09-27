@@ -10,7 +10,7 @@ test('T75E.1 generator is authoritative and inactive artifact contains the post-
 });
 test('T75E.1 defaults legacy, shadow rejoins legacy, and live cannot fall through', () => {
   const route = nodes.get('Route Sales Engine V2 Claim'); assert.match(route.parameters.jsCode, /SALES_ENGINE_V2_CONTROL \|\| 'disabled'/); assert.match(route.parameters.jsCode, /SALES_ENGINE_V2_ROUTE_GENERATION/); assert.doesNotMatch(route.parameters.jsCode, /random|percentage/i);
-  assert.deepEqual(out('Route Sales Engine V2 Mode'), ['Get User from Supabase', 'Invoke V2 Shadow Claimed Turn', 'Invoke V2 Live Claimed Turn']);
+  assert.deepEqual(out('Route Sales Engine V2 Mode'), ['Get User from Supabase', 'Prepare V2 Shadow Assertion', 'Prepare V2 Live Assertion']);
   assert.deepEqual(out('Normalize V2 Shadow Outcome'), ['Get User from Supabase', 'Build V2 Shadow Structural Diagnostic']);
   assert.deepEqual(out('Invoke V2 Live Claimed Turn'), ['Validate V2 Durable Reservation Handoff']);
   assert.deepEqual(out('Validate V2 Durable Reservation Handoff'), ['Loop Paid WhatsApp Parts']);
@@ -18,8 +18,9 @@ test('T75E.1 defaults legacy, shadow rejoins legacy, and live cannot fall throug
   assert.equal(out('Invoke V2 Live Claimed Turn').includes('Prepare Paid WhatsApp Message Parts'), false);
   assert.equal(out('Invoke V2 Live Claimed Turn').includes('Reserve Paid Assistant Reply'), false);
 });
-test('T75E.1 internal request is capability-only and uses a secret-free RS256 credential seam', () => {
-  for (const [name, mode] of [['Invoke V2 Shadow Claimed Turn', 'shadow'], ['Invoke V2 Live Claimed Turn', 'live']]) { const node = nodes.get(name); const body = node.parameters.jsonBody; assert.match(node.parameters.url, /SALES_ENGINE_V2_CLAIMED_TURN_URL/); for (const key of ['contract_version', 'canonical_inbound_message_id', 'session_id', 'processing_owner', 'claimed_lease_until', 'claim_attempt_id', 'mode', 'workflow_execution_id']) assert.match(body, new RegExp(key)); assert.match(body, new RegExp(`mode: '${mode}'`)); for (const forbidden of ['body:', 'phone', 'history', 'prompt', 'provider_', 'Authorization', 'Bearer ']) assert.doesNotMatch(body, new RegExp(forbidden)); assert.equal(node.credentials.httpHeaderAuth.id, '__T75E_RS256_SERVICE_ASSERTION__'); }
+test('T75E.1 internal request is capability-only and uses a secret-free RS256 signing seam', () => {
+  for (const [name, mode] of [['Invoke V2 Shadow Claimed Turn', 'shadow'], ['Invoke V2 Live Claimed Turn', 'live']]) { const node = nodes.get(name); const body = node.parameters.jsonBody; assert.match(node.parameters.url, /SALES_ENGINE_V2_CLAIMED_TURN_URL/); for (const key of ['contract_version', 'canonical_inbound_message_id', 'session_id', 'processing_owner', 'claimed_lease_until', 'claim_attempt_id', 'mode', 'workflow_execution_id']) assert.match(body, new RegExp(key)); assert.match(body, new RegExp(`mode: '${mode}'`)); for (const forbidden of ['body:', 'phone', 'history', 'prompt', 'provider_']) assert.doesNotMatch(body, new RegExp(forbidden)); assert.equal(node.parameters.authentication, 'none'); assert.match(node.parameters.headerParameters.parameters[0].value, /\$json\.v2_assertion/); }
+  for (const name of ['Mint V2 Shadow RS256 Assertion', 'Mint V2 Live RS256 Assertion']) { const node = nodes.get(name); assert.equal(node.credentials.jwtAuth.id, '__T75G3C_RS256_SIGNING_CREDENTIAL__'); assert.equal(node.parameters.options.algorithm, 'RS256'); }
   assert.doesNotMatch(JSON.stringify(workflow), /BEGIN (?:RSA )?PRIVATE KEY|eyJ[a-zA-Z0-9_-]{20,}/);
 });
 test('T75E.1 accepts only complete durable rows and reuses the existing provider-evidence/completion continuation', () => {
