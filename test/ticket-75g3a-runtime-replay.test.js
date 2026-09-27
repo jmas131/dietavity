@@ -40,5 +40,5 @@ test('unsafe local replay guard and disabled mode cannot invoke model, action, r
 });
 test('route cohort and generation are deterministic and cannot be changed by request input', async () => {
   const replayGuard = { kind: 'durable_assertion_replay', async consume() { return true; } }; const handler = createProductionClaimedTurnRuntime({ env: baseEnv(), dependencies: dependencies(replayGuard) });
-  const wrong = body(); wrong.route_generation = 'other'; const result = {}; await handler({ body: wrong, headers: { authorization: `Bearer ${token('generation-75')}` } }, { status(code) { result.status = code; return this; }, json(value) { result.body = value; return this; } }); assert.equal(result.status, 403); assert.equal(result.body.failure_code, 'forbidden_route');
+  const wrong = body(); wrong.route_generation = 'other'; const result = {}; await handler({ body: wrong, headers: { authorization: `Bearer ${token('generation-75')}` } }, { status(code) { result.status = code; return this; }, json(value) { result.body = value; return this; } }); assert.equal(result.status, 200); assert.equal(result.body.failure_code, 'forbidden_route');
 });

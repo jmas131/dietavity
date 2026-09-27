@@ -105,7 +105,7 @@ test('paid transport loops one part through reconciliation before continuing', (
   const out = (name, branch = 0) => workflow.connections[name].main[branch].map((e) => e.node);
   assert.deepEqual(out('Reserve Paid Assistant Reply'), ['Loop Paid WhatsApp Parts']);
   assert.deepEqual(out('Loop Paid WhatsApp Parts', 1), ['Send All Intents Message']);
-  assert.deepEqual(out('Assert Paid Assistant Reply Accepted'), ['Loop Paid WhatsApp Parts', 'Build V2 Provider Acceptance Diagnostic']);
+  assert.deepEqual(out('Assert Paid Assistant Reply Accepted'), ['Loop Paid WhatsApp Parts']);
   assert.deepEqual(out('Loop Paid WhatsApp Parts'), ['Update Last Assistant Message']);
   assert.equal(workflow.nodes.find((n) => n.name === 'Loop Paid WhatsApp Parts').parameters.batchSize, 1);
 });

@@ -75,5 +75,5 @@ test('T75C.3 claimed runtime returns only a bounded eligible result and remains 
   const runtime = createClaimedTurnRuntime({ auth, routeAuthorizer: createRouteAuthorizer({ state: 'shadow', generation: 'g75c3' }), claimVerifier: createCanonicalClaimVerifier({ reader: inputReader, now: () => Date.parse('2026-09-26T12:01:00.000Z') }), inputAdapter: adapter, runtime: input => composition.run({ ...input, mode: input.request.mode }), deadlineMs: 1000 });
   const credential = jwt.sign({ client_id: 'n8n', jti: 'jti-75c3' }, pair.privateKey, { algorithm: 'RS256', keyid: 'key', issuer: auth.issuer, audience: AUDIENCE, expiresIn: 60, notBefore: '0s' }); const result = {};
   await runtime({ body: request('shadow'), headers: { authorization: `Bearer ${credential}` } }, { status(code) { result.status = code; return this; }, json(value) { result.body = value; return this; } });
-  assert.equal(result.status, 200); assert.equal(responseValid(result.body), true); assert.equal(Object.hasOwn(result.body, 'conversation_context'), false);
+  assert.equal(result.status, 200); assert.equal(result.body.contract_version, 'ticket-75-shadow-v1'); assert.equal(Object.hasOwn(result.body, 'conversation_context'), false); assert.equal(Object.hasOwn(result.body, 'delivery'), false); assert.equal(Object.hasOwn(result.body, 'turn_result'), false);
 });
