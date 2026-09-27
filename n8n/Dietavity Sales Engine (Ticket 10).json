@@ -4704,9 +4704,9 @@
         96
       ],
       "parameters": {
-        "jsCode": "return [{ json: { shadow_v2_invoked: true } }];"
+        "jsCode": "const result = $input.first().json;\n// This is deliberately a structural projection, not the semantic response.\n// It is available only to the observational F.1 recorder; legacy remains the\n// sole customer-visible path in shadow mode.\nconst turn = result && result.turn_result || {};\nreturn [{ json: { shadow_v2_invoked: true, shadow_v2_projection: {\n  response_eligibility: result && result.outcome === 'eligible' ? 'eligible' : 'ineligible',\n  stage_trace: Array.isArray(turn.stage_trace) ? turn.stage_trace.map(({ stage, status }) => ({ stage, status })) : [],\n  action_projection: Array.isArray(turn.action_execution_summary) ? turn.action_execution_summary.map(({ action_id, action_type, execution_key, execution_status }) => ({ action_id, action_type, execution_key, execution_status })) : []\n} } }];"
       },
-      "notes": "Shadow result is intentionally not delivery input; legacy produces the customer-visible response."
+      "notes": "Shadow result is intentionally not delivery input. Only a closed structural projection may be observed; legacy produces the customer-visible response."
     },
     {
       "name": "Validate V2 Durable Reservation Handoff",
@@ -4721,6 +4721,201 @@
         "jsCode": "const result = $input.first().json;\nconst claim = $('Claim Next Session Inbound').item.json;\nif (!result || result.outcome !== 'eligible' || result.canonical_inbound_message_id !== claim.id || result.processing_owner !== $execution.id) throw new Error('T75E_V2_RESULT_INVALID');\nconst reservation = result.delivery && result.delivery.reservation;\nif (!reservation || !['reserved_new', 'reserved_existing'].includes(reservation.state) || !Array.isArray(reservation.messages) || reservation.messages.length < 1 || reservation.messages.length > 999) throw new Error('T75E_V2_RESERVATION_INVALID');\nconst seenIds = new Set(), seenKeys = new Set();\nconst rows = reservation.messages.map(row => {\n  if (!row || typeof row.id !== 'string' || typeof row.body !== 'string' || !row.body || typeof row.idempotency_key !== 'string' || !row.idempotency_key || !Number.isInteger(row.part_index) || !Number.isInteger(row.part_count)) throw new Error('T75E_V2_PART_INVALID');\n  if (row.part_count !== reservation.messages.length || row.part_index < 1 || row.part_index > row.part_count || seenIds.has(row.id) || seenKeys.has(row.idempotency_key)) throw new Error('T75E_V2_PART_INVALID');\n  seenIds.add(row.id); seenKeys.add(row.idempotency_key); return { id: row.id, body: row.body, idempotency_key: row.idempotency_key, part_index: row.part_index, part_count: row.part_count };\n}).sort((a, b) => a.part_index - b.part_index);\nif (rows.some((row, index) => row.part_index !== index + 1)) throw new Error('T75E_V2_PART_INVALID');\nreturn rows.map(row => ({ json: row }));"
       },
       "notes": "Accepts only bounded durable RPC rows. It never reads delivery.text, splits, rewrites, or reserves a v2 response."
+    },
+    {
+      "name": "Build V2 Route Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000001",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        40
+      ],
+      "parameters": {
+        "jsCode": "const claim = $('Claim Next Session Inbound').item.json;\nconst route = $('Route Sales Engine V2 Claim').item.json;\nconst hex = String(claim.id || '').replace(/-/g, '').toLowerCase();\nif (!/^[0-9a-f]{32}$/.test(hex)) return [];\nconst tag = 'route:selected:route';\nlet h1 = 0x811c9dc5, h2 = 0x01000193;\nfor (const ch of (hex + '|' + route.route_generation + '|' + $execution.id + '|' + tag)) { h1 = Math.imul(h1 ^ ch.charCodeAt(0), 0x01000193) >>> 0; h2 = Math.imul(h2 ^ ch.charCodeAt(0), 0x27d4eb2d) >>> 0; }\nconst d = (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).repeat(4);\nconst event = { contract_version: 'ticket-75f1-v1', event_key: 'v2d-' + d, invocation_identity: 'cti-' + hex + '0'.repeat(32), claim_attempt_id: String(route.claim_attempt_id), workflow_execution_id: String($execution.id), canonical_inbound_message_id: claim.id, route_mode: route.v2_route === 'v2_shadow' ? 'shadow' : route.v2_route === 'v2_live' ? 'live' : 'legacy', route_generation: route.route_generation, lifecycle_stage: 'route', lifecycle_status: 'selected' };\n\n\n\n\nreturn [{ json: { diagnostic_event: event } }];"
+      },
+      "notes": "Ticket75F.2 closed, privacy-minimized diagnostic projection. It contains no prose, provider payload, identity/contact data, or arbitrary execution state."
+    },
+    {
+      "name": "Build V2 Shadow Structural Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000003",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        16
+      ],
+      "parameters": {
+        "jsCode": "const claim = $('Claim Next Session Inbound').item.json;\nconst route = $('Route Sales Engine V2 Claim').item.json;\nconst hex = String(claim.id || '').replace(/-/g, '').toLowerCase();\nif (!/^[0-9a-f]{32}$/.test(hex)) return [];\nconst tag = 'final_gate:completed:shadow';\nlet h1 = 0x811c9dc5, h2 = 0x01000193;\nfor (const ch of (hex + '|' + route.route_generation + '|' + $execution.id + '|' + tag)) { h1 = Math.imul(h1 ^ ch.charCodeAt(0), 0x01000193) >>> 0; h2 = Math.imul(h2 ^ ch.charCodeAt(0), 0x27d4eb2d) >>> 0; }\nconst d = (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).repeat(4);\nconst event = { contract_version: 'ticket-75f1-v1', event_key: 'v2d-' + d, invocation_identity: 'cti-' + hex + '0'.repeat(32), claim_attempt_id: String(route.claim_attempt_id), workflow_execution_id: String($execution.id), canonical_inbound_message_id: claim.id, route_mode: route.v2_route === 'v2_shadow' ? 'shadow' : route.v2_route === 'v2_live' ? 'live' : 'legacy', route_generation: route.route_generation, lifecycle_stage: 'final_gate', lifecycle_status: 'completed' };\nconst structural = $input.first().json.shadow_v2_projection || {};\nevent.stage_trace = structural.stage_trace || [];\nevent.action_projection = structural.action_projection || [];\nevent.gate_projection = { final_status: structural.response_eligibility || 'ineligible', finding_codes: ['shadow_structural_only'] };\nevent.reservation_projection = { state: 'not_executed' };\n\n\n\nreturn [{ json: { diagnostic_event: event } }];"
+      },
+      "notes": "Ticket75F.2 closed, privacy-minimized diagnostic projection. It contains no prose, provider payload, identity/contact data, or arbitrary execution state."
+    },
+    {
+      "name": "Build V2 Live Handoff Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000005",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        336
+      ],
+      "parameters": {
+        "jsCode": "const claim = $('Claim Next Session Inbound').item.json;\nconst route = $('Route Sales Engine V2 Claim').item.json;\nconst hex = String(claim.id || '').replace(/-/g, '').toLowerCase();\nif (!/^[0-9a-f]{32}$/.test(hex)) return [];\nconst tag = 'reservation:handed_off:handoff';\nlet h1 = 0x811c9dc5, h2 = 0x01000193;\nfor (const ch of (hex + '|' + route.route_generation + '|' + $execution.id + '|' + tag)) { h1 = Math.imul(h1 ^ ch.charCodeAt(0), 0x01000193) >>> 0; h2 = Math.imul(h2 ^ ch.charCodeAt(0), 0x27d4eb2d) >>> 0; }\nconst d = (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).repeat(4);\nconst event = { contract_version: 'ticket-75f1-v1', event_key: 'v2d-' + d, invocation_identity: 'cti-' + hex + '0'.repeat(32), claim_attempt_id: String(route.claim_attempt_id), workflow_execution_id: String($execution.id), canonical_inbound_message_id: claim.id, route_mode: route.v2_route === 'v2_shadow' ? 'shadow' : route.v2_route === 'v2_live' ? 'live' : 'legacy', route_generation: route.route_generation, lifecycle_stage: 'reservation', lifecycle_status: 'handed_off' };\n\nconst rows = $input.all().map(item => item.json);\nevent.reservation_projection = { state: 'reserved_existing', part_count: rows.length, message_ids: rows.map(row => row.id) };\n\n\nreturn [{ json: { diagnostic_event: event } }];"
+      },
+      "notes": "Ticket75F.2 closed, privacy-minimized diagnostic projection. It contains no prose, provider payload, identity/contact data, or arbitrary execution state."
+    },
+    {
+      "name": "Build V2 Provider Acceptance Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000007",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        74100,
+        48820
+      ],
+      "parameters": {
+        "jsCode": "const claim = $('Claim Next Session Inbound').item.json;\nconst route = $('Route Sales Engine V2 Claim').item.json;\nconst hex = String(claim.id || '').replace(/-/g, '').toLowerCase();\nif (!/^[0-9a-f]{32}$/.test(hex)) return [];\nconst tag = 'transport:accepted:provider';\nlet h1 = 0x811c9dc5, h2 = 0x01000193;\nfor (const ch of (hex + '|' + route.route_generation + '|' + $execution.id + '|' + tag)) { h1 = Math.imul(h1 ^ ch.charCodeAt(0), 0x01000193) >>> 0; h2 = Math.imul(h2 ^ ch.charCodeAt(0), 0x27d4eb2d) >>> 0; }\nconst d = (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).repeat(4);\nconst event = { contract_version: 'ticket-75f1-v1', event_key: 'v2d-' + d, invocation_identity: 'cti-' + hex + '0'.repeat(32), claim_attempt_id: String(route.claim_attempt_id), workflow_execution_id: String($execution.id), canonical_inbound_message_id: claim.id, route_mode: route.v2_route === 'v2_shadow' ? 'shadow' : route.v2_route === 'v2_live' ? 'live' : 'legacy', route_generation: route.route_generation, lifecycle_stage: 'transport', lifecycle_status: 'accepted' };\n\n\nif (route.v2_route !== 'v2_live') return [];\nevent.provider_outcome = 'accepted';\n\nreturn [{ json: { diagnostic_event: event } }];"
+      },
+      "notes": "Ticket75F.2 closed, privacy-minimized diagnostic projection. It contains no prose, provider payload, identity/contact data, or arbitrary execution state."
+    },
+    {
+      "name": "Build V2 Completion Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000009",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        74800,
+        49000
+      ],
+      "parameters": {
+        "jsCode": "const claim = $('Claim Next Session Inbound').item.json;\nconst route = $('Route Sales Engine V2 Claim').item.json;\nconst hex = String(claim.id || '').replace(/-/g, '').toLowerCase();\nif (!/^[0-9a-f]{32}$/.test(hex)) return [];\nconst tag = 'completion:completed:completion';\nlet h1 = 0x811c9dc5, h2 = 0x01000193;\nfor (const ch of (hex + '|' + route.route_generation + '|' + $execution.id + '|' + tag)) { h1 = Math.imul(h1 ^ ch.charCodeAt(0), 0x01000193) >>> 0; h2 = Math.imul(h2 ^ ch.charCodeAt(0), 0x27d4eb2d) >>> 0; }\nconst d = (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).repeat(4);\nconst event = { contract_version: 'ticket-75f1-v1', event_key: 'v2d-' + d, invocation_identity: 'cti-' + hex + '0'.repeat(32), claim_attempt_id: String(route.claim_attempt_id), workflow_execution_id: String($execution.id), canonical_inbound_message_id: claim.id, route_mode: route.v2_route === 'v2_shadow' ? 'shadow' : route.v2_route === 'v2_live' ? 'live' : 'legacy', route_generation: route.route_generation, lifecycle_stage: 'completion', lifecycle_status: 'completed' };\n\n\n\nif (route.v2_route !== 'v2_live') return [];\nevent.completion_outcome = 'completed';\nreturn [{ json: { diagnostic_event: event } }];"
+      },
+      "notes": "Ticket75F.2 closed, privacy-minimized diagnostic projection. It contains no prose, provider payload, identity/contact data, or arbitrary execution state."
+    },
+    {
+      "name": "Record V2 Route Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000002",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -680,
+        40
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM public.record_v2_lifecycle_diagnostic($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json.diagnostic_event) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Ticket75F.2 best-effort only. This detached recorder never gates routing, Node, reservation, transport, provider evidence, completion, or recovery."
+    },
+    {
+      "name": "Record V2 Shadow Structural Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000004",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        16
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM public.record_v2_lifecycle_diagnostic($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json.diagnostic_event) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Ticket75F.2 best-effort only. This detached recorder never gates routing, Node, reservation, transport, provider evidence, completion, or recovery."
+    },
+    {
+      "name": "Record V2 Live Handoff Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000006",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        336
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM public.record_v2_lifecycle_diagnostic($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json.diagnostic_event) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Ticket75F.2 best-effort only. This detached recorder never gates routing, Node, reservation, transport, provider evidence, completion, or recovery."
+    },
+    {
+      "name": "Record V2 Provider Acceptance Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000008",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        74300,
+        48820
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM public.record_v2_lifecycle_diagnostic($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json.diagnostic_event) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Ticket75F.2 best-effort only. This detached recorder never gates routing, Node, reservation, transport, provider evidence, completion, or recovery."
+    },
+    {
+      "name": "Record V2 Completion Diagnostic",
+      "id": "75f20000-0000-4000-8000-000000000010",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        75000,
+        49000
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM public.record_v2_lifecycle_diagnostic($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json.diagnostic_event) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Ticket75F.2 best-effort only. This detached recorder never gates routing, Node, reservation, transport, provider evidence, completion, or recovery."
     }
   ],
   "pinData": {},
@@ -6206,6 +6401,11 @@
             "node": "Loop Paid WhatsApp Parts",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Build V2 Provider Acceptance Diagnostic",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -6765,6 +6965,11 @@
             "node": "Claim Next Session Inbound",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Build V2 Completion Diagnostic",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -6792,6 +6997,22 @@
         [
           {
             "node": "Route Sales Engine V2 Mode",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build V2 Route Diagnostic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build V2 Route Diagnostic": {
+      "main": [
+        [
+          {
+            "node": "Record V2 Route Diagnostic",
             "type": "main",
             "index": 0
           }
@@ -6842,6 +7063,22 @@
             "node": "Get User from Supabase",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Build V2 Shadow Structural Diagnostic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build V2 Shadow Structural Diagnostic": {
+      "main": [
+        [
+          {
+            "node": "Record V2 Shadow Structural Diagnostic",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -6862,6 +7099,44 @@
         [
           {
             "node": "Loop Paid WhatsApp Parts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build V2 Live Handoff Diagnostic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build V2 Live Handoff Diagnostic": {
+      "main": [
+        [
+          {
+            "node": "Record V2 Live Handoff Diagnostic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build V2 Provider Acceptance Diagnostic": {
+      "main": [
+        [
+          {
+            "node": "Record V2 Provider Acceptance Diagnostic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build V2 Completion Diagnostic": {
+      "main": [
+        [
+          {
+            "node": "Record V2 Completion Diagnostic",
             "type": "main",
             "index": 0
           }

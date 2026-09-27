@@ -1262,7 +1262,16 @@ const v2Request = (name, mode, position) => ({
   credentials: { httpHeaderAuth: { id: '__T75E_RS256_SERVICE_ASSERTION__', name: 'T75E RS256 service assertion (configure before activation)' } },
   notes: 'Ticket75E.1 inactive internal-call seam. Credential must inject a short-lived RS256 Bearer assertion; no key or token is stored here. No timeout is asserted until T75G verifies the production envelope.',
 });
-const ignoreShadow = { name: 'Discard V2 Shadow Result', id: '75e10000-0000-4000-8000-000000000008', type: 'n8n-nodes-base.code', typeVersion: 2, position: [-420, 96], parameters: { jsCode: "return [{ json: { shadow_v2_invoked: true } }];" }, notes: 'Shadow result is intentionally not delivery input; legacy produces the customer-visible response.' };
+const ignoreShadow = { name: 'Discard V2 Shadow Result', id: '75e10000-0000-4000-8000-000000000008', type: 'n8n-nodes-base.code', typeVersion: 2, position: [-420, 96], parameters: { jsCode: `const result = $input.first().json;
+// This is deliberately a structural projection, not the semantic response.
+// It is available only to the observational F.1 recorder; legacy remains the
+// sole customer-visible path in shadow mode.
+const turn = result && result.turn_result || {};
+return [{ json: { shadow_v2_invoked: true, shadow_v2_projection: {
+  response_eligibility: result && result.outcome === 'eligible' ? 'eligible' : 'ineligible',
+  stage_trace: Array.isArray(turn.stage_trace) ? turn.stage_trace.map(({ stage, status }) => ({ stage, status })) : [],
+  action_projection: Array.isArray(turn.action_execution_summary) ? turn.action_execution_summary.map(({ action_id, action_type, execution_key, execution_status }) => ({ action_id, action_type, execution_key, execution_status })) : []
+} } }];` }, notes: 'Shadow result is intentionally not delivery input. Only a closed structural projection may be observed; legacy produces the customer-visible response.' };
 const validateLive = { name: 'Validate V2 Durable Reservation Handoff', id: '75e10000-0000-4000-8000-000000000009', type: 'n8n-nodes-base.code', typeVersion: 2, position: [-420, 256], parameters: { jsCode: `const result = $input.first().json;
 const claim = $('Claim Next Session Inbound').item.json;
 if (!result || result.outcome !== 'eligible' || result.canonical_inbound_message_id !== claim.id || result.processing_owner !== $execution.id) throw new Error('T75E_V2_RESULT_INVALID');
@@ -1276,9 +1285,56 @@ const rows = reservation.messages.map(row => {
 }).sort((a, b) => a.part_index - b.part_index);
 if (rows.some((row, index) => row.part_index !== index + 1)) throw new Error('T75E_V2_PART_INVALID');
 return rows.map(row => ({ json: row }));` }, notes: 'Accepts only bounded durable RPC rows. It never reads delivery.text, splits, rewrites, or reserves a v2 response.' };
-workflow.nodes.push(v2Route, v2RouteSwitch, v2Request('Invoke V2 Shadow Claimed Turn', 'shadow', [-420, 16]), v2Request('Invoke V2 Live Claimed Turn', 'live', [-420, 256]), ignoreShadow, validateLive);
+// Ticket75F.2: each observer has no route back into business execution.  A
+// recorder error is deliberately ignored by its detached branch.
+const v2DiagnosticBuilder = ({ name, id, position, stage, status, source = 'route' }) => ({
+  name, id, type: 'n8n-nodes-base.code', typeVersion: 2, position,
+  parameters: { jsCode: `const claim = $('Claim Next Session Inbound').item.json;
+const route = $('Route Sales Engine V2 Claim').item.json;
+const hex = String(claim.id || '').replace(/-/g, '').toLowerCase();
+if (!/^[0-9a-f]{32}$/.test(hex)) return [];
+const tag = '${stage}:${status}:${source}';
+let h1 = 0x811c9dc5, h2 = 0x01000193;
+for (const ch of (hex + '|' + route.route_generation + '|' + $execution.id + '|' + tag)) { h1 = Math.imul(h1 ^ ch.charCodeAt(0), 0x01000193) >>> 0; h2 = Math.imul(h2 ^ ch.charCodeAt(0), 0x27d4eb2d) >>> 0; }
+const d = (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).repeat(4);
+const event = { contract_version: 'ticket-75f1-v1', event_key: 'v2d-' + d, invocation_identity: 'cti-' + hex + '0'.repeat(32), claim_attempt_id: String(route.claim_attempt_id), workflow_execution_id: String($execution.id), canonical_inbound_message_id: claim.id, route_mode: route.v2_route === 'v2_shadow' ? 'shadow' : route.v2_route === 'v2_live' ? 'live' : 'legacy', route_generation: route.route_generation, lifecycle_stage: '${stage}', lifecycle_status: '${status}' };
+${source === 'shadow' ? `const structural = $input.first().json.shadow_v2_projection || {};
+event.stage_trace = structural.stage_trace || [];
+event.action_projection = structural.action_projection || [];
+event.gate_projection = { final_status: structural.response_eligibility || 'ineligible', finding_codes: ['shadow_structural_only'] };
+event.reservation_projection = { state: 'not_executed' };` : ''}
+${source === 'handoff' ? `const rows = $input.all().map(item => item.json);
+event.reservation_projection = { state: 'reserved_existing', part_count: rows.length, message_ids: rows.map(row => row.id) };` : ''}
+${source === 'provider' ? `if (route.v2_route !== 'v2_live') return [];
+event.provider_outcome = 'accepted';` : ''}
+${source === 'completion' ? `if (route.v2_route !== 'v2_live') return [];
+event.completion_outcome = 'completed';` : ''}
+return [{ json: { diagnostic_event: event } }];` },
+  notes: 'Ticket75F.2 closed, privacy-minimized diagnostic projection. It contains no prose, provider payload, identity/contact data, or arbitrary execution state.',
+});
+const v2DiagnosticRecorder = ({ name, id, position }) => ({
+  name, id, type: 'n8n-nodes-base.postgres', typeVersion: 2.6, position, onError: 'continueRegularOutput',
+  parameters: { operation: 'executeQuery', query: 'SELECT * FROM public.record_v2_lifecycle_diagnostic($1::jsonb);', options: { queryReplacement: '={{ JSON.stringify($json.diagnostic_event) }}' } },
+  credentials: postgresCredentials,
+  notes: 'Ticket75F.2 best-effort only. This detached recorder never gates routing, Node, reservation, transport, provider evidence, completion, or recovery.',
+});
+const routeDiagnostic = v2DiagnosticBuilder({ name: 'Build V2 Route Diagnostic', id: '75f20000-0000-4000-8000-000000000001', position: [-880, 40], stage: 'route', status: 'selected' });
+const shadowDiagnostic = v2DiagnosticBuilder({ name: 'Build V2 Shadow Structural Diagnostic', id: '75f20000-0000-4000-8000-000000000003', position: [-200, 16], stage: 'final_gate', status: 'completed', source: 'shadow' });
+const handoffDiagnostic = v2DiagnosticBuilder({ name: 'Build V2 Live Handoff Diagnostic', id: '75f20000-0000-4000-8000-000000000005', position: [-200, 336], stage: 'reservation', status: 'handed_off', source: 'handoff' });
+const providerDiagnostic = v2DiagnosticBuilder({ name: 'Build V2 Provider Acceptance Diagnostic', id: '75f20000-0000-4000-8000-000000000007', position: [74100, 48820], stage: 'transport', status: 'accepted', source: 'provider' });
+const completionDiagnostic = v2DiagnosticBuilder({ name: 'Build V2 Completion Diagnostic', id: '75f20000-0000-4000-8000-000000000009', position: [74800, 49000], stage: 'completion', status: 'completed', source: 'completion' });
+const diagnosticRecorders = [
+  v2DiagnosticRecorder({ name: 'Record V2 Route Diagnostic', id: '75f20000-0000-4000-8000-000000000002', position: [-680, 40] }),
+  v2DiagnosticRecorder({ name: 'Record V2 Shadow Structural Diagnostic', id: '75f20000-0000-4000-8000-000000000004', position: [0, 16] }),
+  v2DiagnosticRecorder({ name: 'Record V2 Live Handoff Diagnostic', id: '75f20000-0000-4000-8000-000000000006', position: [0, 336] }),
+  v2DiagnosticRecorder({ name: 'Record V2 Provider Acceptance Diagnostic', id: '75f20000-0000-4000-8000-000000000008', position: [74300, 48820] }),
+  v2DiagnosticRecorder({ name: 'Record V2 Completion Diagnostic', id: '75f20000-0000-4000-8000-000000000010', position: [75000, 49000] }),
+];
+workflow.nodes.push(v2Route, v2RouteSwitch, v2Request('Invoke V2 Shadow Claimed Turn', 'shadow', [-420, 16]), v2Request('Invoke V2 Live Claimed Turn', 'live', [-420, 256]), ignoreShadow, validateLive, routeDiagnostic, shadowDiagnostic, handoffDiagnostic, providerDiagnostic, completionDiagnostic, ...diagnosticRecorders);
 workflow.connections['Route Session Claim State'].main[0] = [{ node: v2Route.name, type: 'main', index: 0 }];
 workflow.connections[v2Route.name] = { main: [[{ node: v2RouteSwitch.name, type: 'main', index: 0 }]] };
+workflow.connections[v2Route.name].main[0].push({ node: routeDiagnostic.name, type: 'main', index: 0 });
+workflow.connections[routeDiagnostic.name] = { main: [[{ node: 'Record V2 Route Diagnostic', type: 'main', index: 0 }]] };
 workflow.connections[v2RouteSwitch.name] = { main: [
   [{ node: 'Get User from Supabase', type: 'main', index: 0 }],
   [{ node: 'Invoke V2 Shadow Claimed Turn', type: 'main', index: 0 }],
@@ -1286,9 +1342,15 @@ workflow.connections[v2RouteSwitch.name] = { main: [
   [],
 ] };
 workflow.connections['Invoke V2 Shadow Claimed Turn'] = { main: [[{ node: ignoreShadow.name, type: 'main', index: 0 }]] };
-workflow.connections[ignoreShadow.name] = { main: [[{ node: 'Get User from Supabase', type: 'main', index: 0 }]] };
+workflow.connections[ignoreShadow.name] = { main: [[{ node: 'Get User from Supabase', type: 'main', index: 0 }, { node: shadowDiagnostic.name, type: 'main', index: 0 }]] };
+workflow.connections[shadowDiagnostic.name] = { main: [[{ node: 'Record V2 Shadow Structural Diagnostic', type: 'main', index: 0 }]] };
 workflow.connections['Invoke V2 Live Claimed Turn'] = { main: [[{ node: validateLive.name, type: 'main', index: 0 }]] };
-workflow.connections[validateLive.name] = { main: [[{ node: 'Loop Paid WhatsApp Parts', type: 'main', index: 0 }]] };
+workflow.connections[validateLive.name] = { main: [[{ node: 'Loop Paid WhatsApp Parts', type: 'main', index: 0 }, { node: handoffDiagnostic.name, type: 'main', index: 0 }]] };
+workflow.connections[handoffDiagnostic.name] = { main: [[{ node: 'Record V2 Live Handoff Diagnostic', type: 'main', index: 0 }]] };
+workflow.connections['Assert Paid Assistant Reply Accepted'].main[0].push({ node: providerDiagnostic.name, type: 'main', index: 0 });
+workflow.connections[providerDiagnostic.name] = { main: [[{ node: 'Record V2 Provider Acceptance Diagnostic', type: 'main', index: 0 }]] };
+workflow.connections['Mark Session Inbound Complete'].main[0].push({ node: completionDiagnostic.name, type: 'main', index: 0 });
+workflow.connections[completionDiagnostic.name] = { main: [[{ node: 'Record V2 Completion Diagnostic', type: 'main', index: 0 }]] };
 
 fs.writeFileSync(outputPath, `${JSON.stringify(workflow, null, 2)}\n`);
 console.log(`Wrote ${path.relative(root, outputPath)}`);

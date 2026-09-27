@@ -11,9 +11,9 @@ test('T75E.1 generator is authoritative and inactive artifact contains the post-
 test('T75E.1 defaults legacy, shadow rejoins legacy, and live cannot fall through', () => {
   const route = nodes.get('Route Sales Engine V2 Claim'); assert.match(route.parameters.jsCode, /SALES_ENGINE_V2_CONTROL \|\| 'disabled'/); assert.match(route.parameters.jsCode, /SALES_ENGINE_V2_ROUTE_GENERATION/); assert.doesNotMatch(route.parameters.jsCode, /random|percentage/i);
   assert.deepEqual(out('Route Sales Engine V2 Mode'), ['Get User from Supabase', 'Invoke V2 Shadow Claimed Turn', 'Invoke V2 Live Claimed Turn']);
-  assert.deepEqual(out('Discard V2 Shadow Result'), ['Get User from Supabase']);
+  assert.deepEqual(out('Discard V2 Shadow Result'), ['Get User from Supabase', 'Build V2 Shadow Structural Diagnostic']);
   assert.deepEqual(out('Invoke V2 Live Claimed Turn'), ['Validate V2 Durable Reservation Handoff']);
-  assert.deepEqual(out('Validate V2 Durable Reservation Handoff'), ['Loop Paid WhatsApp Parts']);
+  assert.deepEqual(out('Validate V2 Durable Reservation Handoff'), ['Loop Paid WhatsApp Parts', 'Build V2 Live Handoff Diagnostic']);
   assert.equal(out('Invoke V2 Live Claimed Turn').includes('Get User from Supabase'), false);
   assert.equal(out('Invoke V2 Live Claimed Turn').includes('Prepare Paid WhatsApp Message Parts'), false);
   assert.equal(out('Invoke V2 Live Claimed Turn').includes('Reserve Paid Assistant Reply'), false);
@@ -24,5 +24,5 @@ test('T75E.1 internal request is capability-only and uses a secret-free RS256 cr
 });
 test('T75E.1 accepts only complete durable rows and reuses the existing provider-evidence/completion continuation', () => {
   const code = nodes.get('Validate V2 Durable Reservation Handoff').parameters.jsCode; for (const token of ['reserved_new', 'reserved_existing', 'seenIds', 'seenKeys', 'part_count', 'T75E_V2_PART_INVALID']) assert.match(code, new RegExp(token)); assert.doesNotMatch(code, /delivery\.text|formatWhatsAppMessage|Reserve Paid Assistant Reply/);
-  assert.deepEqual(out('Validate V2 Durable Reservation Handoff'), ['Loop Paid WhatsApp Parts']); assert.equal(reachable('Loop Paid WhatsApp Parts', 'Update Paid Assistant Reply Delivery'), true); assert.equal(reachable('Update Paid Assistant Reply Delivery', 'Assert Paid Assistant Reply Accepted'), true); assert.equal(reachable('Assert Paid Assistant Reply Accepted', 'Mark Session Inbound Complete'), true);
+  assert.deepEqual(out('Validate V2 Durable Reservation Handoff'), ['Loop Paid WhatsApp Parts', 'Build V2 Live Handoff Diagnostic']); assert.equal(reachable('Loop Paid WhatsApp Parts', 'Update Paid Assistant Reply Delivery'), true); assert.equal(reachable('Update Paid Assistant Reply Delivery', 'Assert Paid Assistant Reply Accepted'), true); assert.equal(reachable('Assert Paid Assistant Reply Accepted', 'Mark Session Inbound Complete'), true);
 });

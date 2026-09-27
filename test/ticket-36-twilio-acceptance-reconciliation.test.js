@@ -70,7 +70,7 @@ test('paid reply follows reserve, send, reconcile, assert, state, completion', (
   assert.deepEqual(outputs('Loop Paid WhatsApp Parts', 1), ['Send All Intents Message']);
   assert.deepEqual(outputs('Send All Intents Message'), ['Update Paid Assistant Reply Delivery']);
   assert.deepEqual(outputs('Update Paid Assistant Reply Delivery'), ['Assert Paid Assistant Reply Accepted']);
-  assert.deepEqual(outputs('Assert Paid Assistant Reply Accepted'), ['Loop Paid WhatsApp Parts']);
+  assert.deepEqual(outputs('Assert Paid Assistant Reply Accepted'), ['Loop Paid WhatsApp Parts', 'Build V2 Provider Acceptance Diagnostic']);
   assert.deepEqual(outputs('Loop Paid WhatsApp Parts'), ['Update Last Assistant Message']);
   assert.deepEqual(outputs('Update Last Assistant Message'), ['Mark Session Inbound Complete']);
 });
