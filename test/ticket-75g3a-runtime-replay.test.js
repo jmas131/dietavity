@@ -18,7 +18,7 @@ function dependencies(replayGuard, counters = {}) { return { supabase: { rpc: as
 
 test('production configuration defaults disabled and rejects malformed activation settings without exposing values', () => {
   assert.deepEqual(parseProductionRuntimeConfig({}), { control: 'disabled', enabled: false, audience: AUDIENCE });
-  for (const env of [{ SALES_ENGINE_V2_CONTROL: 'random' }, { ...baseEnv(), SALES_ENGINE_V2_SHADOW_COHORT_IDS: '' }, { ...baseEnv(), SALES_ENGINE_V2_JWT_PUBLIC_KEYS_JSON: '{bad' }]) assert.throws(() => parseProductionRuntimeConfig(env), error => error.code === 'CLAIMED_TURN_CONFIGURATION_INVALID' && !error.message.includes('PSEUDONYM'));
+  for (const env of [{ SALES_ENGINE_V2_CONTROL: 'random' }, { ...baseEnv(), SALES_ENGINE_V2_SHADOW_COHORT_IDS: '' }, { ...baseEnv(), SALES_ENGINE_V2_JWT_PUBLIC_KEYS_JSON: '{bad' }, { ...baseEnv(), SALES_ENGINE_V2_CLAIMED_TURN_DEADLINE_MS: '90001' }]) assert.throws(() => parseProductionRuntimeConfig(env), error => error.code === 'CLAIMED_TURN_CONFIGURATION_INVALID' && !error.message.includes('PSEUDONYM'));
 });
 test('durable replay adapter maps one atomic result and fails closed for ambiguity', async () => {
   const calls = []; const adapter = createSupabaseAssertionReplayAdapter({ supabase: { async rpc(name, payload) { calls.push({ name, payload }); return { data: [{ state: 'consumed' }] }; } } });

@@ -92,6 +92,6 @@ test('G.3D fails closed for an unexpected production identity, missing acquired/
 });
 
 test('G.3D candidate and manifest have stable fingerprints', () => {
-  assert.equal(sha256(fs.readFileSync(candidatePath, 'utf8')), '55904a8e3e97cf29a83590dfa95f783d7469fddb2d44b91e1594818aa60da26f');
+  assert.equal(sha256(fs.readFileSync(candidatePath, 'utf8')), '3efb9b0062bdf2a5adfdbff8a9cdaa2aac9f9532a646e42c2cb2ce93cf3f6ab5');
   assert.equal(sha256(fs.readFileSync(manifestPath, 'utf8')), 'b30d7588d37f0e325a3288c5edaab058f81fb4daa0374a6bafb16e2729e9e084');
 });

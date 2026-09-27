@@ -21,7 +21,7 @@ never selects Ticket75A's in-memory test guard.
 `production-runtime-config.js` is a closed environment parser. It defaults to
 `disabled`; an enabled shadow configuration requires an opaque route generation,
 nonempty UUID allowlist, issuer, exact Ticket75A audience, `kid`→public-key and
-client map, 1–120 second deadline, pseudonymization key, all six configured
+client map, 1–90 second deadline, pseudonymization key, all six configured
 model identifiers, an explicit `supabase_service_role` backend adapter, enabled
 durable diagnostics, and explicit durable replay mode. Invalid values return the
 disabled fail-closed handler and are never reported with their supplied values.

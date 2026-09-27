@@ -16,8 +16,8 @@ Repository facts at `1fc6bbbe54fdc5b408da204767b8ef264cb612f3`:
 | D.1 reservation migration | intentionally excluded | it must remain absent for shadow |
 | G.3D merge | ready | repeat it against an immediate fresh export; never install the checked-in candidate directly |
 | Disabled runtime | fail closed | missing/disabled configuration does not assemble model, action, reservation, diagnostics, or replay adapters |
-| HTTP timeout | **implementation required** | the generated claimed-turn HTTP nodes currently have empty `options`; no explicit 100-second timeout is represented |
-| private listener | **implementation/operator decision required** | `server.js` currently calls `app.listen(3000)` without a host, so an installation must not rely on an unverified firewall to make the internal endpoint private |
+| HTTP timeout | implemented in G.4A | both claimed-turn HTTP nodes explicitly set `options.timeout: 100000` milliseconds |
+| private listener | implemented in G.4A; deployment decision remains | `DIETAVITY_LISTENER_HOST` defaults to `127.0.0.1`, `DIETAVITY_LISTENER_PORT` defaults to `3000`; the actual n8n private-connect address remains an operator network decision |
 | n8n JWT support | **operator verification required** | repository node definitions use `n8n-nodes-base.jwt`, but installed production capability has not been independently observed |
 | diagnostic governance | **operator approval required** | F.1 deliberately has no embedded retention/purge policy |
 
@@ -68,22 +68,16 @@ do not create either as part of disabled installation. A capability failure is
 a stop condition, not permission to use a Code node, environment private key,
 or static token.
 
-## Required small implementation gate
+## G.4A completed listener and timeout boundary
 
-Before Gate B or Gate D below, implement and review a narrow repository change
-that:
-
-1. sets the n8n claimed-turn request timeout explicitly to `100000` ms in the
-   authoritative Ticket75 topology definition; and
-2. supplies a deliberate Node listener binding configuration so the website
-   may remain nginx-served while port 3000 is not accidentally reachable from
-   arbitrary networks.
-
-The change must preserve ordinary website routes, default to a safe listener,
-and update the G.3D merge candidate through its repository topology source. It
-requires focused generator/server tests. This runbook remains applicable after
-that change; it must be regenerated and re-reviewed rather than hand-patching
-the candidate.
+G.4A makes the request timeout explicit in the authoritative generator and
+sets a closed Node listener contract. `DIETAVITY_LISTENER_HOST` defaults to
+`127.0.0.1`; `DIETAVITY_LISTENER_PORT` defaults to `3000`. Explicit overrides
+must be numeric non-wildcard IP addresses and ports in `1..65535`; empty,
+hostname, `0.0.0.0`, and `::` values stop startup without printing the value.
+This preserves nginx-served website behavior while avoiding an implicit public
+Node bind. The actual Docker-to-host connectivity remains a controlled
+deployment decision, not a workflow default.
 
 ## Network design decision
 
@@ -238,8 +232,9 @@ SALES_ENGINE_V2_LIVE_COHORT_IDS=
    Do not set a route generation, model configuration, pseudonym key, public
    key map, or signing configuration while disabled unless the operator's
    configuration mechanism requires harmless placeholders. Never log values.
-4. Apply the approved loopback Node binding and private nginx/Docker bridge
-   design. Validate nginx configuration before reload and verify the exact
+4. Keep the default loopback Node binding (or use an explicitly reviewed
+   private numeric override) and apply the private nginx/Docker bridge design.
+   Validate nginx configuration before reload and verify the exact
    method/path restriction from the n8n network only.
 5. Use the established PM2 reload mechanism only after the artifact/config and
    network configuration are complete. Confirm the ordinary web pages and

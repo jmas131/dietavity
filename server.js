@@ -13,6 +13,7 @@ const {
   portalRequestTimeoutMs
 } = require('./lib/portal-deadline');
 const { createProductionClaimedTurnRuntime } = require('./lib/sales-engine-v2/production-runtime');
+const { parseListenerConfig } = require('./lib/listener-config');
 
 const app = express();
 
@@ -2428,10 +2429,17 @@ app.use((error, req, res, next) => {
 });
 
 if (require.main === module) {
-
-  app.listen(3000, () => {
-    console.log('Dietavity running on port 3000');
-  });
+  try {
+    const listener = parseListenerConfig();
+    app.listen(listener.port, listener.host, () => {
+      console.log(`Dietavity listening on ${listener.host}:${listener.port}`);
+    });
+  } catch {
+    // Never print configuration values: a malformed listener must stop rather
+    // than silently widening to a wildcard bind.
+    console.error('Dietavity listener configuration invalid');
+    process.exitCode = 1;
+  }
 
 }
 

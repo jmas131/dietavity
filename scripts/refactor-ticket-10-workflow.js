@@ -1281,8 +1281,8 @@ const v2Request = (name, mode, position) => ({
   route_generation: $('Route Sales Engine V2 Claim').item.json.route_generation,
   mode: '${mode}',
   workflow_execution_id: $execution.id
-} }}`, options: {} },
-  notes: 'Ticket75G.3C internal call. A fresh native-JWT RS256 assertion is supplied only in this Authorization header; no static bearer credential, key, or token is stored here. No timeout is asserted until T75G verifies the production envelope.',
+} }}`, options: { timeout: 100000 } },
+  notes: 'Ticket75G.4A internal call. A fresh native-JWT RS256 assertion is supplied only in this Authorization header; no static bearer credential, key, or token is stored here. The explicit 100000 ms HTTP timeout exceeds the 90000 ms Node deadline; retryOnFail remains absent.',
 });
 const normalizeShadow = { name: 'Normalize V2 Shadow Outcome', id: '75g3b000-0000-4000-8000-000000000001', type: 'n8n-nodes-base.code', typeVersion: 2, position: [-420, 96], onError: 'continueRegularOutput', parameters: { jsCode: `const result = $input.first().json;
 const only = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => keys.has(key));
