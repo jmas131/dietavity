@@ -1225,6 +1225,66 @@ workflow.nodes.find(n => n.name === 'Interpret Sales Buyer Signal').parameters.o
 
 classifier.parameters.options.systemMessage += '\nQuestions about generation, readiness, availability, delivery or portal visibility after payment/personalization are fulfillment_timing; readiness notices are fulfillment_notification. Neither means renewal or a scheduled reminder. Set explicit_reminder_request only for a current explicit request to remind the customer, never based on history or readiness notification questions.';
 
+// Ticket75E.1: this inactive seam routes only a successfully acquired claim.
+// Node owns v2 semantics, preparation, and reservation; n8n consumes only the
+// returned durable physical rows for its established transport loop.
+const v2Route = {
+  name: 'Route Sales Engine V2 Claim', id: '75e10000-0000-4000-8000-000000000001', type: 'n8n-nodes-base.code', typeVersion: 2, position: [-900, 160],
+  parameters: { jsCode: `const configured = $env.SALES_ENGINE_V2_ROUTE || 'legacy';
+if (!['legacy', 'v2_shadow', 'v2_live'].includes(configured)) throw new Error('T75E_ROUTE_CONFIGURATION_INVALID');
+return [{ json: { v2_route: configured, claim_attempt_id: $execution.id } }];` },
+  notes: 'Ticket75E.1 inactive deterministic route seam. Default is legacy; no percentage/random routing. The selected route is carried for this acquired claim only.',
+};
+const v2RouteSwitch = {
+  name: 'Route Sales Engine V2 Mode', id: '75e10000-0000-4000-8000-000000000002', type: 'n8n-nodes-base.switch', typeVersion: 3.4, position: [-680, 160],
+  parameters: { rules: { values: ['legacy', 'v2_shadow', 'v2_live'].map((value, index) => ({ conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 }, conditions: [{ id: `75e10000-0000-4000-8000-00000000000${index + 3}`, leftValue: '={{ $json.v2_route }}', rightValue: value, operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } })), }, options: { fallbackOutput: 'extra' } },
+  notes: 'Legacy makes no Node call. Shadow invokes Node but rejoins legacy. Live never falls through to legacy.',
+};
+const v2Request = (name, mode, position) => ({
+  name, id: `75e10000-0000-4000-8000-0000000000${mode === 'shadow' ? '06' : '07'}`, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position,
+  parameters: { method: 'POST', url: '={{ $env.SALES_ENGINE_V2_CLAIMED_TURN_URL || \'http://127.0.0.1:3000/internal/sales-engine-v2/claimed-turn\' }}', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth', sendBody: true, specifyBody: 'json', jsonBody: `={{ {
+  contract_version: 'ticket-75-claimed-turn-v1',
+  canonical_inbound_message_id: $('Claim Next Session Inbound').item.json.id,
+  session_id: $('Claim Next Session Inbound').item.json.session_id,
+  processing_owner: $execution.id,
+  claimed_lease_until: $('Claim Next Session Inbound').item.json.processing_lease_until,
+  claim_attempt_id: $('Route Sales Engine V2 Claim').item.json.claim_attempt_id,
+  mode: '${mode}',
+  workflow_execution_id: $execution.id
+} }}`, options: {} },
+  // Placeholder identity is a configuration seam, not a key/token. Activation
+  // requires managed short-lived RS256 assertion signing and rotation.
+  credentials: { httpHeaderAuth: { id: '__T75E_RS256_SERVICE_ASSERTION__', name: 'T75E RS256 service assertion (configure before activation)' } },
+  notes: 'Ticket75E.1 inactive internal-call seam. Credential must inject a short-lived RS256 Bearer assertion; no key or token is stored here. No timeout is asserted until T75G verifies the production envelope.',
+});
+const ignoreShadow = { name: 'Discard V2 Shadow Result', id: '75e10000-0000-4000-8000-000000000008', type: 'n8n-nodes-base.code', typeVersion: 2, position: [-420, 96], parameters: { jsCode: "return [{ json: { shadow_v2_invoked: true } }];" }, notes: 'Shadow result is intentionally not delivery input; legacy produces the customer-visible response.' };
+const validateLive = { name: 'Validate V2 Durable Reservation Handoff', id: '75e10000-0000-4000-8000-000000000009', type: 'n8n-nodes-base.code', typeVersion: 2, position: [-420, 256], parameters: { jsCode: `const result = $input.first().json;
+const claim = $('Claim Next Session Inbound').item.json;
+if (!result || result.outcome !== 'eligible' || result.canonical_inbound_message_id !== claim.id || result.processing_owner !== $execution.id) throw new Error('T75E_V2_RESULT_INVALID');
+const reservation = result.delivery && result.delivery.reservation;
+if (!reservation || !['reserved_new', 'reserved_existing'].includes(reservation.state) || !Array.isArray(reservation.messages) || reservation.messages.length < 1 || reservation.messages.length > 999) throw new Error('T75E_V2_RESERVATION_INVALID');
+const seenIds = new Set(), seenKeys = new Set();
+const rows = reservation.messages.map(row => {
+  if (!row || typeof row.id !== 'string' || typeof row.body !== 'string' || !row.body || typeof row.idempotency_key !== 'string' || !row.idempotency_key || !Number.isInteger(row.part_index) || !Number.isInteger(row.part_count)) throw new Error('T75E_V2_PART_INVALID');
+  if (row.part_count !== reservation.messages.length || row.part_index < 1 || row.part_index > row.part_count || seenIds.has(row.id) || seenKeys.has(row.idempotency_key)) throw new Error('T75E_V2_PART_INVALID');
+  seenIds.add(row.id); seenKeys.add(row.idempotency_key); return { id: row.id, body: row.body, idempotency_key: row.idempotency_key, part_index: row.part_index, part_count: row.part_count };
+}).sort((a, b) => a.part_index - b.part_index);
+if (rows.some((row, index) => row.part_index !== index + 1)) throw new Error('T75E_V2_PART_INVALID');
+return rows.map(row => ({ json: row }));` }, notes: 'Accepts only bounded durable RPC rows. It never reads delivery.text, splits, rewrites, or reserves a v2 response.' };
+workflow.nodes.push(v2Route, v2RouteSwitch, v2Request('Invoke V2 Shadow Claimed Turn', 'shadow', [-420, 16]), v2Request('Invoke V2 Live Claimed Turn', 'live', [-420, 256]), ignoreShadow, validateLive);
+workflow.connections['Route Session Claim State'].main[0] = [{ node: v2Route.name, type: 'main', index: 0 }];
+workflow.connections[v2Route.name] = { main: [[{ node: v2RouteSwitch.name, type: 'main', index: 0 }]] };
+workflow.connections[v2RouteSwitch.name] = { main: [
+  [{ node: 'Get User from Supabase', type: 'main', index: 0 }],
+  [{ node: 'Invoke V2 Shadow Claimed Turn', type: 'main', index: 0 }],
+  [{ node: 'Invoke V2 Live Claimed Turn', type: 'main', index: 0 }],
+  [],
+] };
+workflow.connections['Invoke V2 Shadow Claimed Turn'] = { main: [[{ node: ignoreShadow.name, type: 'main', index: 0 }]] };
+workflow.connections[ignoreShadow.name] = { main: [[{ node: 'Get User from Supabase', type: 'main', index: 0 }]] };
+workflow.connections['Invoke V2 Live Claimed Turn'] = { main: [[{ node: validateLive.name, type: 'main', index: 0 }]] };
+workflow.connections[validateLive.name] = { main: [[{ node: 'Loop Paid WhatsApp Parts', type: 'main', index: 0 }]] };
+
 fs.writeFileSync(outputPath, `${JSON.stringify(workflow, null, 2)}\n`);
 console.log(`Wrote ${path.relative(root, outputPath)}`);
 

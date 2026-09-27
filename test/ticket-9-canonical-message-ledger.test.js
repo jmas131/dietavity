@@ -82,7 +82,9 @@ test('inbound reservation is the shared concurrency gate before routing or side 
   assert.deepEqual(outputs('Incoming Message'), ['Canonicalize Inbound WhatsApp']);
   assert.deepEqual(outputs('Canonicalize Inbound WhatsApp'), ['Reserve Canonical Inbound Message']);
   assert.deepEqual(outputs('Reserve Canonical Inbound Message'), ['Claim Next Session Inbound']);
-  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get User from Supabase']);
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['Route Sales Engine V2 Claim']);
+  assert.deepEqual(outputs('Route Sales Engine V2 Claim'), ['Route Sales Engine V2 Mode']);
+  assert.deepEqual(outputs('Route Sales Engine V2 Mode', 0), ['Get User from Supabase']);
   const sql = nodes.get('Reserve Canonical Inbound Message').parameters.query;
   assert.match(sql, /INSERT INTO public\.messages/);
   assert.match(sql, /ON CONFLICT \(idempotency_key\)[\s\S]*DO NOTHING/);
