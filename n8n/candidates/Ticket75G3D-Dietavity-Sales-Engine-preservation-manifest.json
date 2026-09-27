@@ -1,0 +1,591 @@
+{
+  "contract_version": "ticket-75g3d-preservation-v1",
+  "source_identity": {
+    "workflow_id": "9oRFrbGVuK91LaAD",
+    "workflow_name": "Dietavity Sales Engine (Ticket 10)",
+    "active": true,
+    "node_count": 183,
+    "sha256": "7914e39b874e5dbe7654a80ecc255c1b80d72bf883cf02c84d92cf3496af3fe8"
+  },
+  "candidate_identity": {
+    "workflow_id": "9oRFrbGVuK91LaAD",
+    "workflow_name": "Dietavity Sales Engine (Ticket 10)",
+    "active": false,
+    "node_count": 207
+  },
+  "protected_production_nodes": [
+    {
+      "name": "Build Canonical Dietavity Knowledge",
+      "sha256": "f0f6bd7257acdd0cd3a2ed146e1c3f650c0e27eb83cdf2e5d34615778ff9687f",
+      "unchanged": true
+    },
+    {
+      "name": "Interpret Sales Buyer Signal",
+      "sha256": "f5d63ad60e3b1db8e31ba3021cbc3ed38ff27ec96d7403fb5f7cc0f850c587e6",
+      "unchanged": true
+    },
+    {
+      "name": "Parse Sales Interpretation",
+      "sha256": "bd66b9184b3d36e155132f120b48e83a434bfbcd97dafa6a6139cf474f06a8f9",
+      "unchanged": true
+    },
+    {
+      "name": "Apply Deterministic Commercial Policy",
+      "sha256": "08e16c20c595b180115260e747ac623ac1ad40ccf2182a27cfc82b0f77040acd",
+      "unchanged": true
+    },
+    {
+      "name": "Build Constrained Sales Response",
+      "sha256": "c2557cc58f66e40bd772e2e637f04a1dea22b004089b3cb1d5b32f70e06288a1",
+      "unchanged": true
+    },
+    {
+      "name": "Validate Sales Response Contract",
+      "sha256": "0aad8d2d7476e29997deac099800cc59dfbe13245ec319a47424ea7977bab1e9",
+      "unchanged": true
+    },
+    {
+      "name": "Reserve Checkout Reply",
+      "sha256": "1b8723513e0d7c4c87ccdcfc71b9d84e1f3bd7b662710b78fe1945891e5f75ca",
+      "unchanged": true
+    },
+    {
+      "name": "Wait Before Session Claim Retry",
+      "sha256": "cc571966289b958c043d14ee12c5035bf3933d08fcc81806d1ebeb12d6a335f0",
+      "unchanged": true
+    },
+    {
+      "name": "Loop Paid WhatsApp Parts",
+      "sha256": "936ca89ff9b1fd3788e349dc7d34f80a8607642cf17bc4e27da2cbd227f1c1c3",
+      "unchanged": true
+    }
+  ],
+  "differences": [
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75e10000-0000-4000-8000-000000000001",
+      "node_name": "Route Sales Engine V2 Claim"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75e10000-0000-4000-8000-000000000002",
+      "node_name": "Route Sales Engine V2 Mode"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000001",
+      "node_name": "Prepare V2 Shadow Assertion"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000002",
+      "node_name": "Route V2 Shadow Assertion Configuration"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000003",
+      "node_name": "Generate V2 Shadow Assertion JTI"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000004",
+      "node_name": "Route V2 Shadow Assertion JTI"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000005",
+      "node_name": "Mint V2 Shadow RS256 Assertion"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000006",
+      "node_name": "Validate V2 Shadow Signed Assertion"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000007",
+      "node_name": "Route V2 Shadow Signed Assertion"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000015",
+      "node_name": "Classify V2 Shadow Signing Failure"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000008",
+      "node_name": "Prepare V2 Live Assertion"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000009",
+      "node_name": "Route V2 Live Assertion Configuration"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000010",
+      "node_name": "Generate V2 Live Assertion JTI"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000011",
+      "node_name": "Route V2 Live Assertion JTI"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000012",
+      "node_name": "Mint V2 Live RS256 Assertion"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000013",
+      "node_name": "Validate V2 Live Signed Assertion"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000014",
+      "node_name": "Route V2 Live Signed Assertion"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3c000-0000-4000-8000-000000000016",
+      "node_name": "Fail V2 Live Signing"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75e10000-0000-4000-8000-000000000006",
+      "node_name": "Invoke V2 Shadow Claimed Turn"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75e10000-0000-4000-8000-000000000007",
+      "node_name": "Invoke V2 Live Claimed Turn"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75g3b000-0000-4000-8000-000000000001",
+      "node_name": "Normalize V2 Shadow Outcome"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75e10000-0000-4000-8000-000000000009",
+      "node_name": "Validate V2 Durable Reservation Handoff"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75f20000-0000-4000-8000-000000000003",
+      "node_name": "Build V2 Shadow Structural Diagnostic"
+    },
+    {
+      "category": "ticket75_added_node",
+      "node_id": "75f20000-0000-4000-8000-000000000004",
+      "node_name": "Record V2 Shadow Structural Diagnostic"
+    },
+    {
+      "category": "ticket75_required_setting",
+      "setting": "active",
+      "from": true,
+      "to": false,
+      "reason": "candidate must be inactive on import"
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Build V2 Shadow Structural Diagnostic",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Record V2 Shadow Structural Diagnostic",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Classify V2 Shadow Signing Failure",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Get User from Supabase",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Generate V2 Live Assertion JTI",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Route V2 Live Assertion JTI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Generate V2 Shadow Assertion JTI",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Route V2 Shadow Assertion JTI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Invoke V2 Live Claimed Turn",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Validate V2 Durable Reservation Handoff",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Invoke V2 Shadow Claimed Turn",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Normalize V2 Shadow Outcome",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Mint V2 Live RS256 Assertion",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Validate V2 Live Signed Assertion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Mint V2 Shadow RS256 Assertion",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Validate V2 Shadow Signed Assertion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Normalize V2 Shadow Outcome",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Get User from Supabase",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Build V2 Shadow Structural Diagnostic",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Prepare V2 Live Assertion",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Route V2 Live Assertion Configuration",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Prepare V2 Shadow Assertion",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Route V2 Shadow Assertion Configuration",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Route Sales Engine V2 Claim",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Route Sales Engine V2 Mode",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Route Sales Engine V2 Mode",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Get User from Supabase",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prepare V2 Shadow Assertion",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prepare V2 Live Assertion",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      }
+    },
+    {
+      "category": "ticket75_required_modified_edge",
+      "source": "Route Session Claim State",
+      "output": 0,
+      "from": "Get User from Supabase",
+      "to": "Route Sales Engine V2 Claim"
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Route V2 Live Assertion Configuration",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Generate V2 Live Assertion JTI",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Fail V2 Live Signing",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Route V2 Live Assertion JTI",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Mint V2 Live RS256 Assertion",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Fail V2 Live Signing",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Route V2 Live Signed Assertion",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Invoke V2 Live Claimed Turn",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Fail V2 Live Signing",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Route V2 Shadow Assertion Configuration",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Generate V2 Shadow Assertion JTI",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify V2 Shadow Signing Failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Route V2 Shadow Assertion JTI",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Mint V2 Shadow RS256 Assertion",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify V2 Shadow Signing Failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Route V2 Shadow Signed Assertion",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Invoke V2 Shadow Claimed Turn",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify V2 Shadow Signing Failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Validate V2 Durable Reservation Handoff",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Loop Paid WhatsApp Parts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Validate V2 Live Signed Assertion",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Route V2 Live Signed Assertion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "category": "ticket75_added_edge",
+      "source": "Validate V2 Shadow Signed Assertion",
+      "connections": {
+        "main": [
+          [
+            {
+              "node": "Route V2 Shadow Signed Assertion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  ]
+}
