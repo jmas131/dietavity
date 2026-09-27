@@ -1230,10 +1230,14 @@ classifier.parameters.options.systemMessage += '\nQuestions about generation, re
 // returned durable physical rows for its established transport loop.
 const v2Route = {
   name: 'Route Sales Engine V2 Claim', id: '75e10000-0000-4000-8000-000000000001', type: 'n8n-nodes-base.code', typeVersion: 2, position: [-900, 160],
-  parameters: { jsCode: `const configured = $env.SALES_ENGINE_V2_ROUTE || 'legacy';
-if (!['legacy', 'v2_shadow', 'v2_live'].includes(configured)) throw new Error('T75E_ROUTE_CONFIGURATION_INVALID');
-return [{ json: { v2_route: configured, claim_attempt_id: $execution.id } }];` },
-  notes: 'Ticket75E.1 inactive deterministic route seam. Default is legacy; no percentage/random routing. The selected route is carried for this acquired claim only.',
+  parameters: { jsCode: `const control = $env.SALES_ENGINE_V2_CONTROL || 'disabled';
+const generation = $env.SALES_ENGINE_V2_ROUTE_GENERATION || 'disabled';
+const claim = $('Claim Next Session Inbound').item.json;
+const members = name => new Set(String($env[name] || '').split(',').map(value => value.trim()).filter(value => /^[0-9a-f-]{36}$/i.test(value)));
+if (!['disabled', 'legacy', 'shadow', 'live'].includes(control) || !/^[A-Za-z0-9._:-]{1,64}$/.test(generation)) throw new Error('T75F_COHORT_CONFIGURATION_INVALID');
+const route = control === 'shadow' && members('SALES_ENGINE_V2_SHADOW_COHORT_IDS').has(claim.id) ? 'v2_shadow' : control === 'live' && members('SALES_ENGINE_V2_LIVE_COHORT_IDS').has(claim.id) ? 'v2_live' : 'legacy';
+return [{ json: { v2_route: route, route_generation: generation, claim_attempt_id: $execution.id } }];` },
+  notes: 'Ticket75F.2 inactive deterministic cohort seam. Default/disabled is legacy; explicit canonical inbound UUID allowlists only, no percentage/random routing. Route and generation are frozen for this acquired claim.',
 };
 const v2RouteSwitch = {
   name: 'Route Sales Engine V2 Mode', id: '75e10000-0000-4000-8000-000000000002', type: 'n8n-nodes-base.switch', typeVersion: 3.4, position: [-680, 160],
@@ -1249,6 +1253,7 @@ const v2Request = (name, mode, position) => ({
   processing_owner: $execution.id,
   claimed_lease_until: $('Claim Next Session Inbound').item.json.processing_lease_until,
   claim_attempt_id: $('Route Sales Engine V2 Claim').item.json.claim_attempt_id,
+  route_generation: $('Route Sales Engine V2 Claim').item.json.route_generation,
   mode: '${mode}',
   workflow_execution_id: $execution.id
 } }}`, options: {} },

@@ -11,7 +11,7 @@ require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded
 const app = require(serverPath);
 
 const inbound = '11111111-1111-4111-8111-000000000075';
-const base = () => ({ contract_version: CONTRACT_VERSION, canonical_inbound_message_id: inbound, session_id: 'session-75', processing_owner: 'ticket17-owner-75', claimed_lease_until: '2026-09-26T12:05:00.000Z', claim_attempt_id: 'claim-75', mode: 'shadow', workflow_execution_id: 'workflow-75' });
+const base = () => ({ contract_version: CONTRACT_VERSION, canonical_inbound_message_id: inbound, session_id: 'session-75', processing_owner: 'ticket17-owner-75', claimed_lease_until: '2026-09-26T12:05:00.000Z', claim_attempt_id: 'claim-75', route_generation: 'g75a', mode: 'shadow', workflow_execution_id: 'workflow-75' });
 const pair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 function auth() { return { issuer: 'dietavity-n8n', audience: AUDIENCE, keys: { 'n8n-2026-09': { clientId: 'n8n-sales-engine', publicKey: pair.publicKey } }, replayGuard: createReplayGuard() }; }
 function token({ issuer = 'dietavity-n8n', audience = AUDIENCE, clientId = 'n8n-sales-engine', jti = crypto.randomUUID(), expiresIn = 60, notBefore = '0s' } = {}) { return jwt.sign({ client_id: clientId, jti }, pair.privateKey, { algorithm: 'RS256', keyid: 'n8n-2026-09', issuer, audience, expiresIn, notBefore }); }

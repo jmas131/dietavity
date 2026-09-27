@@ -9,7 +9,7 @@ test('T75E.1 generator is authoritative and inactive artifact contains the post-
   assert.deepEqual(out('Wait Before Session Claim Retry'), ['Claim Next Session Inbound']);
 });
 test('T75E.1 defaults legacy, shadow rejoins legacy, and live cannot fall through', () => {
-  const route = nodes.get('Route Sales Engine V2 Claim'); assert.match(route.parameters.jsCode, /SALES_ENGINE_V2_ROUTE \|\| 'legacy'/); assert.doesNotMatch(route.parameters.jsCode, /random|percentage/i);
+  const route = nodes.get('Route Sales Engine V2 Claim'); assert.match(route.parameters.jsCode, /SALES_ENGINE_V2_CONTROL \|\| 'disabled'/); assert.match(route.parameters.jsCode, /SALES_ENGINE_V2_ROUTE_GENERATION/); assert.doesNotMatch(route.parameters.jsCode, /random|percentage/i);
   assert.deepEqual(out('Route Sales Engine V2 Mode'), ['Get User from Supabase', 'Invoke V2 Shadow Claimed Turn', 'Invoke V2 Live Claimed Turn']);
   assert.deepEqual(out('Discard V2 Shadow Result'), ['Get User from Supabase']);
   assert.deepEqual(out('Invoke V2 Live Claimed Turn'), ['Validate V2 Durable Reservation Handoff']);

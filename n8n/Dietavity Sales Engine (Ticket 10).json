@@ -4550,9 +4550,9 @@
         160
       ],
       "parameters": {
-        "jsCode": "const configured = $env.SALES_ENGINE_V2_ROUTE || 'legacy';\nif (!['legacy', 'v2_shadow', 'v2_live'].includes(configured)) throw new Error('T75E_ROUTE_CONFIGURATION_INVALID');\nreturn [{ json: { v2_route: configured, claim_attempt_id: $execution.id } }];"
+        "jsCode": "const control = $env.SALES_ENGINE_V2_CONTROL || 'disabled';\nconst generation = $env.SALES_ENGINE_V2_ROUTE_GENERATION || 'disabled';\nconst claim = $('Claim Next Session Inbound').item.json;\nconst members = name => new Set(String($env[name] || '').split(',').map(value => value.trim()).filter(value => /^[0-9a-f-]{36}$/i.test(value)));\nif (!['disabled', 'legacy', 'shadow', 'live'].includes(control) || !/^[A-Za-z0-9._:-]{1,64}$/.test(generation)) throw new Error('T75F_COHORT_CONFIGURATION_INVALID');\nconst route = control === 'shadow' && members('SALES_ENGINE_V2_SHADOW_COHORT_IDS').has(claim.id) ? 'v2_shadow' : control === 'live' && members('SALES_ENGINE_V2_LIVE_COHORT_IDS').has(claim.id) ? 'v2_live' : 'legacy';\nreturn [{ json: { v2_route: route, route_generation: generation, claim_attempt_id: $execution.id } }];"
       },
-      "notes": "Ticket75E.1 inactive deterministic route seam. Default is legacy; no percentage/random routing. The selected route is carried for this acquired claim only."
+      "notes": "Ticket75F.2 inactive deterministic cohort seam. Default/disabled is legacy; explicit canonical inbound UUID allowlists only, no percentage/random routing. Route and generation are frozen for this acquired claim."
     },
     {
       "name": "Route Sales Engine V2 Mode",
@@ -4656,7 +4656,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\n  contract_version: 'ticket-75-claimed-turn-v1',\n  canonical_inbound_message_id: $('Claim Next Session Inbound').item.json.id,\n  session_id: $('Claim Next Session Inbound').item.json.session_id,\n  processing_owner: $execution.id,\n  claimed_lease_until: $('Claim Next Session Inbound').item.json.processing_lease_until,\n  claim_attempt_id: $('Route Sales Engine V2 Claim').item.json.claim_attempt_id,\n  mode: 'shadow',\n  workflow_execution_id: $execution.id\n} }}",
+        "jsonBody": "={{ {\n  contract_version: 'ticket-75-claimed-turn-v1',\n  canonical_inbound_message_id: $('Claim Next Session Inbound').item.json.id,\n  session_id: $('Claim Next Session Inbound').item.json.session_id,\n  processing_owner: $execution.id,\n  claimed_lease_until: $('Claim Next Session Inbound').item.json.processing_lease_until,\n  claim_attempt_id: $('Route Sales Engine V2 Claim').item.json.claim_attempt_id,\n  route_generation: $('Route Sales Engine V2 Claim').item.json.route_generation,\n  mode: 'shadow',\n  workflow_execution_id: $execution.id\n} }}",
         "options": {}
       },
       "credentials": {
@@ -4683,7 +4683,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\n  contract_version: 'ticket-75-claimed-turn-v1',\n  canonical_inbound_message_id: $('Claim Next Session Inbound').item.json.id,\n  session_id: $('Claim Next Session Inbound').item.json.session_id,\n  processing_owner: $execution.id,\n  claimed_lease_until: $('Claim Next Session Inbound').item.json.processing_lease_until,\n  claim_attempt_id: $('Route Sales Engine V2 Claim').item.json.claim_attempt_id,\n  mode: 'live',\n  workflow_execution_id: $execution.id\n} }}",
+        "jsonBody": "={{ {\n  contract_version: 'ticket-75-claimed-turn-v1',\n  canonical_inbound_message_id: $('Claim Next Session Inbound').item.json.id,\n  session_id: $('Claim Next Session Inbound').item.json.session_id,\n  processing_owner: $execution.id,\n  claimed_lease_until: $('Claim Next Session Inbound').item.json.processing_lease_until,\n  claim_attempt_id: $('Route Sales Engine V2 Claim').item.json.claim_attempt_id,\n  route_generation: $('Route Sales Engine V2 Claim').item.json.route_generation,\n  mode: 'live',\n  workflow_execution_id: $execution.id\n} }}",
         "options": {}
       },
       "credentials": {
