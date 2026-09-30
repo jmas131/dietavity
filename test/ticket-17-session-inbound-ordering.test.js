@@ -216,9 +216,7 @@ test('workflow waits only on a busy same-session claim after Twilio reservation'
   assert.deepEqual(outputs('Incoming Message'), ['Canonicalize Inbound WhatsApp']);
   assert.deepEqual(outputs('Canonicalize Inbound WhatsApp'), ['Reserve Canonical Inbound Message']);
   assert.deepEqual(outputs('Reserve Canonical Inbound Message'), ['Claim Next Session Inbound']);
-  assert.deepEqual(outputs('Route Session Claim State', 0), ['Route Sales Engine V2 Claim']);
-  assert.deepEqual(outputs('Route Sales Engine V2 Claim'), ['Route Sales Engine V2 Mode']);
-  assert.deepEqual(outputs('Route Sales Engine V2 Mode', 0), ['Get User from Supabase']);
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get User from Supabase']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait Before Session Claim Retry']);
   assert.deepEqual(outputs('Wait Before Session Claim Retry'), ['Claim Next Session Inbound']);
   assert.equal(nodes.get('Wait Before Session Claim Retry').parameters.amount, ordering.CLAIM_RETRY_SECONDS);

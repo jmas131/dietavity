@@ -2,7 +2,7 @@
 
 ## Determination
 
-**TICKET37A_CLOSED_READY_FOR_T75D.** No recovery behavior, migration, schema snapshot, production system, or workflow was changed.
+**TICKET37A_CLOSED.** No recovery behavior, migration, schema snapshot, production system, or workflow was changed.
 
 ## Root cause
 
@@ -38,4 +38,4 @@ The recovery-source synchronization assertion formerly reported in the broader T
 
 The focused Ticket37A suite passes, including format-tolerance and meaningful-drift tests. Real PostgreSQL was not needed: this ticket compares checked-in repository source representations and does not depend on parser or introspection behavior.
 
-The Ticket72 migration remains byte-identical. Production impact is none. Ticket37A closes the known prerequisite for T75D; T75D itself remains unstarted.
+The Ticket72 migration remains byte-identical. Production impact is none.

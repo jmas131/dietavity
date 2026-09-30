@@ -12,8 +12,6 @@ const {
   createPortalDeadline,
   portalRequestTimeoutMs
 } = require('./lib/portal-deadline');
-const { createProductionClaimedTurnRuntime } = require('./lib/sales-engine-v2/production-runtime');
-const { parseListenerConfig } = require('./lib/listener-config');
 
 const app = express();
 
@@ -25,13 +23,6 @@ app.use(express.urlencoded({
   extended: true,
   limit: '32kb',
   parameterLimit: 100
-}));
-
-// Ticket75G.3A remains disabled unless the closed production configuration is
-// complete. The assembly contains only the shadow-safe runtime; live remains
-// unavailable until its separate deployment boundary is implemented.
-app.post('/internal/sales-engine-v2/claimed-turn', createProductionClaimedTurnRuntime({
-  dependencies: { supabase }
 }));
 
 app.set('view engine', 'ejs');
@@ -2429,17 +2420,10 @@ app.use((error, req, res, next) => {
 });
 
 if (require.main === module) {
-  try {
-    const listener = parseListenerConfig();
-    app.listen(listener.port, listener.host, () => {
-      console.log(`Dietavity listening on ${listener.host}:${listener.port}`);
-    });
-  } catch {
-    // Never print configuration values: a malformed listener must stop rather
-    // than silently widening to a wildcard bind.
-    console.error('Dietavity listener configuration invalid');
-    process.exitCode = 1;
-  }
+
+  app.listen(3000, () => {
+    console.log('Dietavity running on port 3000');
+  });
 
 }
 

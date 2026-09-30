@@ -1,10 +1,10 @@
 # Dietavity - Project Summary
 
-**Updated:** September 11, 2026  
-**Current phase:** Landing-page-first acquisition, revenue validation, and marketing optimization  
-**Production status:** Core purchase, canonical personalization, portal, WhatsApp assistance, identity linking, and monitoring are operational. The redesigned landing page is published; normal paid-message delivery and legacy subscriber continuation are production validated. Ticket 39 is implemented and reviewed, but production deployment is not confirmed.
+**Updated:** September 29, 2026  
+**Current phase:** Revenue validation and direct replacement of the inadequate legacy WhatsApp response layer  
+**Production status:** Core purchase, canonical personalization, portal, WhatsApp assistance, identity linking, and monitoring are operational. The redesigned landing page is published; normal paid-message delivery and legacy subscriber continuation are production validated. The current production Sales Engine still uses its legacy intelligence/response section. Its proven transactional infrastructure remains the production foundation; its response layer is scheduled for direct replacement by the straightforward V2 described in this document. Ticket 39 is implemented and reviewed, but production deployment is not confirmed.
 
-**Scope:** Current state through Ticket 39, based on the existing project summary and the referenced project conversation. This is a documented-state summary, not a fresh production audit. Unconfirmed operational actions are explicitly marked. The synced reference summary is preserved unchanged.
+**Scope:** Current state through Ticket 75 and the September 29 strategic decision, based on the existing project summary and referenced project conversations. This is a documented-state summary, not a fresh production audit. Unconfirmed operational actions are explicitly marked. The synced reference summary is preserved unchanged.
 
 ## 1. Executive Summary
 
@@ -38,7 +38,7 @@ Dietavity Portal
 
 WhatsApp is still available through landing-page and website CTAs, organic conversations, and customer support, but is no longer required to purchase or use Dietavity.
 
-The immediate priority is revenue: improve ads, creative, positioning, landing-page conversion, and understanding actual customer behavior rather than expanding infrastructure or the WhatsApp Sales Engine.
+The immediate priority is revenue: improve ads, creative, positioning, landing-page conversion, and understanding actual customer behavior. The one exception is the direct V2 replacement of the inadequate WhatsApp response layer, because it is a near-term commercial learning and conversion blocker rather than infrastructure expansion for its own sake.
 
 ## 2. Current Product
 
@@ -379,7 +379,7 @@ WhatsApp is now secondary to the landing-page funnel.
 
 ## 15. Sales Engine
 
-The n8n Sales Engine handles:
+The existing n8n workflow, `Dietavity Sales Engine (Ticket 10)`, is the production Sales Engine. It handles:
 
 - Inbound WhatsApp messages
 - Sales classification
@@ -393,6 +393,93 @@ The n8n Sales Engine handles:
 - Conversation state
 
 WhatsApp remains a supporting channel rather than the acquisition center.
+
+### Current production versus V2 replacement
+
+The durable transactional path is retained:
+
+```text
+WhatsApp inbound
+↓
+Inbound deduplication
+↓
+Session ordering and atomic claim
+↓
+User, customer, payment, and conversation-context retrieval
+↓
+Response generation
+↓
+Durable outbound reservation and delivery safety
+↓
+Completion
+```
+
+The **current production response section is Legacy**. It remains live only until the direct V2 workflow update is validated and activated. Legacy response quality is inadequate for the commercial questions Dietavity needs to answer; it is not the desired long-term intelligence layer.
+
+The September 29 decision is to modify the necessary nodes in the existing `Dietavity Sales Engine (Ticket 10)` workflow directly. V2 will replace the legacy reasoning/response section while preserving the proven transactional path above, including inbound deduplication, claims and ordering, payment/customer state, outbound idempotency, transport safety, and completion semantics.
+
+### Straightforward production V2: obligation-grounded RAG
+
+```text
+Incoming claimed message
+↓
+Load conversation context
+↓
+Detect what the user is asking
+→ Obligation[]
+↓
+Resolve facts + policy for each obligation
+→ ResolvedObligation[] + permitted claims
+↓
+Generate response within permitted claims
+→ Response phrasing
+↓
+Validate response against permitted claims
+→ Structural / grounding gate
+↓
+Existing WhatsApp delivery
+```
+
+This is not loose document-search RAG. It deliberately separates four responsibilities:
+
+1. **Obligation detection** identifies each question, request, or required response obligation in the claimed turn.
+2. **Authoritative resolution** maps each obligation to verified Dietavity facts, relevant customer/commercial context, and applicable policy, producing the permitted claims.
+3. **Composition** writes natural Spanish from that resolved material. The composer may not decide Dietavity facts, add unrelated claims, or invent missing capabilities.
+4. **Validation** checks that each obligation was addressed and that the proposed response introduces no unsupported Dietavity claim or policy violation. A failing response is regenerated in a controlled way or falls back safely before delivery.
+
+The knowledge base is expected to remain structured and deterministic at this stage; a vector database is not required for the small commercial knowledge surface. Candidate knowledge/policy domains include offer, pricing, payment methods, how the program works, digital location, prepared-food delivery boundaries, personalization, GLP-1 scope, medical boundaries, refunds, privacy, support, checkout, and examples. Retrieval must be narrow: a location question must not cause unrelated claims about payment, checkout, or product details.
+
+This design preserves useful commercial strategy and safety rules, but makes factual grounding explicit. For example, a location question can be resolved to the authoritative digital-service facts and a no-CTA policy; composition then phrases only those facts rather than adding an office, a city, a payment method, or an unrequested sales pitch.
+
+### Ticket 75: established findings and superseded migration path
+
+Ticket 75 established that the V2 supporting infrastructure is substantially functional: the endpoint/network path, JWT-based authentication, model client, Supabase adapters, durable replay protection, and diagnostic/shadow-routing infrastructure were proven. The remaining blocker was the integration at the claimed-turn request boundary: authentication succeeded, but request-contract validation and the shadow integration remained problematic. This was an integration-contract problem, not evidence that the underlying endpoint, model, or data infrastructure was unavailable.
+
+The former Ticket 75 plan—repair the internal claimed-turn integration, run parallel Legacy/V2 shadow turns, evaluate shadow outputs, then promote V2—has been **superseded as the immediate path**. It is not current production work. Likewise, the following are deliberately out of scope for the direct V2 launch: shadow cohorts, parallel Legacy/V2 answer generation, an internal claimed-turn HTTP boundary, a workflow-to-application token call for that boundary, shadow-specific replay machinery, six-stage/model orchestration, and a separate migration/deployment architecture.
+
+This does not discard the grounding architecture or Ticket 75’s useful infrastructure findings. It discards migration machinery whose value is currently lower than rapid learning about whether better sales conversations can convert.
+
+### Direct V2 implementation and rollback plan
+
+```text
+Back up active Sales Engine workflow JSON
+↓
+Modify the existing Ticket 10 workflow’s intelligence/response nodes
+↓
+Run structural validation
+↓
+Run 5–10 controlled conversations
+↓
+Activate V2 in production
+↓
+Resume Meta Ads and observe conversion/quality
+```
+
+Controlled conversations should cover, at minimum, location, price, how the plan is built, GLP-1 availability/scope, medical-dose questions, thanks/closing, explicit purchase intent, objections, and contextual follow-ups. The prior workflow JSON is the immediate rollback artifact: deactivate the updated workflow and restore the backed-up prior version if a material issue appears. No data rollback is implied.
+
+### Why this decision changed
+
+Dietavity is far from profitability, and Legacy response quality is already known to be inadequate. The immediate business question is whether a substantially better sales conversation can help convert paid traffic into customers. At this stage, launch learning and sales velocity outweigh elaborate shadow-first migration machinery. The direct V2 still requires production-quality grounding, validation, transactional safety, and controlled testing; it simply avoids treating co-existence with the response layer being replaced as the primary project.
 
 ### Sales clarification — implemented; deployment unconfirmed
 
@@ -594,20 +681,9 @@ This remains the operational-failure mechanism; the weekly report serves commerc
 
 No server-side Meta Conversions API implementation was introduced. GA and browser Meta Pixel events support funnel measurement; canonical payment records remain the authority for confirmed purchases.
 
-### Known production locations
+### Deployment boundary
 
-| Component | Last documented location / configuration |
-| --- | --- |
-| Application | `/var/www/dietavity` |
-| PM2 process | `dietavity` |
-| Application environment | `/root/.env` |
-| Supabase application access | `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` |
-| n8n endpoint | `n8n.dietavity.com` |
-| Docker Compose | `/root/docker-compose.yml`; service `n8n` |
-| n8n container | `root-n8n-1` |
-| Twilio secrets | Existing n8n credentials |
-
-Website files run under PM2, generated workflows are imported into n8n, and migrations change PostgreSQL. These are separate deployment surfaces.
+Website files run under PM2, generated workflows are imported into n8n, and migrations change PostgreSQL. These are separate deployment surfaces. Operational credentials, private environment-file locations, token material, and host-specific secret configuration are intentionally not recorded in this summary.
 
 Both Ticket 37A recovery and historical-reopen definitions are installed in production; historical recovery was intentionally not executed or end-to-end validated. Recovery tooling requires separately configured direct PostgreSQL connectivity; application Supabase API access does not configure it automatically. Detailed tooling, incident-file locations, and execution procedures remain in runbooks.
 
@@ -626,6 +702,8 @@ Temporary Codex/SSH access was revoked. PostgreSQL client and ACL utilities were
 - **Acceptance is not delivery:** Provider API acceptance does not establish handset delivery.
 - **Fail closed:** Ambiguous identity and security situations are not guessed.
 - **Product facts are canonical:** AI components must not invent capabilities.
+- **Obligations before phrasing:** Detect what must be answered, resolve authoritative facts and policy, then compose only within permitted claims.
+- **Grounding gate before delivery:** A response must structurally answer its resolved obligations and remain within permitted claims before it reaches the existing delivery path.
 - **Evidence before engineering:** A conversation problem does not automatically justify a software ticket.
 
 ## 26. Current Status and Open Operational Actions
@@ -641,15 +719,24 @@ Temporary Codex/SSH access was revoked. PostgreSQL client and ACL utilities were
 | Paid WhatsApp assistance | Updated transport protections deployed; ordinary one-part production canary passed |
 | Historical failed recipe | Intentionally not recovered; historical multipart recovery remains unvalidated end to end |
 | Legacy subscriber continuation | Program 2 production validated; awaiting normal customer start-date selection at last observation |
-| Sales clarification | Ticket 39 implemented and approved; production deployment unconfirmed |
+| Current Sales Engine | Production transactional infrastructure operational; Legacy response section remains live pending direct V2 cutover |
+| Ticket 39 sales clarification | Implemented and approved; production deployment remains unconfirmed and should be reconciled during the direct V2 update |
+| Ticket 75 shadow-first V2 | Supporting infrastructure proven, but claimed-turn request contract/shadow integration remained problematic; superseded as the immediate migration path |
+| Direct production V2 | Chosen September 29; not yet implemented, structurally validated, or production activated |
 | Weekly Sales Intelligence | Operational and preferred report |
 | Older overlapping report | Disable / confirm disabled status |
 | Automated tests | 384 passed, 0 failed, 0 skipped after Ticket 39 |
 | Commercial validation | Repeatable paid acquisition remains unproven |
 
-### Remaining controlled deployment for Ticket 39
+### Next controlled change: direct production V2
 
-Confirm whether deployment has already occurred before acting. If not, back up the active Sales Engine and import only `n8n/Dietavity Sales Engine (Ticket 10).json` initially inactive. Verify credentials, especially PostgreSQL on `Get Recent Sales Clarification Context`, and the Global Error Handler association. Validate continuation, delivery confusion, and repeated billing questions with an authorized test identity, and inspect `strategy`, `buyer_signal`, and `deterministic_reason` in the ledger. Cut over with only one production Sales Engine active, then monitor executions and Twilio evidence.
+Before modifying production, export and preserve the currently active `Dietavity Sales Engine (Ticket 10)` workflow JSON as the rollback version. Implement the obligation-grounded RAG section in that existing workflow; do not introduce the superseded shadow-first architecture as a launch dependency. Validate the workflow structure and credentials, ensure the existing claim/order, identity, payment-state, durable outbound, and Global Error Handler paths remain connected, then run 5–10 controlled conversations that cover the defined regression set.
+
+When the controlled set passes, activate only one authoritative production Sales Engine and monitor workflow executions, message-ledger evidence, and provider transport evidence. If a material issue occurs, deactivate the updated version and restore the saved pre-V2 workflow JSON. Resume Meta Ads after production activation and use real conversation quality and conversion behavior as the next learning loop.
+
+### Ticket 39 deployment reconciliation
+
+Confirm whether Ticket 39 was activated before or while preparing the direct V2 update. Preserve its useful clarification behavior where it remains consistent with the resolved obligations and policy model. Validate continuation, delivery confusion, and repeated billing questions with an authorized test identity, and inspect the existing ledger metadata as appropriate. Cut over with only one production Sales Engine active, then monitor executions and transport evidence.
 
 Do not import the Stripe sandbox for Ticket 39: it was regenerated for synchronization, contains none of the Ticket 39 functional nodes, and has no Ticket 39 functional change. No SQL migration or data rollback is required. Workflow rollback means deactivating the new version and restoring the backed-up prior version.
 
@@ -657,7 +744,13 @@ Confirm the older overlapping weekly report is disabled, then observe real conve
 
 ## 27. Immediate Priorities
 
-### Priority 1 - Generate Revenue
+### Priority 1 - Replace the Legacy response layer and restart learning
+
+Complete the direct production V2 in the existing Sales Engine: backup, workflow modification, structural validation, 5–10 controlled conversations, activation, and Meta Ads resumption. This is the only near-term engineering initiative elevated above commercial work because inadequate Legacy responses currently impair the sales experiment itself.
+
+Do not restart the shadow-first migration as a prerequisite. The direct V2 must retain established transactional protections and must not let the composer invent Dietavity facts.
+
+### Priority 2 - Generate Revenue
 
 Determine whether the offer can acquire paying customers economically:
 
@@ -670,11 +763,11 @@ Meta traffic
 
 Evaluate the current headline and reduced-decision-fatigue promise against the published landing page. Historical pre-redesign traffic showed interest but no reported campaign sales; those earlier figures are not a post-redesign conversion baseline or proof that every stored purchase was organic revenue.
 
-### Priority 2 - Creative Development
+### Priority 3 - Creative Development
 
 Develop and test stronger Reels, carousels, hooks, headlines, slogans, meal imagery, and problem/solution concepts. Emphasize the practical problem Dietavity solves rather than relying primarily on longevity.
 
-### Priority 3 - Measure the Landing-Page Funnel
+### Priority 4 - Measure the Landing-Page Funnel
 
 ```text
 Ad impressions
@@ -687,13 +780,13 @@ Ad impressions
 
 This separates advertising, audience, positioning, landing-page, offer, checkout, and trust constraints.
 
-### Priority 4 - Learn from Buyers and Prospects
+### Priority 5 - Learn from Buyers and Prospects
 
 Use Meta performance, landing-page behavior, purchases, WhatsApp conversations, and weekly Sales Intelligence together. WhatsApp is particularly valuable as qualitative research alongside quantitative funnel data.
 
 Watch whether clear continuation answers reduce hesitation, how often digital meal plans are confused with prepared-food delivery, and whether useful immediate recipe interactions precede purchase. Preserve helpful recipe conversations without forcing a sales CTA into every answer. Do not infer broad patterns from five conversations.
 
-### Priority 5 - Engineering Only Where It Unlocks Revenue
+### Priority 6 - Engineering Only Where It Unlocks Revenue
 
 New technical work should remove a conversion blocker, improve measurement, fix a production defect, reduce meaningful operational risk, or enable an important experiment. “Could be architecturally nicer” is not sufficient by itself.
 
@@ -709,8 +802,9 @@ Deeper personalization and a more practical shopping list are potential differen
 4. **Meal perception matters.** Meals must feel achievable, familiar, affordable, appetizing, healthy, and relevant to Mexican/Latin American users.
 5. **Health-condition expectations.** Prospects may expect support for diabetes, prediabetes, or hypertension; Dietavity must not imply clinical treatment.
 6. **Low data volume.** Small numbers of purchases or conversations can mislead conclusions.
-7. **Known operational limits.** Ticket 39 deployment and older-report deactivation remain unconfirmed; historical multipart recovery was not completed; simultaneous program initialization can still create duplicates.
-8. **Infrastructure can consume founder attention.** The foundation is mature enough for commercial validation, so each new engineering request should be evaluated for immediate customer impact.
+7. **V2 cutover risk.** Direct production V2 has not yet been implemented or controlled-tested. The response layer must preserve existing claims, ordering, and outbound protections while improving grounding and relevance.
+8. **Known operational limits.** Ticket 39 deployment and older-report deactivation remain unconfirmed; historical multipart recovery was not completed; simultaneous program initialization can still create duplicates.
+9. **Infrastructure can consume founder attention.** The foundation is mature enough for commercial validation, so each new engineering request should be evaluated for immediate customer impact.
 
 ## 29. Current Strategic Thesis
 
@@ -757,8 +851,10 @@ Revenue
 
 The technical foundation is no longer Dietavity's primary constraint. The next phase is discovering a repeatable commercial engine: find the message that makes the right people click, the offer and landing page that make them buy, and the product experience that makes the purchase feel worthwhile. That should drive the roadmap.
 
+The direct V2 is a focused exception: it replaces a known-quality constraint in the WhatsApp sales experience without reopening a broad infrastructure program. Its success criterion is not architectural sophistication; it is grounded, relevant customer answers and faster learning about sales conversion.
+
 ## 30. Source and Maintenance Boundary
 
-This revision preserves the architecture and strategy from the August 29 summary and incorporates the later implementation reports, operator outputs, production confirmations, and decisions in [Dietavity project - 11 (We need money!)](chatgpt-conversation://6a832411-7198-83e8-b12c-7ced277f2438). Later corrections and observed outcomes take precedence over earlier proposals. Proposed work is not treated as deployed functionality.
+This revision preserves the architecture and strategy from the August 29 summary and incorporates the later implementation reports, operator outputs, production confirmations, and decisions in [Dietavity project - 11 (We need money!)](chatgpt-conversation://6a832411-7198-83e8-b12c-7ced277f2438) and [Dietavity project - 13 (We need money!)](chatgpt-conversation://6ab9c3ca-d554-83e8-b49e-3f70fac0b5e4). Later corrections and observed outcomes take precedence over earlier proposals. Proposed work is not treated as deployed functionality.
 
-Update the operational status when Ticket 39 activation, report deactivation, or subsequent production checks are confirmed. Do not overwrite historical incident evidence or equate repository test success with a production rollout.
+Update the operational status when the direct V2 workflow is implemented, controlled-tested, activated, rolled back, or superseded; also update Ticket 39 activation, report deactivation, and subsequent production checks when confirmed. Do not overwrite historical incident evidence or equate repository test success with a production rollout.
