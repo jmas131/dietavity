@@ -3285,9 +3285,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH decision AS (\n  SELECT $1::jsonb AS payload\n), updated_session AS (\n  UPDATE public.onboarding_sessions AS session\n  SET conversation_stage = CASE WHEN decision.payload->>'pending_action' = 'close' THEN 'closed' ELSE decision.payload->>'conversation_stage' END,\n      goal = COALESCE(NULLIF(decision.payload->>'goal', ''), session.goal),\n      last_question_type = NULLIF(decision.payload->>'next_last_question_type', ''),\n      last_question_at = CASE WHEN NULLIF(decision.payload->>'next_last_question_type', '') IS NULL THEN NULL ELSE NOW() END,\n      offer_version = CASE WHEN decision.payload->>'next_last_question_type' = 'purchase_confirmation' OR decision.payload->>'holding_page_would_be_sent' = 'true' THEN '28d-149-v1' ELSE session.offer_version END,\n      commercial_context_expires_at = CASE WHEN decision.payload->>'next_last_question_type' = 'purchase_confirmation' THEN NOW() + INTERVAL '30 minutes' ELSE NULL END,\n      updated_at = NOW()\n  FROM decision\n  WHERE session.session_id = decision.payload->>'session_id'\n    AND decision.payload->>'pending_action' IN ('respond', 'close')\n  RETURNING session.*\n), event_names AS (\n  SELECT DISTINCT jsonb_array_elements_text(decision.payload->'events') AS event_type\n  FROM decision\n  WHERE decision.payload->>'pending_action' IN ('respond', 'close')\n), inserted_events AS (\n  INSERT INTO public.sales_funnel_events (\n    session_id, event_type, event_key, buyer_signal, topic, strategy,\n    offer_version, metadata\n  )\n  SELECT\n    updated_session.session_id,\n    event_names.event_type,\n    CASE\n      WHEN event_names.event_type = 'purchase_intent' AND updated_session.offer_context = 'glp1_validation' THEN 'purchase_intent:' || updated_session.session_id || ':glp1_validation:28d-149-v1'\n      WHEN event_names.event_type IN ('meaningful_engagement', 'offer_presented')\n        THEN event_names.event_type || ':' || updated_session.session_id || CASE WHEN event_names.event_type = 'offer_presented' THEN ':28d-149-v1' ELSE '' END\n      ELSE event_names.event_type || ':' || updated_session.session_id || ':' || (SELECT payload->>'inbound_message_sid' FROM decision)\n    END,\n    (SELECT payload->>'buyer_signal' FROM decision),\n    NULLIF((SELECT payload->>'topic' FROM decision), ''),\n    (SELECT payload->>'strategy' FROM decision),\n    CASE WHEN event_names.event_type = 'offer_presented' OR (event_names.event_type = 'purchase_intent' AND updated_session.offer_context = 'glp1_validation') THEN '28d-149-v1' ELSE NULL END,\n    jsonb_strip_nulls(jsonb_build_object('offer_context', offer_context))\n  FROM updated_session CROSS JOIN event_names\n  ON CONFLICT (event_key) WHERE event_key IS NOT NULL DO NOTHING\n)\nSELECT * FROM updated_session;",
+        "query": "WITH decision AS (\n  SELECT $1::jsonb AS payload\n), updated_session AS (\n  UPDATE public.onboarding_sessions AS session\n  SET conversation_stage = CASE WHEN decision.payload->>'pending_action' = 'close' THEN 'closed' ELSE COALESCE(NULLIF(decision.payload->>'conversation_stage', ''), session.conversation_stage) END,\n      goal = COALESCE(NULLIF(decision.payload->>'goal', ''), session.goal),\n      last_question_type = NULLIF(decision.payload->>'next_last_question_type', ''),\n      last_question_at = CASE WHEN NULLIF(decision.payload->>'next_last_question_type', '') IS NULL THEN NULL ELSE NOW() END,\n      offer_version = CASE WHEN decision.payload->>'next_last_question_type' = 'purchase_confirmation' OR decision.payload->>'holding_page_would_be_sent' = 'true' THEN '28d-149-v1' ELSE session.offer_version END,\n      commercial_context_expires_at = CASE WHEN decision.payload->>'next_last_question_type' = 'purchase_confirmation' THEN NOW() + INTERVAL '30 minutes' ELSE NULL END,\n      updated_at = NOW()\n  FROM decision\n  WHERE session.session_id = decision.payload->>'session_id'\n    AND decision.payload->>'pending_action' IN ('respond', 'close')\n  RETURNING session.*\n), event_names AS (\n  SELECT DISTINCT jsonb_array_elements_text(decision.payload->'events') AS event_type\n  FROM decision\n  WHERE decision.payload->>'pending_action' IN ('respond', 'close')\n), inserted_events AS (\n  INSERT INTO public.sales_funnel_events (\n    session_id, event_type, event_key, buyer_signal, topic, strategy,\n    offer_version, metadata\n  )\n  SELECT\n    updated_session.session_id,\n    event_names.event_type,\n    CASE\n      WHEN event_names.event_type = 'purchase_intent' AND updated_session.offer_context = 'glp1_validation' THEN 'purchase_intent:' || updated_session.session_id || ':glp1_validation:28d-149-v1'\n      WHEN event_names.event_type IN ('meaningful_engagement', 'offer_presented')\n        THEN event_names.event_type || ':' || updated_session.session_id || CASE WHEN event_names.event_type = 'offer_presented' THEN ':28d-149-v1' ELSE '' END\n      ELSE event_names.event_type || ':' || updated_session.session_id || ':' || (SELECT payload->>'inbound_message_sid' FROM decision)\n    END,\n    (SELECT payload->>'buyer_signal' FROM decision),\n    NULLIF((SELECT payload->>'topic' FROM decision), ''),\n    (SELECT payload->>'strategy' FROM decision),\n    CASE WHEN event_names.event_type = 'offer_presented' OR (event_names.event_type = 'purchase_intent' AND updated_session.offer_context = 'glp1_validation') THEN '28d-149-v1' ELSE NULL END,\n    jsonb_strip_nulls(jsonb_build_object('offer_context', offer_context))\n  FROM updated_session CROSS JOIN event_names\n  ON CONFLICT (event_key) WHERE event_key IS NOT NULL DO NOTHING\n)\nSELECT * FROM updated_session;",
         "options": {
-          "queryReplacement": "={{ JSON.stringify($('Validate Sales Response Contract').item.json) }}"
+          "queryReplacement": "={{ JSON.stringify($('Build Sales Response Persistence Envelope').item.json) }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -3590,7 +3590,7 @@
         "operation": "executeQuery",
         "query": "WITH input AS (SELECT $1::jsonb AS payload), renewed_claim AS (\n  UPDATE public.messages AS inbound\n  SET processing_lease_until = NOW() + INTERVAL '15 minutes'\n  FROM input\n  WHERE inbound.id = NULLIF(input.payload->>'in_reply_to_id', '')::uuid\n    AND inbound.direction = 'inbound'\n    AND inbound.processing_completed_at IS NULL\n    AND inbound.processing_owner = input.payload->>'processing_owner'\n  RETURNING inbound.id\n), reserved AS (\n  INSERT INTO public.messages (\n    user_id, session_id, direction, body, message_kind, provider,\n    idempotency_key, in_reply_to_id, delivery_status, metadata,\n    assistant_response\n  )\n  SELECT\n    NULLIF(input.payload->>'user_id', '')::uuid,\n    input.payload->>'session_id', 'outbound', input.payload->>'body',\n    input.payload->>'message_kind', 'twilio', input.payload->>'idempotency_key',\n    NULLIF(input.payload->>'in_reply_to_id', '')::uuid, 'pending',\n    COALESCE(input.payload->'metadata', '{}'::jsonb), input.payload->>'body'\n  FROM input\n  WHERE EXISTS (SELECT 1 FROM renewed_claim)\n    AND NULLIF(input.payload->>'body', '') IS NOT NULL\n  ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING\n  RETURNING *\n)\nSELECT * FROM reserved;",
         "options": {
-          "queryReplacement": "={{ JSON.stringify({\n    session_id: $('Claim Next Session Inbound').item.json.session_id,\n    user_id: null,\n    body: [$('Apply Deterministic Commercial Policy').item.json.checkout_question_response, $json.message].filter(Boolean).join('\\n\\n'),\n    message_kind: \"checkout\",\n    idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':checkout',\n    in_reply_to_id: $('Claim Next Session Inbound').item.json.id,\n    processing_owner: $execution.id,\n    metadata: { workflow_execution_id: $execution.id, checkout_session_id: $('LIVE Stripe Checkout Session Payment').item.json.id }\n  }) }}"
+          "queryReplacement": "={{ JSON.stringify({\n    session_id: $('Claim Next Session Inbound').item.json.session_id,\n    user_id: null,\n    body: [$('Resolve Direct RAG Obligations').item.json.checkout_question_response, $json.message].filter(Boolean).join('\\n\\n'),\n    message_kind: \"checkout\",\n    idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':checkout',\n    in_reply_to_id: $('Claim Next Session Inbound').item.json.id,\n    processing_owner: $execution.id,\n    metadata: { workflow_execution_id: $execution.id, checkout_session_id: $('LIVE Stripe Checkout Session Payment').item.json.id }\n  }) }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -4527,6 +4527,20 @@
       "notes": "Safe boundary: the canonical outbound is no longer pending and branch-specific state persistence has completed. Final delivered status is not awaited."
     },
     {
+      "name": "Build Sales Response Persistence Envelope",
+      "id": "d74a0001-0000-4000-8000-000000000012",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        70400,
+        49904
+      ],
+      "parameters": {
+        "jsCode": "const value = $input.first().json;\nconst claimed = $('Claim Next Session Inbound').item.json;\nreturn [{ json: { ...value,\n  session_id: value.session_id || claimed.session_id,\n  inbound_message_sid: value.inbound_message_sid || claimed.provider_message_sid,\n  pending_action: ['respond', 'close'].includes(value.pending_action) ? value.pending_action : 'respond',\n  conversation_stage: value.conversation_stage || null,\n  goal: value.goal || null,\n  next_last_question_type: value.next_last_question_type || null,\n  events: Array.isArray(value.events) ? value.events : [],\n  buyer_signal: value.buyer_signal || null,\n  topic: value.topic || null,\n  strategy: value.strategy || null,\n  offer_version: value.offer_version || null,\n} }];"
+      },
+      "notes": "Canonical response-state envelope for both retained Sales Engine and Direct RAG outbound replies."
+    },
+    {
       "name": "Loop Paid WhatsApp Parts",
       "id": "de53b931-acde-4cd4-a77b-37a000000001",
       "type": "n8n-nodes-base.splitInBatches",
@@ -4538,6 +4552,295 @@
       "parameters": {
         "batchSize": 1,
         "options": {}
+      }
+    },
+    {
+      "name": "Get Direct RAG Conversation History",
+      "id": "d74a0001-0000-4000-8000-000000000001",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        68120,
+        49536
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH current_inbound AS (\n  SELECT id, session_id, processing_order, timestamp\n  FROM public.messages\n  WHERE id = $2::uuid\n    AND session_id = $1\n    AND direction = 'inbound'\n),\neligible_history AS (\n  SELECT\n    jsonb_build_object(\n      'direction', message.direction,\n      'body', message.body,\n      'timestamp', message.timestamp\n    ) AS entry,\n    message.timestamp,\n    message.id\n  FROM public.messages AS message\n  CROSS JOIN current_inbound\n  WHERE message.session_id = current_inbound.session_id\n    AND message.id <> current_inbound.id\n    AND (\n      (\n        message.direction = 'inbound'\n        AND message.processing_order < current_inbound.processing_order\n      )\n      OR (\n        message.direction = 'outbound'\n        AND message.message_kind IN ('sales_deterministic', 'sales_ai', 'checkout')\n        AND message.delivery_status IN ('accepted', 'sent', 'delivered')\n        AND EXISTS (\n          SELECT 1\n          FROM public.messages AS replied_inbound\n          WHERE replied_inbound.id = message.in_reply_to_id\n            AND replied_inbound.session_id = current_inbound.session_id\n            AND replied_inbound.direction = 'inbound'\n            AND replied_inbound.processing_order < current_inbound.processing_order\n            AND (\n              message.provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n              OR message.metadata->>'provider_acceptance_evidence' = 'message_sid'\n            )\n            AND NOT EXISTS (\n              SELECT 1\n              FROM public.messages AS intervening_inbound\n              WHERE intervening_inbound.session_id = current_inbound.session_id\n                AND intervening_inbound.direction = 'inbound'\n                AND intervening_inbound.processing_order > replied_inbound.processing_order\n                AND intervening_inbound.processing_order < current_inbound.processing_order\n            )\n        )\n      )\n    )\n  ORDER BY message.timestamp DESC, message.id DESC\n  LIMIT 12\n)\nSELECT COALESCE(\n  jsonb_agg(entry ORDER BY timestamp ASC, id ASC),\n  '[]'::jsonb\n) AS history\nFROM eligible_history;",
+        "options": {
+          "queryReplacement": "={{ [ $('Claim Next Session Inbound').item.json.session_id, $('Claim Next Session Inbound').item.json.id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Direct RAG V2: bounded canonical history only; current claimed message remains authoritative."
+    },
+    {
+      "name": "Build Direct RAG Conversation Context",
+      "id": "d74a0001-0000-4000-8000-000000000002",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        68352,
+        49536
+      ],
+      "parameters": {
+        "jsCode": "const current = $('Claim Next Session Inbound').item.json;\nconst session = $('Get Onboarding Session').item.json || {};\nconst historyValue = $input.first().json.history;\nlet historyRows = Array.isArray(historyValue) ? historyValue : [];\nif (typeof historyValue === 'string') { try { const parsed = JSON.parse(historyValue); historyRows = Array.isArray(parsed) ? parsed : []; } catch { historyRows = []; } }\nconst history = historyRows.slice(-12).map(row => ({ role: row.direction === 'outbound' ? 'assistant' : 'customer', text: String(row.body || '').slice(0, 1000) }));\nconst expiry = typeof session.commercial_context_expires_at === 'string' ? Date.parse(session.commercial_context_expires_at) : NaN;\nconst purchaseContext = session.last_question_type === 'purchase_confirmation' && Number.isFinite(expiry) && expiry > Date.now();\nreturn [{ json: { contract_version: 'direct-rag-v2', locale: 'es-MX', session_id: current.session_id, inbound_message_id: current.id, inbound_message_sid: current.provider_message_sid, current_message: String(current.body || '').slice(0, 2000), history, most_recent_assistant_message: history.filter(x => x.role === 'assistant').at(-1)?.text || '', customer_state: { paid: Boolean($('Get User from Supabase').item.json?.is_active) }, commercial_state: { purchase_context: purchaseContext }, offer_version: session.offer_version || '28d-149-v1' } }];"
+      },
+      "notes": "Direct RAG V2 ConversationContext. It is bounded, inspectable, and makes current-turn precedence explicit."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json) }}",
+        "options": {
+          "systemMessage": "You extract customer obligations for Dietavity. Return JSON only: {\"obligations\":[{\"type\":\"...\",\"evidence\":\"exact current-message span\",\"intent\":\"optional\"}]}.\nThe current_message is authoritative; history only resolves a current referent. Never answer facts, write customer prose, give medication advice, or authorize an action. Split independent requests.\nAllowed type values: location, price, payment_methods, offer_contents, how_it_works, personalization, delivery_access, glp1_scope, medical_boundary, acknowledgement, unsupported, objection, purchase, general_information, glp1_nutrition_support, prepared_food, post_program, ai_value, graceful_close, deferred, reminder_request, trust_credentials, human_preference, portal_support, fulfillment, support_limits, example, practical_guidance.\nUse purchase only for an explicit present request to buy/pay/receive the payment link, or a strong current confirmation of the immediately preceding purchase question. Only purchase may include intent, and it must be exactly explicit_current_request or valid_current_confirmation. Omit intent for every other obligation. Bare ok, perfecto, vale, listo, gracias and informational questions are never purchase.\nUse reminder_request for a current explicit request to be reminded. Dietavity cannot schedule it; never emit a timestamp or scheduling action.\nEvidence MUST be a short contiguous verbatim substring copied exactly from current_message. Never use ellipses, paraphrase, join separated spans, or invent punctuation/text. Each obligation needs its own exact supporting span.\nGLP-1 terminology by itself is customer context, never an obligation. Use glp1_scope only when the customer asks whether Dietavity sells, delivers, provides, or prescribes GLP-1 medication. Use medical_boundary only when the customer seeks medication or clinical management advice such as starting, stopping, changing, raising, or lowering a dose. When a customer who mentions GLP-1 asks how Dietavity can help with low appetite, food, nutrition, or practical meal organization, use glp1_nutrition_support; do not add glp1_scope or medical_boundary unless that distinct question is also present. Split price or other independent current questions into their own obligations. Use unsupported when a requested capability is not established by context. Do not create obligations from history."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        68608,
+        49536
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000003",
+      "name": "Interpret Sales Obligations"
+    },
+    {
+      "name": "Parse Direct RAG Obligations",
+      "id": "d74a0001-0000-4000-8000-000000000004",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        68864,
+        49536
+      ],
+      "parameters": {
+        "jsCode": "const context = $('Build Direct RAG Conversation Context').item.json;\nconst allowed = new Set([\"location\",\"price\",\"payment_methods\",\"offer_contents\",\"how_it_works\",\"personalization\",\"delivery_access\",\"glp1_scope\",\"medical_boundary\",\"acknowledgement\",\"unsupported\",\"objection\",\"purchase\",\"general_information\",\"glp1_nutrition_support\",\"prepared_food\",\"post_program\",\"ai_value\",\"graceful_close\",\"deferred\",\"reminder_request\",\"trust_credentials\",\"human_preference\",\"portal_support\",\"fulfillment\",\"support_limits\",\"example\",\"practical_guidance\"]);\ntry { const raw = String($input.first().json.output || '').replace(/^\\x60\\x60\\x60(?:json)?\\s*|\\s*\\x60\\x60\\x60$/g, ''); const parsed = JSON.parse(raw); const obligations = parsed.obligations;\n  if (!Array.isArray(obligations) || !obligations.length || obligations.length > 8) throw new Error('count');\n  const normalized = []; const seen = new Set();\n  for (const o of obligations) {\n    if (!o || !allowed.has(o.type) || typeof o.evidence !== 'string' || !context.current_message.includes(o.evidence) || (o.type === 'purchase' && o.intent !== undefined && !['explicit_current_request','valid_current_confirmation'].includes(o.intent))) continue;\n    const intent = o.type === 'purchase' && o.intent ? o.intent : undefined;\n    const key = JSON.stringify([o.type, o.evidence, intent || null]);\n    if (seen.has(key)) continue;\n    seen.add(key); normalized.push({ id: 'o-' + (normalized.length + 1), type: o.type, evidence: o.evidence, ...(intent ? { intent } : {}) });\n  }\n  return [{ json: { ...context, obligations: normalized.length ? normalized : [{ id: 'o-1', type: 'unsupported', evidence: context.current_message }] } }];\n} catch { return [{ json: { ...context, obligations: [{ id: 'o-1', type: 'unsupported', evidence: context.current_message }] } }]; }"
+      },
+      "notes": "Rejects malformed extraction into a bounded-unknown obligation; never converts failure into purchase authorization."
+    },
+    {
+      "name": "Resolve Direct RAG Obligations",
+      "id": "d74a0001-0000-4000-8000-000000000005",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        69120,
+        49536
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nfunction practicalGuidance(message) {\n  const text = String(message || '').normalize('NFD').replace(/[\\u0300-\\u036f]/gu, '').toLowerCase();\n  const guidance = /\\bpoco apetito|porciones? pequenas?|comer poco\\b/u.test(text) ? ['Prueba una porción pequeña con una proteína y otro componente sencillo: por ejemplo, yogurt natural con fruta, huevo con tortilla, o frijoles con queso y verduras.'] :\n    /\\bproteina\\b/u.test(text) ? ['Como ideas sencillas de proteína puedes elegir huevo, yogurt natural, frijoles, lentejas, pollo, atún o queso, según lo que te resulte práctico.'] : ['Para una comida o snack sencillo, combina una proteína con fruta, verduras, cereal o tortilla según lo que tengas disponible.'];\n  if (/\\b(?:dosis|medicamento|mg|suspender|iniciar|debo bajar)\\b/u.test(text)) guidance.push('Para la parte de medicamentos, consulta al profesional que te lo prescribió.');\n  return guidance;\n}\nconst claims = {\"location\":[\"Dietavity es un servicio digital.\",\"No cuenta con atención presencial ni una sucursal para clientes.\"],\"price\":[\"El programa de 28 días cuesta $149 MXN.\",\"Es un pago único, no una suscripción.\"],\"payment_methods\":[\"Puedes pagar con tarjeta de crédito, tarjeta de débito, OXXO o Apple Pay.\"],\"offer_contents\":[\"El programa incluye desayuno, comida, cena y snack para 28 días.\"],\"how_it_works\":[\"Después del pago verificado completas la personalización.\",\"Luego consultas tu programa de 28 días en el portal Dietavity.\",\"Puedes elegir iniciar desde ese día y hasta 30 días después.\"],\"personalization\":[\"La personalización se realiza después del pago con la información que compartes en el Setup.\"],\"delivery_access\":[\"El programa se consulta en el portal Dietavity después del pago verificado y de completar la personalización.\"],\"glp1_scope\":[\"Dietavity no vende, entrega ni prescribe medicamentos GLP-1.\",\"Dietavity es un servicio de nutrición y programas de comidas.\"],\"medical_boundary\":[\"No puedo orientarte sobre iniciar, suspender o cambiar una dosis de medicamento.\",\"Consulta al profesional que te lo prescribió.\"],\"acknowledgement\":[\"¡Con gusto! 😊\"],\"unsupported\":[\"No tengo información confirmada para afirmar que Dietavity ofrezca eso.\"],\"objection\":[\"Entiendo que el precio pueda parecer alto. El programa cuesta $149 MXN por 28 días y es un pago único, sin suscripción.\"],\"purchase\":[\"Estamos abriendo esta modalidad de Dietavity de forma gradual. Te enviaremos por WhatsApp el enlace para completar tu compra.\",\"$149 MXN · 28 días · pago único · sin suscripción.\"],\"general_information\":[\"Dietavity es un programa personalizado de alimentación de 28 días.\",\"Incluye desayuno, comida, cena y snack para cada día.\",\"Las comidas se adaptan a tus objetivos y preferencias.\"],\"glp1_nutrition_support\":[\"Dietavity ayuda a organizar comidas sencillas cuando tienes poco apetito.\",\"El programa personalizado de 28 días incluye desayuno, comida, cena y snack, adaptados a tus objetivos y preferencias.\"],\"prepared_food\":[\"Dietavity no entrega comida preparada; ofrece un programa de comidas para consultar en el portal.\"],\"post_program\":[\"El programa actual es de 28 días; no tengo una continuidad automática confirmada para ofrecer.\"],\"ai_value\":[\"Dietavity organiza un programa de comidas de 28 días a partir de la información de personalización; no es una consulta humana individual.\"],\"graceful_close\":[\"Gracias por conocer Dietavity.\"],\"deferred\":[\"Claro, cuando quieras retomarlo puedes escribirnos por aquí.\"],\"reminder_request\":[\"Por ahora no puedo programar recordatorios automáticos, pero puedes escribirnos cuando quieras retomarlo.\"],\"trust_credentials\":[\"Dietavity usa inteligencia artificial; un nutriólogo humano no elabora individualmente cada programa.\"],\"human_preference\":[\"Entiendo tu preferencia; Dietavity no ofrece una consulta individual con un nutriólogo.\"],\"portal_support\":[\"Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas y orientación práctica.\"],\"fulfillment\":[\"Después del pago verificado y de completar la personalización, el programa se consulta en el portal.\"],\"support_limits\":[\"El apoyo por WhatsApp es bajo demanda durante el programa; no se envían mensajes diarios proactivos.\"],\"example\":[\"Un ejemplo ilustrativo puede incluir desayuno, comida, cena y snack; no sustituye tu programa personalizado.\"],\"practical_guidance\":[\"Para una duda de alimentación o medicación, busca orientación profesional adecuada; Dietavity no da tratamiento médico.\"]};\nconst glp1LivePilotCheckoutSuppressed = true;\nconst resolved_obligations = input.obligations.map(obligation => {\n  const validPurchase = obligation.type === 'purchase' && ['explicit_current_request','valid_current_confirmation'].includes(obligation.intent) && (obligation.intent === 'explicit_current_request' || input.commercial_state.purchase_context);\n  return { obligation, resolution: obligation.type === 'unsupported' ? 'bounded_unknown' : 'resolved', permitted_claims: obligation.type === 'practical_guidance' ? practicalGuidance(input.current_message) : claims[obligation.type] || claims.unsupported, prohibited_or_boundary_claims: obligation.type === 'medical_boundary' ? ['medication_management_advice'] : obligation.type === 'glp1_scope' ? ['medication_sale_delivery_or_prescription'] : [], action_authorization: null, ...(validPurchase && glp1LivePilotCheckoutSuppressed ? { checkout_suppressed_reason: 'glp1_live_pilot' } : {}) };\n});\nconst checkout_suppressed_reason = resolved_obligations.find(x => x.checkout_suppressed_reason)?.checkout_suppressed_reason || null;\nreturn [{ json: { ...input, resolved_obligations, permitted_claims: resolved_obligations.flatMap(x => x.permitted_claims), authorized_action: null, checkout_suppressed_reason, pending_action: 'respond', checkout_authorized: false, checkout_authorization_type: null, checkout_question_response: null, strategy: 'direct_rag_response', buyer_signal: input.obligations.some(x => x.type === 'purchase') ? 'explicit_purchase' : 'obligation_resolution', topic: input.obligations.map(x => x.type).join(','), goal: null, offer_version: input.offer_version, inbound_message_sid: input.inbound_message_sid, events: [] } }];"
+      },
+      "notes": "Temporary GLP-1 live-pilot safeguard: purchase is resolved and observable, but Checkout authority is suppressed."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "3b98d88c-e005-46e1-935e-eee671d3c0f0",
+                    "leftValue": "={{ $json.pending_action }}",
+                    "rightValue": "send_checkout",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "925a6e23-1a1f-4c89-932e-8d1d9f020f03",
+                    "leftValue": "={{ $json.pending_action }}",
+                    "rightValue": "schedule_requested_reminder",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "55d637b2-1ec6-4217-a50a-17cd03050da3",
+                    "leftValue": "={{ $json.pending_action }}",
+                    "rightValue": "close",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ea3e7df3-d992-4a14-9e55-714db170d8af",
+                    "leftValue": "={{ $json.pending_action }}",
+                    "rightValue": "respond",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        69376,
+        49536
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000006",
+      "name": "Route Direct RAG Authorized Action"
+    },
+    {
+      "name": "Build Direct RAG Composition Envelope",
+      "id": "d74a0001-0000-4000-8000-000000000007",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        69632,
+        49904
+      ],
+      "parameters": {
+        "jsCode": "const value = $input.first().json; return [{ json: { ...value, composition_envelope: { current_message: value.current_message, relevant_conversation_context: { history: value.history, most_recent_assistant_message: value.most_recent_assistant_message }, resolved_obligations: value.resolved_obligations, permitted_claims: value.permitted_claims, response_policy: { locale: 'es-MX', max_questions: 0, unsolicited_purchase_cta: false } } } }];"
+      },
+      "notes": "The composer receives this bounded envelope, not the full knowledge base or workflow state."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.composition_envelope) }}",
+        "options": {
+          "systemMessage": "Write one concise natural Mexican-Spanish WhatsApp response from the supplied JSON envelope. Return JSON only: {\"response\":\"...\",\"covered_obligation_ids\":[...],\"used_claims\":[exact permitted claim strings used]}. Answer every resolved obligation. Use only permitted_claims for Dietavity factual statements. Do not add a purchase CTA or question. Do not invent capabilities, prices, locations, payment methods, delivery, medical advice, or future actions. For medication boundaries, refer to the prescribing professional without dosing advice."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        69888,
+        49904
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000008",
+      "name": "Compose Grounded Sales Response"
+    },
+    {
+      "name": "Final Direct RAG Customer Response Gate",
+      "id": "d74a0001-0000-4000-8000-000000000009",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        70144,
+        49904
+      ],
+      "parameters": {
+        "jsCode": "const value = $('Build Direct RAG Composition Envelope').item.json; const required = value.resolved_obligations.map(x => x.obligation.id); let parsed;\ntry { parsed = JSON.parse(String($input.first().json.output || '').replace(/^\\x60\\x60\\x60(?:json)?\\s*|\\s*\\x60\\x60\\x60$/g, '')); } catch { parsed = null; }\nconst canonical = text => String(text || '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('es-MX'); const allowed = new Set(value.permitted_claims.map(canonical));\nconst grounded = parsed && typeof parsed.response === 'string' && parsed.response.trim().split(/(?<=[.!?])\\s+/).map(canonical).filter(Boolean).every(sentence => allowed.has(sentence));\nconst valid = grounded && Array.isArray(parsed.covered_obligation_ids) && required.every(id => parsed.covered_obligation_ids.includes(id));\nconst response = valid ? parsed.response.trim() : value.resolved_obligations.flatMap(x => x.permitted_claims).join(' ');\nconst unsafe = /\\b(?:sube|baja|aumenta|reduce|cambia|ajusta|suspende|inicia)\\b.{0,50}\\b(?:dosis|medicamento|mg)\\b/i.test(response) || /\\b(?:quieres comprar|te env[ií]o el enlace)\\b/i.test(response);\nconst output = unsafe || !response ? value.resolved_obligations.flatMap(x => x.permitted_claims).join(' ') || 'No tengo información confirmada para responder eso.' : response;\nreturn [{ json: { ...value, output, final_gate: { cleared: valid && !unsafe, fallback_used: !valid || unsafe, required_obligation_ids: required }, next_last_question_type: null, allow_purchase_cta: false, deterministic_reason: 'direct_rag_final_gate' } }];"
+      },
+      "notes": "One final deterministic grounding/policy gate. Invalid drafts get one safe grounded fallback; no unbounded regeneration."
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "reasoningEffort": "low"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        68608,
+        49760
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000010",
+      "name": "Sales Obligations Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "cNVYcOYj3kngOsrM",
+          "name": "Onboarding Agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "reasoningEffort": "low"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        69888,
+        50128
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000011",
+      "name": "Grounded Sales Response Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "cNVYcOYj3kngOsrM",
+          "name": "Onboarding Agent"
+        }
       }
     }
   ],
@@ -5112,7 +5415,7 @@
       "main": [
         [
           {
-            "node": "Build Canonical Dietavity Knowledge",
+            "node": "Get Direct RAG Conversation History",
             "type": "main",
             "index": 0
           }
@@ -5729,7 +6032,7 @@
       "main": [
         [
           {
-            "node": "Build Canonical Dietavity Knowledge",
+            "node": "Get Direct RAG Conversation History",
             "type": "main",
             "index": 0
           }
@@ -5900,7 +6203,7 @@
       "main": [
         [
           {
-            "node": "Reserve Sales Reply",
+            "node": "Build Sales Response Persistence Envelope",
             "type": "main",
             "index": 0
           }
@@ -6587,6 +6890,17 @@
         ]
       ]
     },
+    "Build Sales Response Persistence Envelope": {
+      "main": [
+        [
+          {
+            "node": "Reserve Sales Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Loop Paid WhatsApp Parts": {
       "main": [
         [
@@ -6599,6 +6913,130 @@
         [
           {
             "node": "Send All Intents Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Direct RAG Conversation History": {
+      "main": [
+        [
+          {
+            "node": "Build Direct RAG Conversation Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Direct RAG Conversation Context": {
+      "main": [
+        [
+          {
+            "node": "Interpret Sales Obligations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpret Sales Obligations": {
+      "main": [
+        [
+          {
+            "node": "Parse Direct RAG Obligations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sales Obligations Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Interpret Sales Obligations",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Direct RAG Obligations": {
+      "main": [
+        [
+          {
+            "node": "Resolve Direct RAG Obligations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Direct RAG Obligations": {
+      "main": [
+        [
+          {
+            "node": "Route Direct RAG Authorized Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Direct RAG Authorized Action": {
+      "main": [
+        [],
+        [],
+        [],
+        [
+          {
+            "node": "Build Direct RAG Composition Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Direct RAG Composition Envelope": {
+      "main": [
+        [
+          {
+            "node": "Compose Grounded Sales Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Grounded Sales Response": {
+      "main": [
+        [
+          {
+            "node": "Final Direct RAG Customer Response Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grounded Sales Response Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Compose Grounded Sales Response",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Direct RAG Customer Response Gate": {
+      "main": [
+        [
+          {
+            "node": "Build Sales Response Persistence Envelope",
             "type": "main",
             "index": 0
           }

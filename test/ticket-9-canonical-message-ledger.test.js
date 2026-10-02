@@ -139,7 +139,8 @@ test('Twilio sends consume the canonical reservation row payload', () => {
 });
 
 test('final deterministic and Checkout text is reserved after construction', () => {
-  assert.deepEqual(outputs('Validate Sales Response Contract'), ['Reserve Sales Reply']);
+  assert.deepEqual(outputs('Validate Sales Response Contract'), ['Build Sales Response Persistence Envelope']);
+  assert.deepEqual(outputs('Build Sales Response Persistence Envelope'), ['Reserve Sales Reply']);
   assert.deepEqual(outputs('Message with Stripe Payment URL'), ['Reserve Checkout Reply']);
   assert.deepEqual(outputs('Parse Assistant Response'), ['Prepare Paid WhatsApp Message Parts']);
   assert.deepEqual(outputs('Build Deterministic Customer Response'), ['Prepare Paid WhatsApp Message Parts']);

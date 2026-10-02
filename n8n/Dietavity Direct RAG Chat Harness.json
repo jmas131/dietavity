@@ -1,0 +1,473 @@
+{
+  "name": "Dietavity Direct RAG Chat Harness",
+  "active": false,
+  "settings": {},
+  "pinData": {},
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json) }}",
+        "options": {
+          "systemMessage": "You extract customer obligations for Dietavity. Return JSON only: {\"obligations\":[{\"type\":\"...\",\"evidence\":\"exact current-message span\",\"intent\":\"optional\"}]}.\nThe current_message is authoritative; history only resolves a current referent. Never answer facts, write customer prose, give medication advice, or authorize an action. Split independent requests.\nAllowed type values: location, price, payment_methods, offer_contents, how_it_works, personalization, delivery_access, glp1_scope, medical_boundary, acknowledgement, unsupported, objection, purchase, general_information, glp1_nutrition_support, prepared_food, post_program, ai_value, graceful_close, deferred, reminder_request, trust_credentials, human_preference, portal_support, fulfillment, support_limits, example, practical_guidance.\nUse purchase only for an explicit present request to buy/pay/receive the payment link, or a strong current confirmation of the immediately preceding purchase question. Only purchase may include intent, and it must be exactly explicit_current_request or valid_current_confirmation. Omit intent for every other obligation. Bare ok, perfecto, vale, listo, gracias and informational questions are never purchase.\nUse reminder_request for a current explicit request to be reminded. Dietavity cannot schedule it; never emit a timestamp or scheduling action.\nEvidence MUST be a short contiguous verbatim substring copied exactly from current_message. Never use ellipses, paraphrase, join separated spans, or invent punctuation/text. Each obligation needs its own exact supporting span.\nGLP-1 terminology by itself is customer context, never an obligation. Use glp1_scope only when the customer asks whether Dietavity sells, delivers, provides, or prescribes GLP-1 medication. Use medical_boundary only when the customer seeks medication or clinical management advice such as starting, stopping, changing, raising, or lowering a dose. When a customer who mentions GLP-1 asks how Dietavity can help with low appetite, food, nutrition, or practical meal organization, use glp1_nutrition_support; do not add glp1_scope or medical_boundary unless that distinct question is also present. Split price or other independent current questions into their own obligations. Use unsupported when a requested capability is not established by context. Do not create obligations from history."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1000,
+        300
+      ],
+      "id": "50e2623c-ffad-4d8c-adf4-9e14aa21c114",
+      "name": "Interpret Sales Obligations"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "reasoningEffort": "low"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1000,
+        480
+      ],
+      "id": "4d5ab39e-11d1-41fd-a32f-1d735bd014cb",
+      "name": "Sales Obligations Model",
+      "credentials": {
+        "openAiApi": {
+          "name": "Dietavity Direct RAG Chat Harness OpenAI"
+        }
+      }
+    },
+    {
+      "name": "Parse Direct RAG Obligations",
+      "id": "a1f0fc2e-c4a6-42b6-a45f-1bf2eb868d74",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const context = $('Build Direct RAG Test Context').item.json;\nconst allowed = new Set([\"location\",\"price\",\"payment_methods\",\"offer_contents\",\"how_it_works\",\"personalization\",\"delivery_access\",\"glp1_scope\",\"medical_boundary\",\"acknowledgement\",\"unsupported\",\"objection\",\"purchase\",\"general_information\",\"glp1_nutrition_support\",\"prepared_food\",\"post_program\",\"ai_value\",\"graceful_close\",\"deferred\",\"reminder_request\",\"trust_credentials\",\"human_preference\",\"portal_support\",\"fulfillment\",\"support_limits\",\"example\",\"practical_guidance\"]);\ntry { const raw = String($input.first().json.output || '').replace(/^\\x60\\x60\\x60(?:json)?\\s*|\\s*\\x60\\x60\\x60$/g, ''); const parsed = JSON.parse(raw); const obligations = parsed.obligations;\n  if (!Array.isArray(obligations) || !obligations.length || obligations.length > 8) throw new Error('count');\n  const normalized = []; const seen = new Set();\n  for (const o of obligations) {\n    if (!o || !allowed.has(o.type) || typeof o.evidence !== 'string' || !context.current_message.includes(o.evidence) || (o.type === 'purchase' && o.intent !== undefined && !['explicit_current_request','valid_current_confirmation'].includes(o.intent))) continue;\n    const intent = o.type === 'purchase' && o.intent ? o.intent : undefined;\n    const key = JSON.stringify([o.type, o.evidence, intent || null]);\n    if (seen.has(key)) continue;\n    seen.add(key); normalized.push({ id: 'o-' + (normalized.length + 1), type: o.type, evidence: o.evidence, ...(intent ? { intent } : {}) });\n  }\n  return [{ json: { ...context, obligations: normalized.length ? normalized : [{ id: 'o-1', type: 'unsupported', evidence: context.current_message }] } }];\n} catch { return [{ json: { ...context, obligations: [{ id: 'o-1', type: 'unsupported', evidence: context.current_message }] } }]; }"
+      },
+      "notes": "Rejects malformed extraction into a bounded-unknown obligation; never converts failure into purchase authorization."
+    },
+    {
+      "name": "Resolve Direct RAG Obligations",
+      "id": "8b2ee890-2e65-4093-a5c4-0ca16c6ba455",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nfunction practicalGuidance(message) {\n  const text = String(message || '').normalize('NFD').replace(/[\\u0300-\\u036f]/gu, '').toLowerCase();\n  const guidance = /\\bpoco apetito|porciones? pequenas?|comer poco\\b/u.test(text) ? ['Prueba una porción pequeña con una proteína y otro componente sencillo: por ejemplo, yogurt natural con fruta, huevo con tortilla, o frijoles con queso y verduras.'] :\n    /\\bproteina\\b/u.test(text) ? ['Como ideas sencillas de proteína puedes elegir huevo, yogurt natural, frijoles, lentejas, pollo, atún o queso, según lo que te resulte práctico.'] : ['Para una comida o snack sencillo, combina una proteína con fruta, verduras, cereal o tortilla según lo que tengas disponible.'];\n  if (/\\b(?:dosis|medicamento|mg|suspender|iniciar|debo bajar)\\b/u.test(text)) guidance.push('Para la parte de medicamentos, consulta al profesional que te lo prescribió.');\n  return guidance;\n}\nconst claims = {\"location\":[\"Dietavity es un servicio digital.\",\"No cuenta con atención presencial ni una sucursal para clientes.\"],\"price\":[\"El programa de 28 días cuesta $149 MXN.\",\"Es un pago único, no una suscripción.\"],\"payment_methods\":[\"Puedes pagar con tarjeta de crédito, tarjeta de débito, OXXO o Apple Pay.\"],\"offer_contents\":[\"El programa incluye desayuno, comida, cena y snack para 28 días.\"],\"how_it_works\":[\"Después del pago verificado completas la personalización.\",\"Luego consultas tu programa de 28 días en el portal Dietavity.\",\"Puedes elegir iniciar desde ese día y hasta 30 días después.\"],\"personalization\":[\"La personalización se realiza después del pago con la información que compartes en el Setup.\"],\"delivery_access\":[\"El programa se consulta en el portal Dietavity después del pago verificado y de completar la personalización.\"],\"glp1_scope\":[\"Dietavity no vende, entrega ni prescribe medicamentos GLP-1.\",\"Dietavity es un servicio de nutrición y programas de comidas.\"],\"medical_boundary\":[\"No puedo orientarte sobre iniciar, suspender o cambiar una dosis de medicamento.\",\"Consulta al profesional que te lo prescribió.\"],\"acknowledgement\":[\"¡Con gusto! 😊\"],\"unsupported\":[\"No tengo información confirmada para afirmar que Dietavity ofrezca eso.\"],\"objection\":[\"Entiendo que el precio pueda parecer alto. El programa cuesta $149 MXN por 28 días y es un pago único, sin suscripción.\"],\"purchase\":[\"Estamos abriendo esta modalidad de Dietavity de forma gradual. Te enviaremos por WhatsApp el enlace para completar tu compra.\",\"$149 MXN · 28 días · pago único · sin suscripción.\"],\"general_information\":[\"Dietavity es un programa personalizado de alimentación de 28 días.\",\"Incluye desayuno, comida, cena y snack para cada día.\",\"Las comidas se adaptan a tus objetivos y preferencias.\"],\"glp1_nutrition_support\":[\"Dietavity ayuda a organizar comidas sencillas cuando tienes poco apetito.\",\"El programa personalizado de 28 días incluye desayuno, comida, cena y snack, adaptados a tus objetivos y preferencias.\"],\"prepared_food\":[\"Dietavity no entrega comida preparada; ofrece un programa de comidas para consultar en el portal.\"],\"post_program\":[\"El programa actual es de 28 días; no tengo una continuidad automática confirmada para ofrecer.\"],\"ai_value\":[\"Dietavity organiza un programa de comidas de 28 días a partir de la información de personalización; no es una consulta humana individual.\"],\"graceful_close\":[\"Gracias por conocer Dietavity.\"],\"deferred\":[\"Claro, cuando quieras retomarlo puedes escribirnos por aquí.\"],\"reminder_request\":[\"Por ahora no puedo programar recordatorios automáticos, pero puedes escribirnos cuando quieras retomarlo.\"],\"trust_credentials\":[\"Dietavity usa inteligencia artificial; un nutriólogo humano no elabora individualmente cada programa.\"],\"human_preference\":[\"Entiendo tu preferencia; Dietavity no ofrece una consulta individual con un nutriólogo.\"],\"portal_support\":[\"Durante el programa puedes pedir por WhatsApp recetas, ideas de comidas y orientación práctica.\"],\"fulfillment\":[\"Después del pago verificado y de completar la personalización, el programa se consulta en el portal.\"],\"support_limits\":[\"El apoyo por WhatsApp es bajo demanda durante el programa; no se envían mensajes diarios proactivos.\"],\"example\":[\"Un ejemplo ilustrativo puede incluir desayuno, comida, cena y snack; no sustituye tu programa personalizado.\"],\"practical_guidance\":[\"Para una duda de alimentación o medicación, busca orientación profesional adecuada; Dietavity no da tratamiento médico.\"]};\nconst glp1LivePilotCheckoutSuppressed = true;\nconst resolved_obligations = input.obligations.map(obligation => {\n  const validPurchase = obligation.type === 'purchase' && ['explicit_current_request','valid_current_confirmation'].includes(obligation.intent) && (obligation.intent === 'explicit_current_request' || input.commercial_state.purchase_context);\n  return { obligation, resolution: obligation.type === 'unsupported' ? 'bounded_unknown' : 'resolved', permitted_claims: obligation.type === 'practical_guidance' ? practicalGuidance(input.current_message) : claims[obligation.type] || claims.unsupported, prohibited_or_boundary_claims: obligation.type === 'medical_boundary' ? ['medication_management_advice'] : obligation.type === 'glp1_scope' ? ['medication_sale_delivery_or_prescription'] : [], action_authorization: null, ...(validPurchase && glp1LivePilotCheckoutSuppressed ? { checkout_suppressed_reason: 'glp1_live_pilot' } : {}) };\n});\nconst checkout_suppressed_reason = resolved_obligations.find(x => x.checkout_suppressed_reason)?.checkout_suppressed_reason || null;\nreturn [{ json: { ...input, resolved_obligations, permitted_claims: resolved_obligations.flatMap(x => x.permitted_claims), authorized_action: null, checkout_suppressed_reason, pending_action: 'respond', checkout_authorized: false, checkout_authorization_type: null, checkout_question_response: null, strategy: 'direct_rag_response', buyer_signal: input.obligations.some(x => x.type === 'purchase') ? 'explicit_purchase' : 'obligation_resolution', topic: input.obligations.map(x => x.type).join(','), goal: null, offer_version: input.offer_version, inbound_message_sid: input.inbound_message_sid, events: [] } }];"
+      },
+      "notes": "Temporary GLP-1 live-pilot safeguard: purchase is resolved and observable, but Checkout authority is suppressed."
+    },
+    {
+      "name": "Build Direct RAG Composition Envelope",
+      "id": "6d574ba8-6671-497b-af41-7a63d8e41b65",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const value = $input.first().json; return [{ json: { ...value, composition_envelope: { current_message: value.current_message, relevant_conversation_context: { history: value.history, most_recent_assistant_message: value.most_recent_assistant_message }, resolved_obligations: value.resolved_obligations, permitted_claims: value.permitted_claims, response_policy: { locale: 'es-MX', max_questions: 0, unsolicited_purchase_cta: false } } } }];"
+      },
+      "notes": "The composer receives this bounded envelope, not the full knowledge base or workflow state."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.composition_envelope) }}",
+        "options": {
+          "systemMessage": "Write one concise natural Mexican-Spanish WhatsApp response from the supplied JSON envelope. Return JSON only: {\"response\":\"...\",\"covered_obligation_ids\":[...],\"used_claims\":[exact permitted claim strings used]}. Answer every resolved obligation. Use only permitted_claims for Dietavity factual statements. Do not add a purchase CTA or question. Do not invent capabilities, prices, locations, payment methods, delivery, medical advice, or future actions. For medication boundaries, refer to the prescribing professional without dosing advice."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2250,
+        300
+      ],
+      "id": "d265e1ed-0937-4432-a599-069c2260f001",
+      "name": "Compose Grounded Sales Response"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "reasoningEffort": "low"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2500,
+        480
+      ],
+      "id": "2114dc87-dda4-431c-ad5f-740ece76c26b",
+      "name": "Grounded Sales Response Model",
+      "credentials": {
+        "openAiApi": {
+          "name": "Dietavity Direct RAG Chat Harness OpenAI"
+        }
+      }
+    },
+    {
+      "name": "Final Direct RAG Customer Response Gate",
+      "id": "662a1ea3-eec9-48cc-a6b5-0a62d0318e06",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2500,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const value = $('Build Direct RAG Composition Envelope').item.json; const required = value.resolved_obligations.map(x => x.obligation.id); let parsed;\ntry { parsed = JSON.parse(String($input.first().json.output || '').replace(/^\\x60\\x60\\x60(?:json)?\\s*|\\s*\\x60\\x60\\x60$/g, '')); } catch { parsed = null; }\nconst canonical = text => String(text || '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('es-MX'); const allowed = new Set(value.permitted_claims.map(canonical));\nconst grounded = parsed && typeof parsed.response === 'string' && parsed.response.trim().split(/(?<=[.!?])\\s+/).map(canonical).filter(Boolean).every(sentence => allowed.has(sentence));\nconst valid = grounded && Array.isArray(parsed.covered_obligation_ids) && required.every(id => parsed.covered_obligation_ids.includes(id));\nconst response = valid ? parsed.response.trim() : value.resolved_obligations.flatMap(x => x.permitted_claims).join(' ');\nconst unsafe = /\\b(?:sube|baja|aumenta|reduce|cambia|ajusta|suspende|inicia)\\b.{0,50}\\b(?:dosis|medicamento|mg)\\b/i.test(response) || /\\b(?:quieres comprar|te env[ií]o el enlace)\\b/i.test(response);\nconst output = unsafe || !response ? value.resolved_obligations.flatMap(x => x.permitted_claims).join(' ') || 'No tengo información confirmada para responder eso.' : response;\nreturn [{ json: { ...value, output, final_gate: { cleared: valid && !unsafe, fallback_used: !valid || unsafe, required_obligation_ids: required }, next_last_question_type: null, allow_purchase_cta: false, deterministic_reason: 'direct_rag_final_gate' } }];"
+      },
+      "notes": "One final deterministic grounding/policy gate. Invalid drafts get one safe grounded fallback; no unbounded regeneration."
+    },
+    {
+      "name": "When Chat Message Received",
+      "id": "209d07a2-d563-4252-a182-062b0dd04fff",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "parameters": {
+        "public": false,
+        "options": {
+          "responseMode": "lastNode",
+          "loadPreviousSession": "notSupported"
+        }
+      },
+      "position": [
+        0,
+        300
+      ],
+      "notes": "Manual developer Chat only. Keep the imported workflow inactive until intentionally used; it is not a WhatsApp webhook.",
+      "webhookId": "6f6cb567-4ba5-425b-a0f2-89c2d8b4e4fd"
+    },
+    {
+      "name": "Prepare Test Turn",
+      "id": "2f6a7739-026a-4b36-a0ac-c52859e5a8d4",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const chat = $('When Chat Message Received').item.json;\nif (chat.action && chat.action !== 'sendMessage') throw new Error('DIRECT_RAG_HARNESS_SEND_MESSAGE_ONLY');\nif (typeof chat.chatInput !== 'string' || !chat.chatInput.trim() || chat.chatInput.length > 2000) throw new Error('DIRECT_RAG_HARNESS_TEXT_REQUIRED');\nreturn [{ json: { session_id: \"direct-rag-chat-harness:v1:synthetic-dietavity-customer\", current_message: chat.chatInput.trim() } }];"
+      },
+      "position": [
+        250,
+        300
+      ],
+      "notes": "Pins every Chat turn to one synthetic, non-phone identity. Ignores all Chat-supplied session and provider identifiers."
+    },
+    {
+      "name": "Get Test Conversation History",
+      "id": "0ce9f014-78ca-4190-a741-0297fbb74dd0",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(jsonb_agg(entry ORDER BY harness_sequence ASC), '[]'::jsonb) AS history\nFROM (\n  SELECT CASE WHEN message->'data'->>'harness_sequence' ~ '^[0-9]+$' THEN (message->'data'->>'harness_sequence')::bigint END AS harness_sequence, jsonb_build_object(\n    'role', CASE WHEN message->>'type' = 'ai' THEN 'assistant' ELSE 'customer' END,\n    'text', COALESCE(message->'data'->>'content', message->>'content', '')\n  ) AS entry\n  FROM public.onboarding_chat_memory\n  WHERE session_id = $1::jsonb->>'session_id'\n    AND message->'data'->>'harness_sequence' ~ '^[0-9]+$'\n  ORDER BY harness_sequence DESC\n  LIMIT 12\n) AS bounded_history;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($('Prepare Test Turn').item.json) }}"
+        }
+      },
+      "position": [
+        500,
+        300
+      ],
+      "notes": "Reads only the namespaced synthetic transcript from AI memory. The persisted harness_sequence is the authoritative monotonic order: latest 12 are selected descending, then returned oldest-to-newest. It never reads the canonical WhatsApp messages ledger.",
+      "credentials": {
+        "postgres": {
+          "name": "Dietavity Direct RAG Chat Harness Postgres"
+        }
+      }
+    },
+    {
+      "name": "Build Direct RAG Test Context",
+      "id": "24043e55-8c6a-4ada-a36a-46be97c8719b",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const turn = $('Prepare Test Turn').item.json;\nconst rawHistory = $input.first().json.history;\nlet rows = Array.isArray(rawHistory) ? rawHistory : [];\nif (typeof rawHistory === 'string') { try { rows = JSON.parse(rawHistory); } catch { rows = []; } }\nconst history = rows.slice(-12).map(row => ({ role: row.role === 'assistant' ? 'assistant' : 'customer', text: String(row.text || '').slice(0, 1000) }));\nreturn [{ json: { contract_version: 'direct-rag-v2', locale: 'es-MX', session_id: turn.session_id, inbound_message_id: null, inbound_message_sid: null, current_message: turn.current_message, history, most_recent_assistant_message: history.filter(row => row.role === 'assistant').at(-1)?.text || '', customer_state: { paid: false }, commercial_state: { purchase_context: false }, offer_version: '28d-149-v1' } }];"
+      },
+      "position": [
+        750,
+        300
+      ],
+      "notes": "Side-effect-free adapter for the Ticket 10 Direct RAG ConversationContext. The synthetic harness never grants purchase context or a paid customer state."
+    },
+    {
+      "name": "Assert No External Action",
+      "id": "c938674e-defe-4d13-ab43-e664ecb9967e",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const value = $input.first().json;\nif (value.authorized_action !== null || value.checkout_authorized !== false || value.pending_action !== 'respond') throw new Error('DIRECT_RAG_HARNESS_EXTERNAL_ACTION_BLOCKED');\nreturn [{ json: value }];"
+      },
+      "position": [
+        1750,
+        300
+      ],
+      "notes": "Hard terminal guard: even if future source changes create an action, this harness fails before any Checkout, delivery, reservation, or state mutation."
+    },
+    {
+      "name": "Persist Test Conversation",
+      "id": "b2cf7bf0-afc8-408f-a939-2f59731d99d7",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH turn AS (SELECT $1::jsonb AS payload), locked AS (\n  SELECT pg_advisory_xact_lock(hashtext(payload->>'session_id')) FROM turn\n), next_sequence AS (\n  SELECT COALESCE(MAX((memory.message->'data'->>'harness_sequence')::bigint), 0) AS last_sequence\n  FROM public.onboarding_chat_memory AS memory\n  CROSS JOIN turn CROSS JOIN locked\n  WHERE memory.session_id = turn.payload->>'session_id'\n    AND memory.message->'data'->>'harness_sequence' ~ '^[0-9]+$'\n), inserted AS (\n  INSERT INTO public.onboarding_chat_memory (session_id, message)\n  SELECT payload->>'session_id', jsonb_build_object('type', 'human', 'data', jsonb_build_object('content', payload->>'current_message', 'harness_sequence', last_sequence + 1)) FROM turn CROSS JOIN next_sequence\n  UNION ALL\n  SELECT payload->>'session_id', jsonb_build_object('type', 'ai', 'data', jsonb_build_object('content', payload->>'output', 'harness_sequence', last_sequence + 2)) FROM turn CROSS JOIN next_sequence\n  RETURNING id\n)\nSELECT (SELECT COUNT(*) FROM inserted) AS persisted_turn_messages;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ session_id: $('Prepare Test Turn').item.json.session_id, current_message: $('Prepare Test Turn').item.json.current_message, output: $('Final Direct RAG Customer Response Gate').item.json.output }) }}"
+        }
+      },
+      "position": [
+        2750,
+        300
+      ],
+      "notes": "Writes exactly the synthetic user/assistant transcript after the final Direct RAG gate with a transaction-locked, monotonic synthetic sequence. No users, sessions, messages ledger, funnel events, delivery reservations, or provider identifiers are touched.",
+      "credentials": {
+        "postgres": {
+          "name": "Dietavity Direct RAG Chat Harness Postgres"
+        }
+      }
+    },
+    {
+      "name": "Respond to Chat",
+      "id": "e2754d9c-e254-4158-a329-f71d70dbe97d",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const persisted = $input.first().json;\nif (Number(persisted.persisted_turn_messages) !== 2) throw new Error('DIRECT_RAG_HARNESS_TRANSCRIPT_NOT_PERSISTED');\nconst result = $('Final Direct RAG Customer Response Gate').item.json;\nreturn [{ json: { output: result.output, assistant_response: result.output, test_identity: \"direct-rag-chat-harness:v1:synthetic-dietavity-customer\", checkout_executed: false, checkout_suppressed_reason: result.checkout_suppressed_reason || null } }];"
+      },
+      "position": [
+        3000,
+        300
+      ],
+      "notes": "Last-node Chat response. It returns only the final gated customer response and safe test metadata."
+    },
+    {
+      "name": "Reset Test Conversation",
+      "id": "49657c76-00b5-4e53-a347-100422c639b5",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "parameters": {},
+      "position": [
+        0,
+        700
+      ],
+      "notes": "Run this separate manual branch to delete only this harness’s fixed synthetic transcript before a new conversation."
+    },
+    {
+      "name": "Clear Test Conversation",
+      "id": "52d5a153-dd85-4134-a511-1d2d8f58b7b4",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM public.onboarding_chat_memory\nWHERE session_id = $1::jsonb->>'session_id'\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ session_id: \"direct-rag-chat-harness:v1:synthetic-dietavity-customer\" }) }}"
+        }
+      },
+      "position": [
+        250,
+        700
+      ],
+      "notes": "Reset is strictly limited to the synthetic Direct RAG Chat Harness session; no real customer history or analytics can match it.",
+      "credentials": {
+        "postgres": {
+          "name": "Dietavity Direct RAG Chat Harness Postgres"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When Chat Message Received": {
+      "main": [
+        [
+          {
+            "node": "Prepare Test Turn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Test Turn": {
+      "main": [
+        [
+          {
+            "node": "Get Test Conversation History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Test Conversation History": {
+      "main": [
+        [
+          {
+            "node": "Build Direct RAG Test Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Direct RAG Test Context": {
+      "main": [
+        [
+          {
+            "node": "Interpret Sales Obligations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpret Sales Obligations": {
+      "main": [
+        [
+          {
+            "node": "Parse Direct RAG Obligations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sales Obligations Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Interpret Sales Obligations",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Direct RAG Obligations": {
+      "main": [
+        [
+          {
+            "node": "Resolve Direct RAG Obligations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Direct RAG Obligations": {
+      "main": [
+        [
+          {
+            "node": "Assert No External Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert No External Action": {
+      "main": [
+        [
+          {
+            "node": "Build Direct RAG Composition Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Direct RAG Composition Envelope": {
+      "main": [
+        [
+          {
+            "node": "Compose Grounded Sales Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grounded Sales Response Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Compose Grounded Sales Response",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Grounded Sales Response": {
+      "main": [
+        [
+          {
+            "node": "Final Direct RAG Customer Response Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Direct RAG Customer Response Gate": {
+      "main": [
+        [
+          {
+            "node": "Persist Test Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Test Conversation": {
+      "main": [
+        [
+          {
+            "node": "Respond to Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset Test Conversation": {
+      "main": [
+        [
+          {
+            "node": "Clear Test Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

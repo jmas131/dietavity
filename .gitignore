@@ -19,3 +19,6 @@ pnpm-debug.log*
 # Runtime
 *.pid
 *.pid.lock
+
+# Per-incident operator material; never source-controlled.
+secure/ticket-37a-incident.json

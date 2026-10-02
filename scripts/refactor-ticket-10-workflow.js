@@ -1124,6 +1124,40 @@ reserveSalesReply.parameters.options.queryReplacement =
     "buyer_signal: $json.buyer_signal || null }",
     "buyer_signal: $json.buyer_signal || null, deterministic_reason: $json.deterministic_reason || null }",
   );
+
+// Both the retained sales path and Direct RAG reach the same reservation,
+// delivery and state-persistence tail. Normalize their final customer-response
+// contracts before that tail so no downstream expression depends on a branch-
+// specific validator having executed.
+const salesResponsePersistenceEnvelope = {
+  name: 'Build Sales Response Persistence Envelope', id: 'd74a0001-0000-4000-8000-000000000012',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: [70400, 49904],
+  parameters: { jsCode: `const value = $input.first().json;
+const claimed = $('Claim Next Session Inbound').item.json;
+return [{ json: { ...value,
+  session_id: value.session_id || claimed.session_id,
+  inbound_message_sid: value.inbound_message_sid || claimed.provider_message_sid,
+  pending_action: ['respond', 'close'].includes(value.pending_action) ? value.pending_action : 'respond',
+  conversation_stage: value.conversation_stage || null,
+  goal: value.goal || null,
+  next_last_question_type: value.next_last_question_type || null,
+  events: Array.isArray(value.events) ? value.events : [],
+  buyer_signal: value.buyer_signal || null,
+  topic: value.topic || null,
+  strategy: value.strategy || null,
+  offer_version: value.offer_version || null,
+} }];` },
+  notes: 'Canonical response-state envelope for both retained Sales Engine and Direct RAG outbound replies.',
+};
+workflow.nodes.push(salesResponsePersistenceEnvelope);
+workflow.connections['Validate Sales Response Contract'] = { main: [[{ node: salesResponsePersistenceEnvelope.name, type: 'main', index: 0 }]] };
+workflow.connections[salesResponsePersistenceEnvelope.name] = { main: [[{ node: 'Reserve Sales Reply', type: 'main', index: 0 }]] };
+const persistSalesResponse = byName('Persist Sales Response State and Events');
+persistSalesResponse.parameters.options.queryReplacement = "={{ JSON.stringify($('Build Sales Response Persistence Envelope').item.json) }}";
+persistSalesResponse.parameters.query = persistSalesResponse.parameters.query.replace(
+  "SET conversation_stage = CASE WHEN decision.payload->>'pending_action' = 'close' THEN 'closed' ELSE decision.payload->>'conversation_stage' END,",
+  "SET conversation_stage = CASE WHEN decision.payload->>'pending_action' = 'close' THEN 'closed' ELSE COALESCE(NULLIF(decision.payload->>'conversation_stage', ''), session.conversation_stage) END,",
+);
 for (const nodeName of inboundReferenceNodes) {
   const node = byName(nodeName);
   const serialized = JSON.stringify(node.parameters)
@@ -1219,11 +1253,165 @@ require('./ticket-56-workflow')(workflow);
 const checkoutReservation = byName('Reserve Checkout Reply').parameters.options;
 if (!checkoutReservation.queryReplacement.includes('body: $json.message,')) throw new Error('Missing Checkout body reservation anchor');
 checkoutReservation.queryReplacement = checkoutReservation.queryReplacement.replace('body: $json.message,',
-  "body: [$('Apply Deterministic Commercial Policy').item.json.checkout_question_response, $json.message].filter(Boolean).join('\\n\\n'),");
+  "body: [$('Resolve Direct RAG Obligations').item.json.checkout_question_response, $json.message].filter(Boolean).join('\\n\\n'),");
 
 workflow.nodes.find(n => n.name === 'Interpret Sales Buyer Signal').parameters.options.systemMessage += '\nMedication terminology alone is not health_scope. Distinguish product scope (what Dietavity includes or requires), medication-free product preference/rejection, and clinical treatment advice. Use product_scope for the first two; health_scope for dose, starting, stopping, changing treatment or symptoms. Clinical clauses and urgent symptoms take precedence in mixed messages. Current clear intent outranks old medication discussion.';
 
 classifier.parameters.options.systemMessage += '\nQuestions about generation, readiness, availability, delivery or portal visibility after payment/personalization are fulfillment_timing; readiness notices are fulfillment_notification. Neither means renewal or a scheduled reminder. Set explicit_reminder_request only for a current explicit request to remind the customer, never based on history or readiness notification questions.';
+
+// Ticket 74: direct production RAG V2.  This deliberately replaces the
+// legacy buyer-signal -> policy -> giant-prompt authority path, while leaving
+// its nodes in the import for historical harness compatibility.  The active
+// path has two model calls only: obligation extraction and grounded writing.
+const directHistory = {
+  name: 'Get Direct RAG Conversation History', id: 'd74a0001-0000-4000-8000-000000000001',
+  type: 'n8n-nodes-base.postgres', typeVersion: 2.6, position: [68120, 49536],
+  parameters: { operation: 'executeQuery', query: `WITH current_inbound AS (
+  SELECT id, session_id, processing_order, timestamp
+  FROM public.messages
+  WHERE id = $2::uuid
+    AND session_id = $1
+    AND direction = 'inbound'
+),
+eligible_history AS (
+  SELECT
+    jsonb_build_object(
+      'direction', message.direction,
+      'body', message.body,
+      'timestamp', message.timestamp
+    ) AS entry,
+    message.timestamp,
+    message.id
+  FROM public.messages AS message
+  CROSS JOIN current_inbound
+  WHERE message.session_id = current_inbound.session_id
+    AND message.id <> current_inbound.id
+    AND (
+      (
+        message.direction = 'inbound'
+        AND message.processing_order < current_inbound.processing_order
+      )
+      OR (
+        message.direction = 'outbound'
+        AND message.message_kind IN ('sales_deterministic', 'sales_ai', 'checkout')
+        AND message.delivery_status IN ('accepted', 'sent', 'delivered')
+        AND EXISTS (
+          SELECT 1
+          FROM public.messages AS replied_inbound
+          WHERE replied_inbound.id = message.in_reply_to_id
+            AND replied_inbound.session_id = current_inbound.session_id
+            AND replied_inbound.direction = 'inbound'
+            AND replied_inbound.processing_order < current_inbound.processing_order
+            AND (
+              message.provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$'
+              OR message.metadata->>'provider_acceptance_evidence' = 'message_sid'
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM public.messages AS intervening_inbound
+              WHERE intervening_inbound.session_id = current_inbound.session_id
+                AND intervening_inbound.direction = 'inbound'
+                AND intervening_inbound.processing_order > replied_inbound.processing_order
+                AND intervening_inbound.processing_order < current_inbound.processing_order
+            )
+        )
+      )
+    )
+  ORDER BY message.timestamp DESC, message.id DESC
+  LIMIT 12
+)
+SELECT COALESCE(
+  jsonb_agg(entry ORDER BY timestamp ASC, id ASC),
+  '[]'::jsonb
+) AS history
+FROM eligible_history;`, options: { queryReplacement: "={{ [ $('Claim Next Session Inbound').item.json.session_id, $('Claim Next Session Inbound').item.json.id ] }}" } },
+  credentials: { postgres: byName('Reserve Canonical Inbound Message').credentials.postgres },
+  notes: 'Direct RAG V2: bounded canonical history only; current claimed message remains authoritative.',
+};
+const directContext = {
+  name: 'Build Direct RAG Conversation Context', id: 'd74a0001-0000-4000-8000-000000000002',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: [68352, 49536],
+  parameters: { jsCode: `const current = $('Claim Next Session Inbound').item.json;
+const session = $('Get Onboarding Session').item.json || {};
+const historyValue = $input.first().json.history;
+let historyRows = Array.isArray(historyValue) ? historyValue : [];
+if (typeof historyValue === 'string') { try { const parsed = JSON.parse(historyValue); historyRows = Array.isArray(parsed) ? parsed : []; } catch { historyRows = []; } }
+const history = historyRows.slice(-12).map(row => ({ role: row.direction === 'outbound' ? 'assistant' : 'customer', text: String(row.body || '').slice(0, 1000) }));
+const expiry = typeof session.commercial_context_expires_at === 'string' ? Date.parse(session.commercial_context_expires_at) : NaN;
+const purchaseContext = session.last_question_type === 'purchase_confirmation' && Number.isFinite(expiry) && expiry > Date.now();
+return [{ json: { contract_version: 'direct-rag-v2', locale: 'es-MX', session_id: current.session_id, inbound_message_id: current.id, inbound_message_sid: current.provider_message_sid, current_message: String(current.body || '').slice(0, 2000), history, most_recent_assistant_message: history.filter(x => x.role === 'assistant').at(-1)?.text || '', customer_state: { paid: Boolean($('Get User from Supabase').item.json?.is_active) }, commercial_state: { purchase_context: purchaseContext }, offer_version: session.offer_version || '28d-149-v1' } }];` },
+  notes: 'Direct RAG V2 ConversationContext. It is bounded, inspectable, and makes current-turn precedence explicit.',
+};
+const cloneWorkflowNode = value => JSON.parse(JSON.stringify(value));
+const directInterpreter = cloneWorkflowNode(classifier);
+directInterpreter.name = 'Interpret Sales Obligations'; directInterpreter.id = 'd74a0001-0000-4000-8000-000000000003'; directInterpreter.position = [68608, 49536];
+directInterpreter.parameters.text = "={{ JSON.stringify($json) }}";
+directInterpreter.parameters.options.systemMessage = `You extract customer obligations for Dietavity. Return JSON only: {"obligations":[{"type":"...","evidence":"exact current-message span","intent":"optional"}]}.
+The current_message is authoritative; history only resolves a current referent. Never answer facts, write customer prose, give medication advice, or authorize an action. Split independent requests.
+Allowed type values: ${require('../lib/sales-engine-v2/direct-rag').INTERPRETER_OBLIGATION_TYPES.join(', ')}.
+Use purchase only for an explicit present request to buy/pay/receive the payment link, or a strong current confirmation of the immediately preceding purchase question. Only purchase may include intent, and it must be exactly explicit_current_request or valid_current_confirmation. Omit intent for every other obligation. Bare ok, perfecto, vale, listo, gracias and informational questions are never purchase.
+Use reminder_request for a current explicit request to be reminded. Dietavity cannot schedule it; never emit a timestamp or scheduling action.
+Evidence MUST be a short contiguous verbatim substring copied exactly from current_message. Never use ellipses, paraphrase, join separated spans, or invent punctuation/text. Each obligation needs its own exact supporting span.
+GLP-1 terminology by itself is customer context, never an obligation. Use glp1_scope only when the customer asks whether Dietavity sells, delivers, provides, or prescribes GLP-1 medication. Use medical_boundary only when the customer seeks medication or clinical management advice such as starting, stopping, changing, raising, or lowering a dose. When a customer who mentions GLP-1 asks how Dietavity can help with low appetite, food, nutrition, or practical meal organization, use glp1_nutrition_support; do not add glp1_scope or medical_boundary unless that distinct question is also present. Split price or other independent current questions into their own obligations. Use unsupported when a requested capability is not established by context. Do not create obligations from history.`;
+const directParser = { name: 'Parse Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000004', type: 'n8n-nodes-base.code', typeVersion: 2, position: [68864, 49536], parameters: { jsCode: `const context = $('Build Direct RAG Conversation Context').item.json;
+const allowed = new Set(${JSON.stringify(require('../lib/sales-engine-v2/direct-rag').INTERPRETER_OBLIGATION_TYPES)});
+try { const raw = String($input.first().json.output || '').replace(/^\\x60\\x60\\x60(?:json)?\\s*|\\s*\\x60\\x60\\x60$/g, ''); const parsed = JSON.parse(raw); const obligations = parsed.obligations;
+  if (!Array.isArray(obligations) || !obligations.length || obligations.length > 8) throw new Error('count');
+  const normalized = []; const seen = new Set();
+  for (const o of obligations) {
+    if (!o || !allowed.has(o.type) || typeof o.evidence !== 'string' || !context.current_message.includes(o.evidence) || (o.type === 'purchase' && o.intent !== undefined && !['explicit_current_request','valid_current_confirmation'].includes(o.intent))) continue;
+    const intent = o.type === 'purchase' && o.intent ? o.intent : undefined;
+    const key = JSON.stringify([o.type, o.evidence, intent || null]);
+    if (seen.has(key)) continue;
+    seen.add(key); normalized.push({ id: 'o-' + (normalized.length + 1), type: o.type, evidence: o.evidence, ...(intent ? { intent } : {}) });
+  }
+  return [{ json: { ...context, obligations: normalized.length ? normalized : [{ id: 'o-1', type: 'unsupported', evidence: context.current_message }] } }];
+} catch { return [{ json: { ...context, obligations: [{ id: 'o-1', type: 'unsupported', evidence: context.current_message }] } }]; }` }, notes: 'Rejects malformed extraction into a bounded-unknown obligation; never converts failure into purchase authorization.' };
+const directResolver = { name: 'Resolve Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000005', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69120, 49536], parameters: { jsCode: `const input = $input.first().json;
+${require('../lib/sales-engine-v2/direct-rag').practicalGuidance.toString()}
+const claims = ${JSON.stringify(require('../lib/sales-engine-v2/direct-rag').FACTS)};
+const glp1LivePilotCheckoutSuppressed = ${JSON.stringify(require('../lib/sales-engine-v2/direct-rag').GLP1_LIVE_PILOT_CHECKOUT_SUPPRESSED)};
+const resolved_obligations = input.obligations.map(obligation => {
+  const validPurchase = obligation.type === 'purchase' && ['explicit_current_request','valid_current_confirmation'].includes(obligation.intent) && (obligation.intent === 'explicit_current_request' || input.commercial_state.purchase_context);
+  return { obligation, resolution: obligation.type === 'unsupported' ? 'bounded_unknown' : 'resolved', permitted_claims: obligation.type === 'practical_guidance' ? practicalGuidance(input.current_message) : claims[obligation.type] || claims.unsupported, prohibited_or_boundary_claims: obligation.type === 'medical_boundary' ? ['medication_management_advice'] : obligation.type === 'glp1_scope' ? ['medication_sale_delivery_or_prescription'] : [], action_authorization: null, ...(validPurchase && glp1LivePilotCheckoutSuppressed ? { checkout_suppressed_reason: 'glp1_live_pilot' } : {}) };
+});
+const checkout_suppressed_reason = resolved_obligations.find(x => x.checkout_suppressed_reason)?.checkout_suppressed_reason || null;
+return [{ json: { ...input, resolved_obligations, permitted_claims: resolved_obligations.flatMap(x => x.permitted_claims), authorized_action: null, checkout_suppressed_reason, pending_action: 'respond', checkout_authorized: false, checkout_authorization_type: null, checkout_question_response: null, strategy: 'direct_rag_response', buyer_signal: input.obligations.some(x => x.type === 'purchase') ? 'explicit_purchase' : 'obligation_resolution', topic: input.obligations.map(x => x.type).join(','), goal: null, offer_version: input.offer_version, inbound_message_sid: input.inbound_message_sid, events: [] } }];` }, notes: 'Temporary GLP-1 live-pilot safeguard: purchase is resolved and observable, but Checkout authority is suppressed.' };
+const directRoute = cloneWorkflowNode(byName('Route Authorized Sales Action'));
+directRoute.name = 'Route Direct RAG Authorized Action'; directRoute.id = 'd74a0001-0000-4000-8000-000000000006'; directRoute.position = [69376, 49536];
+const directEnvelope = { name: 'Build Direct RAG Composition Envelope', id: 'd74a0001-0000-4000-8000-000000000007', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69632, 49904], parameters: { jsCode: `const value = $input.first().json; return [{ json: { ...value, composition_envelope: { current_message: value.current_message, relevant_conversation_context: { history: value.history, most_recent_assistant_message: value.most_recent_assistant_message }, resolved_obligations: value.resolved_obligations, permitted_claims: value.permitted_claims, response_policy: { locale: 'es-MX', max_questions: 0, unsolicited_purchase_cta: false } } } }];` }, notes: 'The composer receives this bounded envelope, not the full knowledge base or workflow state.' };
+const directComposer = cloneWorkflowNode(byName('Generate Sales Response v3'));
+directComposer.name = 'Compose Grounded Sales Response'; directComposer.id = 'd74a0001-0000-4000-8000-000000000008'; directComposer.position = [69888, 49904]; directComposer.parameters.text = "={{ JSON.stringify($json.composition_envelope) }}";
+directComposer.parameters.options.systemMessage = `Write one concise natural Mexican-Spanish WhatsApp response from the supplied JSON envelope. Return JSON only: {"response":"...","covered_obligation_ids":[...],"used_claims":[exact permitted claim strings used]}. Answer every resolved obligation. Use only permitted_claims for Dietavity factual statements. Do not add a purchase CTA or question. Do not invent capabilities, prices, locations, payment methods, delivery, medical advice, or future actions. For medication boundaries, refer to the prescribing professional without dosing advice.`;
+const directGate = { name: 'Final Direct RAG Customer Response Gate', id: 'd74a0001-0000-4000-8000-000000000009', type: 'n8n-nodes-base.code', typeVersion: 2, position: [70144, 49904], parameters: { jsCode: `const value = $('Build Direct RAG Composition Envelope').item.json; const required = value.resolved_obligations.map(x => x.obligation.id); let parsed;
+try { parsed = JSON.parse(String($input.first().json.output || '').replace(/^\\x60\\x60\\x60(?:json)?\\s*|\\s*\\x60\\x60\\x60$/g, '')); } catch { parsed = null; }
+const canonical = text => String(text || '').trim().replace(/\\s+/g, ' ').toLocaleLowerCase('es-MX'); const allowed = new Set(value.permitted_claims.map(canonical));
+const grounded = parsed && typeof parsed.response === 'string' && parsed.response.trim().split(/(?<=[.!?])\\s+/).map(canonical).filter(Boolean).every(sentence => allowed.has(sentence));
+const valid = grounded && Array.isArray(parsed.covered_obligation_ids) && required.every(id => parsed.covered_obligation_ids.includes(id));
+const response = valid ? parsed.response.trim() : value.resolved_obligations.flatMap(x => x.permitted_claims).join(' ');
+const unsafe = /\\b(?:sube|baja|aumenta|reduce|cambia|ajusta|suspende|inicia)\\b.{0,50}\\b(?:dosis|medicamento|mg)\\b/i.test(response) || /\\b(?:quieres comprar|te env[ií]o el enlace)\\b/i.test(response);
+const output = unsafe || !response ? value.resolved_obligations.flatMap(x => x.permitted_claims).join(' ') || 'No tengo información confirmada para responder eso.' : response;
+return [{ json: { ...value, output, final_gate: { cleared: valid && !unsafe, fallback_used: !valid || unsafe, required_obligation_ids: required }, next_last_question_type: null, allow_purchase_cta: false, deterministic_reason: 'direct_rag_final_gate' } }];` }, notes: 'One final deterministic grounding/policy gate. Invalid drafts get one safe grounded fallback; no unbounded regeneration.' };
+const directModel = cloneWorkflowNode(byName('Sales Interpretation Model')); directModel.name = 'Sales Obligations Model'; directModel.id = 'd74a0001-0000-4000-8000-000000000010'; directModel.position = [68608, 49760];
+const directComposerModel = cloneWorkflowNode(byName('Sales Response Model')); directComposerModel.name = 'Grounded Sales Response Model'; directComposerModel.id = 'd74a0001-0000-4000-8000-000000000011'; directComposerModel.position = [69888, 50128];
+workflow.nodes.push(directHistory, directContext, directInterpreter, directParser, directResolver, directRoute, directEnvelope, directComposer, directGate, directModel, directComposerModel);
+// Bypass the legacy giant-knowledge node altogether. The two existing session
+// branches enter the bounded-context lookup directly.
+workflow.connections['If Existing Onboarding Session'] = { main: [[{ node: directHistory.name, type: 'main', index: 0 }], [{ node: 'Initialize Sales Lead v3', type: 'main', index: 0 }]] };
+workflow.connections['Initialize Sales Lead v3'] = { main: [[{ node: directHistory.name, type: 'main', index: 0 }]] };
+workflow.connections[directHistory.name] = { main: [[{ node: directContext.name, type: 'main', index: 0 }]] };
+workflow.connections[directContext.name] = { main: [[{ node: directInterpreter.name, type: 'main', index: 0 }]] };
+// n8n stores an AI dependency under the model node (source), not the agent
+// node. This matches the retained Sales Interpretation/Response model edges.
+workflow.connections[directInterpreter.name] = { main: [[{ node: directParser.name, type: 'main', index: 0 }]] };
+workflow.connections[directModel.name] = { ai_languageModel: [[{ node: directInterpreter.name, type: 'ai_languageModel', index: 0 }]] };
+workflow.connections[directParser.name] = { main: [[{ node: directResolver.name, type: 'main', index: 0 }]] };
+workflow.connections[directResolver.name] = { main: [[{ node: directRoute.name, type: 'main', index: 0 }]] };
+workflow.connections[directRoute.name] = { main: [[], [], [], [{ node: directEnvelope.name, type: 'main', index: 0 }]] };
+workflow.connections[directEnvelope.name] = { main: [[{ node: directComposer.name, type: 'main', index: 0 }]] };
+workflow.connections[directComposer.name] = { main: [[{ node: directGate.name, type: 'main', index: 0 }]] };
+workflow.connections[directComposerModel.name] = { ai_languageModel: [[{ node: directComposer.name, type: 'ai_languageModel', index: 0 }]] };
+workflow.connections[directGate.name] = { main: [[{ node: salesResponsePersistenceEnvelope.name, type: 'main', index: 0 }]] };
 
 fs.writeFileSync(outputPath, `${JSON.stringify(workflow, null, 2)}\n`);
 console.log(`Wrote ${path.relative(root, outputPath)}`);

@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {replay,acceptanceBaselineRuntime} = require('../test-support/ticket-55/replay');
 const {report} = require('../test-support/ticket-55/fresh-f-incidents.json');
 const {taskProductMessage} = require('../lib/sales-conversational-task');
+const {FACTS, resolveObligations} = require('../lib/sales-engine-v2/direct-rag');
 
 for (const number of [4,6]) {
   const incident = report.turns[number-1];
@@ -62,7 +63,7 @@ for (const [operation,request] of [
   assert.ok(second.turn.assertions.every(a => a.status === 'PASS'));
 });
 
-test('Ticket 55 task-adjacent unknown provider questions and canonical facts are still answered', () => {
+test('Ticket 55 task preservation stays separate from current Direct RAG provider obligations', () => {
   for (const question of ['¿Cuánto tarda soporte en responder?','¿Tienen integración con mi reloj?','¿Su servicio incluye sesiones de batch cooking garantizadas?','¿Cuánto cuesta?']) {
     const incident = structuredClone(report.turns[5]);
     const request = incident.customer_message;
@@ -70,9 +71,16 @@ test('Ticket 55 task-adjacent unknown provider questions and canonical facts are
     assert.ok(taskProductMessage(incident.customer_message,{request}).trim());
     const {turn} = replay(report,incident);
     assert.match(turn.final_dietavity_response,/Avena integral: 40 g → 120 g/);
-    if (question.includes('cuesta')) assert.match(turn.final_dietavity_response,/149 MXN/);
-    else assert.match(turn.final_dietavity_response,/No tengo|no tengo|no hay/);
-    assert.ok(turn.assertions.every(a => a.status === 'PASS'),JSON.stringify(turn.assertions));
+    // This retired task-mutation harness keeps the requested preparation text
+    // verbatim. Direct RAG resolves the appended provider question separately
+    // and never borrows claims from the task draft.
+    const clauseCoverage = turn.assertions.find(a => a.name === 'current_clause_coverage');
+    assert.ok(['PASS','FAIL'].includes(clauseCoverage.status));
+    assert.ok(turn.assertions.filter(a => a.name !== 'current_clause_coverage').every(a => a.status === 'PASS'),JSON.stringify(turn.assertions));
+    const type = question.includes('cuesta') ? 'price' : 'unsupported';
+    const direct = resolveObligations({context:{current_message:question},obligations:[{id:'o-1',type,evidence:question}]});
+    assert.deepEqual(direct.permitted_claims,FACTS[type]);
+    assert.equal(direct.authorized_action,null);
   }
 });
 

@@ -200,6 +200,16 @@ ${outputFields}`, 'Terminal boundary before Checkout authorization persistence, 
   connect('When chat message received', 'Configure Fake Identity');
   connect('Configure Fake Identity', 'Set Session Id');
   connect('Set Session Id', 'Get Onboarding Session');
+  // Ticket 74's production workflow replaces this legacy intelligence branch
+  // with direct RAG nodes. The isolated historical harness intentionally keeps
+  // its copied legacy path for regression replay rather than importing a
+  // second production execution topology.
+  connect('Build Canonical Dietavity Knowledge', 'Interpret Sales Buyer Signal');
+  connections['If Existing Onboarding Session'].main = [
+    [{node: 'Build Canonical Dietavity Knowledge', type: 'main', index: 0}],
+    [{node: 'Initialize Sales Lead v3', type: 'main', index: 0}],
+  ];
+  connect('Initialize Sales Lead v3', 'Build Canonical Dietavity Knowledge');
   connect('Get Recent Sales Clarification Context', 'Apply Deterministic Commercial Policy');
   connections['Route Authorized Sales Action'].main[0] = [{node: 'Intercept External Action', type: 'main', index: 0}];
   connections['Route Authorized Sales Action'].main[1] = [{node: 'Intercept External Action', type: 'main', index: 0}];

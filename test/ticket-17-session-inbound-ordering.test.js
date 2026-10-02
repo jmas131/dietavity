@@ -248,7 +248,10 @@ test('only the current lease owner may reserve any inbound customer response', (
 });
 
 test('Checkout and purchase-confirmation state are ordered and remain fail-closed', () => {
-  assert.equal(reachable('Claim Next Session Inbound', 'Persist Checkout Authorization v3'), true);
+  // The Checkout implementation remains intact, but the active Direct RAG GLP-1
+  // pilot deliberately has no route that can authorize it from a claimed inbound.
+  assert.equal(reachable('Claim Next Session Inbound', 'Persist Checkout Authorization v3'), false);
+  assert.equal(reachable('Route Authorized Sales Action', 'Persist Checkout Authorization v3'), true);
   assert.equal(reachable('Mark Checkout Sent v3', 'Mark Session Inbound Complete'), true);
   assert.equal(reachable('Persist Sales Response State and Events', 'Mark Session Inbound Complete'), true);
   assert.match(nodes.get('Persist Checkout Authorization v3').parameters.query, /checkout_authorized.*IS TRUE/);

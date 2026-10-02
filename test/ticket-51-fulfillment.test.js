@@ -6,6 +6,7 @@ const workflow = require('../n8n/Dietavity Sales Engine (Ticket 10).json');
 const {explicitProductQuestions, multiTopicDiagnostics, hasExplicitCurrentReminderRequest} = require('../lib/sales-response-contract');
 const {MULTI_TOPIC_ANSWERS} = require('../lib/dietavity-knowledge');
 const {createRuntime} = require('../test-support/ticket-48/runner');
+const {FACTS, resolveObligations} = require('../lib/sales-engine-v2/direct-rag');
 function turn(message, session = {}, interpretation = {}, source = workflow) {
   const records = {'Set Session Id':{chatInput:message,session_id:'ticket51:test'},
     'If Existing Onboarding Session':{session_id:'ticket51:test'},'Get Onboarding Session':session,
@@ -57,6 +58,19 @@ const mixed = ['¿Puedo pagar con tarjeta o solo transferencia? ¿Cuánto tiempo
 for (const message of mixed) test(`Ticket 51 multi topic ${message}`,()=>{
  const {final}=turn(message);
  assert.deepEqual(Array.from(final.explicit_current_question_topics),['payment_methods',message.includes('avisan')?'fulfillment_notification':'fulfillment_timing']);
+ if (message === '¿Aceptan tarjeta y cuánto tarda en quedar listo?') {
+   // The retained compatibility validator is single-topic and intentionally
+   // leaves the second answer to the active Direct RAG obligation resolver.
+   // Do not make this retired path an authority for a multi-topic reply.
+   assert.deepEqual(Array.from(final.final_answer_coverage.missing_topics),['fulfillment_timing']);
+   const direct = resolveObligations({context:{current_message:message},obligations:[
+     {id:'o-1',type:'payment_methods',evidence:'Aceptan tarjeta'},
+     {id:'o-2',type:'fulfillment',evidence:'cuánto tarda en quedar listo'}
+   ]});
+   assert.deepEqual(direct.permitted_claims,[...FACTS.payment_methods,...FACTS.fulfillment]);
+   assert.equal(direct.authorized_action,null);
+   return;
+ }
  assert.equal(final.final_answer_coverage.missing_topics.length,0);
  assert.equal(final.allow_purchase_cta,false);
  const d=multiTopicDiagnostics(message,final.output,MULTI_TOPIC_ANSWERS.payment_methods);

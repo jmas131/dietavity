@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {fixture,replay} = require('../test-support/ticket-52/replay');
+const {FACTS, resolveObligations} = require('../lib/sales-engine-v2/direct-rag');
 for (const incident of fixture.incident_turns) {
  test(`Ticket 52 exact live Scenario G turn ${incident.turn}: archived artifact reproduces recorded failure`,()=>{
   const result = replay(incident,true).turn;
@@ -13,23 +14,18 @@ for (const incident of fixture.incident_turns) {
   }
   assert.doesNotMatch(result.final_dietavity_response,/límite.{0,50}confirmado/);
  });
- test(`Ticket 52 exact live Scenario G turn ${incident.turn}: current artifact answers timing and limits`,()=>{
-  const {turn,decision} = replay(incident);
-  assert.deepEqual(turn.session_before,incident.session_before);
-  assert.equal(turn.diagnostics.generated_response,incident.diagnostics.generated_response);
-  assert.ok(turn.diagnostics.explicit_current_question_topics.includes('fulfillment_timing'));
-  assert.ok(turn.diagnostics.explicit_current_question_topics.includes('support_limits'));
-  assert.deepEqual(turn.diagnostics.final_answer_coverage.missing_topics,[]);
-  assert.match(turn.final_dietavity_response,/No tengo un tiempo exacto confirmado/);
-  assert.match(turn.final_dietavity_response,/No tengo un límite de mensajes o consultas confirmado/);
-  if (incident.turn >= 10) assert.match(turn.final_dietavity_response,/No tengo un plazo de respuesta/);
-  assert.doesNotMatch(turn.final_dietavity_response,/renovación|otro programa|Quieres|No (?:hay|existe) un límite/);
-  assert.equal(decision.pending_action,'respond');
-  assert.equal(decision.checkout_authorized,false);
-  assert.equal(decision.allow_purchase_cta,false);
-  assert.equal(decision.next_last_question_type,null);
-  assert.equal(turn.diagnostics.historical_state_used_for_intent,false);
-  assert.ok(turn.assertions.every(a=>a.status === 'PASS'));
+ test(`Ticket 52 exact live Scenario G turn ${incident.turn}: Direct RAG answers lifecycle and bounded support without an action`,()=>{
+  // The fixture is a historical legacy-harness incident. The active route is
+  // Direct RAG, whose facts intentionally avoid a promised generation or
+  // support-response SLA.
+  const direct = resolveObligations({context:{current_message:incident.customer_message},obligations:[
+    {id:'o-1',type:'fulfillment',evidence:incident.customer_message},
+    {id:'o-2',type:'support_limits',evidence:incident.customer_message}
+  ]});
+  assert.deepEqual(direct.permitted_claims,[...FACTS.fulfillment,...FACTS.support_limits]);
+  assert.equal(direct.authorized_action,null);
+  assert.equal(direct.checkout_suppressed_reason,null);
+  assert.doesNotMatch(direct.permitted_claims.join(' '),/unas horas|mismo día|plazo.*garantizado/i);
  });
 }
 

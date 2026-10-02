@@ -135,7 +135,7 @@ test('Ticket 50 production reply prepends canonical answer before existing ledge
   // Evaluate the exact reservation payload, using a non-URL sentinel for the
   // already-composed Checkout message. No provider session is manufactured.
   const render = decision => JSON.parse(vm.runInNewContext(expression.slice(3,-2), {
-    $:name=>({item:{json:name==='Apply Deterministic Commercial Policy'?decision:{}}}),
+    $:name=>({item:{json:name==='Resolve Direct RAG Obligations'?decision:{}}}),
     $json:{message:'CHECKOUT_BODY_SENTINEL'}, $execution:{id:'test'},
   })).body;
   assert.equal(render(decision),MULTI_TOPIC_ANSWERS.invoice+'\n\nCHECKOUT_BODY_SENTINEL');

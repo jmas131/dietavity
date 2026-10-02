@@ -25,7 +25,7 @@ function buildPrelude(production) {
   // The adapter mirrors this reviewed UPDATE, not the event/lease machinery.
   // A canonical SQL change requires explicit adapter review before regeneration.
   const stateSqlHash = hash(get('Persist Sales Response State and Events').parameters.query);
-  if (stateSqlHash !== '50eeff767392a6a6caa47d7c50867f2db6c0cf038c34ddf58ffa29ab0feb9679') {
+  if (stateSqlHash !== '173dd1e7974a1a09d99fa42d1ddb41668231da045e5a4f93b1f5c0a950ad9c48') {
     throw new Error('Canonical state SQL changed: review the Ticket 48 memory adapter');
   }
   const canonical = canonicalNames.map(name => {
