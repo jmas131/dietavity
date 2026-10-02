@@ -20,13 +20,13 @@ test('direct RAG regression semantics cover location, GLP-1, medication, thanks,
   assert.equal(resolution.checkout_suppressed_reason, 'glp1_live_pilot');
   assert.match(resolution.permitted_claims.join(' '), /abriendo esta modalidad/i);
 });
-test('generated interpreter, parser, and resolver keep GLP-1 context separate from medication questions', () => {
+test('generated interpreter, parser, and resolver enforce V3 food and safety obligations', () => {
   const node = name => workflow.nodes.find(value => value.name === name);
   const prompt = node('Interpret Sales Obligations').parameters.options.systemMessage;
-  assert.match(prompt, /GLP-1 terminology by itself is customer context, never an obligation/);
-  assert.match(prompt, /glp1_nutrition_support/);
+  assert.match(prompt, /food_decision/);
+  assert.match(prompt, /A contextual rejection is not a durable preference/);
   const parseAndResolve = (current_message, modelObligations) => {
-    const context = { current_message, commercial_state: { purchase_context: false }, offer_version: '28d-149-v1' };
+    const context = { current_message, commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' };
     const parsed = vm.runInNewContext(`(function(){${node('Parse Direct RAG Obligations').parameters.jsCode}})()`, {
       $: () => ({ item: { json: context } }), $input: { first: () => ({ json: { output: JSON.stringify({ obligations: modelObligations }) } }) },
     })[0].json;
@@ -34,22 +34,21 @@ test('generated interpreter, parser, and resolver keep GLP-1 context separate fr
   };
   const intro = parseAndResolve('¡Hola! Quiero saber más.', [{ type: 'general_information', evidence: '¡Hola! Quiero saber más.' }]);
   assert.deepEqual(Array.from(intro.obligations, value => value.type), ['general_information']);
-  assert.match(intro.permitted_claims.join(' '), /desayuno, comida, cena y snack/i);
-  assert.match(intro.permitted_claims.join(' '), /objetivos y preferencias/i);
-  const nutrition = parseAndResolve('Uso GLP-1 y casi no tengo hambre, ¿cómo me ayudaría Dietavity?', [{ type: 'glp1_nutrition_support', evidence: 'Uso GLP-1 y casi no tengo hambre, ¿cómo me ayudaría Dietavity?' }]);
-  assert.deepEqual(Array.from(nutrition.obligations, value => value.type), ['glp1_nutrition_support']);
-  assert.match(nutrition.permitted_claims.join(' '), /organizar comidas sencillas/i);
-  assert.doesNotMatch(nutrition.permitted_claims.join(' '), /vende|prescribe|profesional que te lo prescribió/i);
+  assert.match(intro.permitted_claims.join(' '), /asistente de alimentación por WhatsApp/i);
+  assert.equal(intro.permitted_claims.join(' ').split('¿Qué necesitas resolver con tu alimentación ahora?').length - 1, 1);
+  const nutrition = parseAndResolve('Uso GLP-1 y casi no tengo hambre, ¿cómo me ayudaría Dietavity?', [{ type: 'food_decision', evidence: 'casi no tengo hambre' }]);
+  assert.deepEqual(Array.from(nutrition.obligations, value => value.type), ['food_decision']);
+  assert.match(nutrition.permitted_claims.join(' '), /porción pequeña/i);
   const medication = parseAndResolve('¿Debo bajar mi dosis si casi no tengo hambre?', [{ type: 'medical_boundary', evidence: '¿Debo bajar mi dosis si casi no tengo hambre?' }]);
   assert.deepEqual(Array.from(medication.obligations, value => value.type), ['medical_boundary']);
   assert.match(medication.permitted_claims.join(' '), /profesional/i);
   const scope = parseAndResolve('¿Dan el medicamento GLP-1?', [{ type: 'glp1_scope', evidence: '¿Dan el medicamento GLP-1?' }]);
   assert.deepEqual(Array.from(scope.obligations, value => value.type), ['glp1_scope']);
-  assert.match(scope.permitted_claims.join(' '), /no vende, entrega ni prescribe/i);
-  const mixed = parseAndResolve('Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?', [{ type: 'price', evidence: 'cuánto cuesta' }, { type: 'glp1_nutrition_support', evidence: 'Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?' }]);
-  assert.deepEqual(Array.from(mixed.obligations, value => value.type), ['price', 'glp1_nutrition_support']);
-  assert.match(mixed.permitted_claims.join(' '), /149 MXN/);
-  assert.match(mixed.permitted_claims.join(' '), /organizar comidas sencillas/i);
+  assert.match(scope.permitted_claims.join(' '), /no vende, entrega ni receta/i);
+  const mixed = parseAndResolve('Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?', [{ type: 'price', evidence: 'cuánto cuesta' }, { type: 'food_decision', evidence: 'poco apetito' }]);
+  assert.deepEqual(Array.from(mixed.obligations, value => value.type), ['price', 'food_decision']);
+  assert.match(mixed.permitted_claims.join(' '), /gratis/i);
+  assert.match(mixed.permitted_claims.join(' '), /porción pequeña/i);
   assert.doesNotMatch(mixed.permitted_claims.join(' '), /no vende|profesional que te lo prescribió/i);
 });
 test('final gate rejects unsupported claims, missing coverage, medical advice, and CTA', () => { const e = envelope('¿Dan GLP-1?', [{ type: 'glp1_scope', evidence: 'Dan GLP-1' }]); const ids = ['o-1']; assert.equal(rag.gateResponse({ envelope: e, response: 'Vendemos Ozempic.', coveredObligationIds: ids, usedClaims: ['Vendemos Ozempic.'] }).reason, 'UNSUPPORTED_ACTUAL_RESPONSE'); assert.equal(rag.gateResponse({ envelope: e, response: 'Dietavity no vende GLP-1.', coveredObligationIds: [], usedClaims: [] }).reason, 'OBLIGATION_COVERAGE_MISSING'); assert.equal(rag.gateResponse({ envelope: e, response: 'Baja tu dosis a 2 mg.', coveredObligationIds: ids, usedClaims: [] }).reason, 'MEDICATION_GUIDANCE'); assert.equal(rag.gateResponse({ envelope: e, response: 'No los vendemos. ¿Quieres comprar?', coveredObligationIds: ids, usedClaims: [] }).reason, 'UNAUTHORIZED_CTA'); });
@@ -86,11 +85,12 @@ test('generated final gate requires the response-level discovery question exactl
   const resolved = vm.runInNewContext(`(function(){${code('Resolve Direct RAG Obligations')}})()`, { $input: { first: () => ({ json: input }) } })[0].json;
   const enveloped = vm.runInNewContext(`(function(){${code('Build Direct RAG Composition Envelope')}})()`, { $input: { first: () => ({ json: resolved }) } })[0].json;
   const runGate = response => vm.runInNewContext(`(function(){${code('Final Direct RAG Customer Response Gate')}})()`, { $input: { first: () => ({ json: { output: JSON.stringify({ response, covered_obligation_ids: ['o-1'], used_claims: [] }) } }) }, $: () => ({ item: { json: enveloped } }) })[0].json;
-  const factsOnly = resolved.permitted_claims.filter(claim => claim !== rag.FIRST_CONTACT_DISCOVERY_QUESTION).join(' ');
+  const question = '¿Qué necesitas resolver con tu alimentación ahora?';
+  const factsOnly = resolved.permitted_claims.filter(claim => claim !== question).join(' ');
   assert.equal(runGate(factsOnly).final_gate.fallback_used, true);
-  assert.equal(runGate(factsOnly).output.split(rag.FIRST_CONTACT_DISCOVERY_QUESTION).length - 1, 1);
+  assert.equal(runGate(factsOnly).output.split(question).length - 1, 1);
   assert.equal(runGate(resolved.permitted_claims.join(' ')).final_gate.cleared, true);
-  assert.equal(runGate(`${resolved.permitted_claims.join(' ')} ${rag.FIRST_CONTACT_DISCOVERY_QUESTION}`).final_gate.fallback_used, true);
+  assert.equal(runGate(`${resolved.permitted_claims.join(' ')} ${question}`).final_gate.fallback_used, true);
 });
 test('specific information and repeated history do not enter a generic discovery loop', () => {
   const specific = harness.run({ message: '¿Cómo funciona el programa?', obligations: [{ type: 'how_it_works', evidence: 'Cómo funciona el programa' }] });
@@ -185,7 +185,7 @@ test('generated workflow enters direct RAG, preserves action routes, and has a g
   assert.ok(names.has('Persist Checkout Authorization v3'));
   assert.ok((workflow.connections['Route Authorized Sales Action']?.main || []).flat().some(edge => edge.node === 'Persist Checkout Authorization v3'));
   const gate = workflow.nodes.find(node => node.name === 'Final Direct RAG Customer Response Gate').parameters.jsCode;
-  assert.match(gate, /every\(sentence => allowed\.has\(sentence\)\)/); assert.doesNotMatch(gate, /used_claims\.every/);
+  assert.match(gate, /obsolete_claims_rejected/); assert.match(gate, /allowed\.has\(canonical\(parsed\.response\)\)/); assert.doesNotMatch(gate, /used_claims\.every/);
   const history = workflow.nodes.find(node => node.name === 'Get Direct RAG Conversation History').parameters.query;
   assert.match(history, /message_kind IN \('sales_deterministic', 'sales_ai', 'checkout'\)/); assert.match(history, /provider_acceptance_evidence/); assert.doesNotMatch(history, /'scheduled'/);
   assert.match(history, /message\.processing_order < current_inbound\.processing_order/);
@@ -253,52 +253,52 @@ test('dedicated V2 harness covers all controlled conversations with material out
     if (!action || claimPattern) assert.ok(result.gate_result.cleared || result.fallback_used, message);
   }
 });
-test('generated parser and resolver reject reminder action fields and arbitrary intents', () => {
+test('generated parser rejects retired reminder and purchase action fields', () => {
   const code = name => workflow.nodes.find(node => node.name === name).parameters.jsCode;
-  const context = { current_message: 'Recuérdame mañana.', commercial_state: { purchase_context: false }, offer_version: '28d-149-v1' };
+  const context = { current_message: 'Recuérdame mañana.', commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' };
   const parse = vm.runInNewContext(`(function(){${code('Parse Direct RAG Obligations')}})()`, { $: () => ({ item: { json: context } }), $input: { first: () => ({ json: { output: JSON.stringify({ obligations: [{ type: 'reminder_request', evidence: 'Recuérdame mañana.', reminder_at: '2099-01-01T00:00:00Z' }] }) } }) } });
-  assert.equal(parse[0].json.obligations[0].type, 'reminder_request'); assert.equal(Object.hasOwn(parse[0].json.obligations[0], 'reminder_at'), false);
+  assert.equal(parse[0].json.obligations[0].type, 'unsupported');
   const arbitraryIntent = vm.runInNewContext(`(function(){${code('Parse Direct RAG Obligations')}})()`, { $: () => ({ item: { json: context } }), $input: { first: () => ({ json: { output: JSON.stringify({ obligations: [{ type: 'purchase', evidence: 'Recuérdame mañana.', intent: 'model_says_checkout' }] }) } }) } });
   assert.equal(arbitraryIntent[0].json.obligations[0].type, 'unsupported');
 });
 test('generated parser isolates malformed sibling evidence and keeps purchase fail-closed', () => {
   const code = name => workflow.nodes.find(node => node.name === name).parameters.jsCode;
   const parse = (current_message, obligations) => vm.runInNewContext(`(function(){${code('Parse Direct RAG Obligations')}})()`, {
-    $: () => ({ item: { json: { current_message, commercial_state: { purchase_context: false }, offer_version: '28d-149-v1' } } }),
+    $: () => ({ item: { json: { current_message, commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' } } }),
     $input: { first: () => ({ json: { output: JSON.stringify({ obligations }) } }) },
   })[0].json;
   const message = 'Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?';
   const malformedSibling = parse(message, [
     { type: 'price', evidence: '¿cuánto cuesta' },
-    { type: 'glp1_nutrition_support', evidence: 'Uso GLP-1, ¿... cómo me ayudaría si tengo poco apetito?' },
+    { type: 'food_decision', evidence: 'Uso GLP-1, ¿... cómo me ayudaría si tengo poco apetito?' },
   ]);
   assert.deepEqual(JSON.parse(JSON.stringify(malformedSibling.obligations)), [{ id: 'o-1', type: 'price', evidence: '¿cuánto cuesta' }]);
   const resolvedSibling = vm.runInNewContext(`(function(){${code('Resolve Direct RAG Obligations')}})()`, { $input: { first: () => ({ json: malformedSibling }) } })[0].json;
   assert.equal(resolvedSibling.authorized_action, null); assert.equal(resolvedSibling.checkout_authorized, false);
-  const allMalformed = parse(message, [{ type: 'glp1_nutrition_support', evidence: '¿... poco apetito?' }]);
+  const allMalformed = parse(message, [{ type: 'food_decision', evidence: '¿... poco apetito?' }]);
   assert.equal(allMalformed.obligations[0].type, 'unsupported');
-  const validMixed = parse(message, [{ type: 'price', evidence: '¿cuánto cuesta' }, { type: 'glp1_nutrition_support', evidence: 'cómo me ayudaría si tengo poco apetito?' }]);
-  assert.deepEqual(JSON.parse(JSON.stringify(validMixed.obligations.map(value => value.type))), ['price', 'glp1_nutrition_support']);
-  const malformedPurchase = parse('Quiero comprarlo.', [{ type: 'purchase', evidence: 'Quiero ... comprarlo.', intent: 'explicit_current_request' }]);
+  const validMixed = parse(message, [{ type: 'price', evidence: '¿cuánto cuesta' }, { type: 'food_decision', evidence: 'cómo me ayudaría si tengo poco apetito?' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(validMixed.obligations.map(value => value.type))), ['price', 'food_decision']);
+  const malformedPurchase = parse('Quiero comprarlo.', [{ type: 'purchase_intent', evidence: 'Quiero ... comprarlo.' }]);
   assert.equal(malformedPurchase.obligations[0].type, 'unsupported');
   const resolvedPurchase = vm.runInNewContext(`(function(){${code('Resolve Direct RAG Obligations')}})()`, { $input: { first: () => ({ json: malformedPurchase }) } })[0].json;
   assert.equal(resolvedPurchase.authorized_action, null); assert.equal(resolvedPurchase.checkout_authorized, false);
 });
 test('interpreter taxonomy, parser allowlist, and resolver contract stay in parity', () => {
-  const types = rag.INTERPRETER_OBLIGATION_TYPES;
-  assert.deepEqual([...types].sort(), Object.keys(rag.FACTS).sort());
+  const v3 = require('../lib/sales-engine-v2/direct-rag-v3');
+  const types = v3.INTERPRETER_OBLIGATION_TYPES;
+  assert.ok(types.every(type => ['food_decision', 'food_context', 'recommendation_feedback'].includes(type) || Object.hasOwn(v3.FACTS, type)));
   for (const type of types) {
-    assert.ok(['resolved', 'bounded_unknown'].includes(rag.OBLIGATION_TYPE_CONTRACT[type]), type);
-    assert.ok(Array.isArray(rag.FACTS[type]), type);
+    assert.ok(['resolved', 'bounded_unknown'].includes(v3.OBLIGATION_TYPE_CONTRACT[type]), type);
   }
-  assert.equal(rag.OBLIGATION_TYPE_CONTRACT.unsupported, 'bounded_unknown');
+  assert.equal(v3.OBLIGATION_TYPE_CONTRACT.unsupported, 'bounded_unknown');
   const prompt = workflow.nodes.find(node => node.name === 'Interpret Sales Obligations').parameters.options.systemMessage;
   const listed = prompt.match(/Allowed type values: ([^.]+)\./)[1].split(', ');
   assert.deepEqual(listed, types);
 });
 test('generated parser and resolver retain general_information despite descriptive non-purchase intent', () => {
   const code = name => workflow.nodes.find(node => node.name === name).parameters.jsCode;
-  const context = { current_message: '¡Hola! Quiero saber más.', commercial_state: { purchase_context: false }, offer_version: '28d-149-v1' };
+  const context = { current_message: '¡Hola! Quiero saber más.', commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' };
   const parsed = vm.runInNewContext(`(function(){${code('Parse Direct RAG Obligations')}})()`, {
     $: () => ({ item: { json: context } }),
     $input: { first: () => ({ json: { output: JSON.stringify({ obligations: [{ type: 'general_information', evidence: '¡Hola! Quiero saber más.', intent: 'request_information' }] }) } }) },
@@ -306,7 +306,7 @@ test('generated parser and resolver retain general_information despite descripti
   assert.deepEqual(JSON.parse(JSON.stringify(parsed.obligations)), [{ id: 'o-1', type: 'general_information', evidence: '¡Hola! Quiero saber más.' }]);
   const resolved = vm.runInNewContext(`(function(){${code('Resolve Direct RAG Obligations')}})()`, { $input: { first: () => ({ json: parsed }) } })[0].json;
   assert.equal(resolved.resolved_obligations[0].resolution, 'resolved');
-  assert.match(resolved.permitted_claims.join(' '), /programa personalizado de alimentación de 28 días/i);
+  assert.match(resolved.permitted_claims.join(' '), /asistente de alimentación por WhatsApp/i);
 });
 test('generated history aggregate contract always supplies one explicit bounded history array to context', () => {
   const code = workflow.nodes.find(node => node.name === 'Build Direct RAG Conversation Context').parameters.jsCode;
@@ -331,17 +331,17 @@ test('generated history aggregate contract always supplies one explicit bounded 
 });
 test('generated resolver, envelope, and gate execute with deterministic VM fixtures', () => {
   const code = name => workflow.nodes.find(node => node.name === name).parameters.jsCode;
-  const input = { current_message: '¿Cuánto cuesta?', commercial_state: { purchase_context: false }, offer_version: '28d-149-v1', obligations: [{ id: 'o-1', type: 'price', evidence: 'Cuánto cuesta' }] };
+  const input = { current_message: '¿Cuánto cuesta?', commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3', obligations: [{ id: 'o-1', type: 'price', evidence: 'Cuánto cuesta' }] };
   const resolved = vm.runInNewContext(`(function(){${code('Resolve Direct RAG Obligations')}})()`, { $input: { first: () => ({ json: input }) } })[0].json;
-  assert.equal(resolved.checkout_authorized, false); assert.match(resolved.permitted_claims.join(' '), /149 MXN/);
+  assert.equal(resolved.checkout_authorized, false); assert.match(resolved.permitted_claims.join(' '), /gratis/i);
   const enveloped = vm.runInNewContext(`(function(){${code('Build Direct RAG Composition Envelope')}})()`, { $input: { first: () => ({ json: resolved }) } })[0].json;
   const candidate = { output: JSON.stringify({ response: resolved.permitted_claims.join(' '), covered_obligation_ids: ['o-1'], used_claims: [] }) };
   const gated = vm.runInNewContext(`(function(){${code('Final Direct RAG Customer Response Gate')}})()`, { $input: { first: () => ({ json: candidate }) }, $: name => ({ item: { json: name === 'Build Direct RAG Composition Envelope' ? enveloped : {} } }) })[0].json;
   assert.equal(gated.final_gate.cleared, true); assert.equal(gated.output, resolved.permitted_claims.join(' '));
-  const pilotInput = { current_message: 'Mándame el enlace.', commercial_state: { purchase_context: false }, offer_version: '28d-149-v1', obligations: [{ id: 'o-1', type: 'purchase', evidence: 'Mándame el enlace', intent: 'explicit_current_request' }] };
+  const pilotInput = { current_message: 'Mándame el enlace.', commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3', obligations: [{ id: 'o-1', type: 'purchase_intent', evidence: 'Mándame el enlace' }] };
   const pilotResolved = vm.runInNewContext(`(function(){${code('Resolve Direct RAG Obligations')}})()`, { $input: { first: () => ({ json: pilotInput }) } })[0].json;
-  assert.equal(pilotResolved.authorized_action, null); assert.equal(pilotResolved.checkout_authorized, false); assert.equal(pilotResolved.checkout_suppressed_reason, 'glp1_live_pilot');
-  assert.match(pilotResolved.permitted_claims.join(' '), /abriendo esta modalidad/i);
+  assert.equal(pilotResolved.authorized_action, null); assert.equal(pilotResolved.checkout_authorized, false); assert.equal(pilotResolved.checkout_suppressed_reason, 'proposition_test_no_checkout');
+  assert.match(pilotResolved.permitted_claims.join(' '), /prueba gratuita/i);
 });
 test('generated shared persistence envelope makes the Direct RAG delivery tail independent of legacy validation', () => {
   const code = workflow.nodes.find(node => node.name === 'Build Sales Response Persistence Envelope').parameters.jsCode;

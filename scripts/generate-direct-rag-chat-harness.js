@@ -76,8 +76,8 @@ const rawHistory = $input.first().json.history;
 let rows = Array.isArray(rawHistory) ? rawHistory : [];
 if (typeof rawHistory === 'string') { try { rows = JSON.parse(rawHistory); } catch { rows = []; } }
 const history = rows.slice(-12).map(row => ({ role: row.role === 'assistant' ? 'assistant' : 'customer', text: String(row.text || '').slice(0, 1000) }));
-return [{ json: { contract_version: 'direct-rag-v2', locale: 'es-MX', session_id: turn.session_id, inbound_message_id: null, inbound_message_sid: null, current_message: turn.current_message, history, most_recent_assistant_message: history.filter(row => row.role === 'assistant').at(-1)?.text || '', customer_state: { paid: false }, commercial_state: { purchase_context: false }, offer_version: '28d-149-v1' } }];`,
-  'Side-effect-free adapter for the Ticket 10 Direct RAG ConversationContext. The synthetic harness never grants purchase context or a paid customer state.');
+return [{ json: { contract_version: 'direct-rag-v3-proposition-test', locale: 'es-MX', session_id: turn.session_id, inbound_message_id: null, inbound_message_sid: null, current_message: turn.current_message, history, most_recent_assistant_message: history.filter(row => row.role === 'assistant').at(-1)?.text || '', customer_state: { paid: false }, commercial_state: { purchase_context: false, checkout_suppressed: true }, offer_version: 'glp1-whatsapp-free-test-v3' } }];`,
+  'Side-effect-free adapter for the Ticket 10 Direct RAG V3 context. The synthetic harness never grants purchase context or a paid customer state.');
   // The cloned production nodes expect this exact context-node name. Renaming
   // only the adapter keeps their generated prompt/resolver/gate byte-for-byte
   // synchronized with Ticket 10.

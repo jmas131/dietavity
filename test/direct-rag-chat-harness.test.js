@@ -89,14 +89,14 @@ test('the no-action guard preserves the GLP-1 pilot safeguard before memory pers
   assert.deepEqual(run('Assert No External Action', input)[0].json, input);
   assert.throws(() => run('Assert No External Action', { authorized_action: { action: 'existing_checkout' }, checkout_authorized: true, pending_action: 'send_checkout' }), /EXTERNAL_ACTION_BLOCKED/);
   const resolver = byName('Resolve Direct RAG Obligations').parameters.jsCode;
-  const result = vm.runInNewContext(`(function(){${resolver}})()`, { $input: { first: () => ({ json: { current_message: 'Quiero comprarlo.', commercial_state: { purchase_context: false }, obligations: [{ id: 'o-1', type: 'purchase', evidence: 'Quiero comprarlo', intent: 'explicit_current_request' }] } }) } })[0].json;
-  assert.equal(result.checkout_authorized, false); assert.equal(result.authorized_action, null); assert.equal(result.checkout_suppressed_reason, 'glp1_live_pilot');
+  const result = vm.runInNewContext(`(function(){${resolver}})()`, { $input: { first: () => ({ json: { current_message: 'Quiero comprarlo.', commercial_state: { purchase_context: false }, obligations: [{ id: 'o-1', type: 'purchase_intent', evidence: 'Quiero comprarlo' }] } }) } })[0].json;
+  assert.equal(result.checkout_authorized, false); assert.equal(result.authorized_action, null); assert.equal(result.checkout_suppressed_reason, 'proposition_test_no_checkout');
 });
 
 test('required manual prompt cases map to the current Direct RAG resolver and never execute Checkout', () => {
   const resolver = byName('Resolve Direct RAG Obligations').parameters.jsCode;
   const cases = [
-    ['¡Hola! Quiero saber más.', 'general_information', /programa personalizado/i], ['¿Cuánto cuesta?', 'price', /149 MXN/], ['¿Qué incluye?', 'offer_contents', /desayuno, comida, cena y snack/i], ['¿Dan el medicamento GLP-1?', 'glp1_scope', /no vende, entrega ni prescribe/i], ['¿Debo bajar mi dosis?', 'medical_boundary', /profesional/i], ['¿Cómo arman el plan?', 'how_it_works', /personalización/i], ['Gracias', 'acknowledgement', /con gusto/i], ['Quiero comprarlo.', 'purchase', /abriendo esta modalidad/i],
+    ['¡Hola! Quiero saber más.', 'general_information', /asistente de alimentación por WhatsApp/i], ['¿Cuánto cuesta?', 'price', /probar Dietavity gratis/i], ['Tengo poca hambre, ¿qué puedo comer?', 'food_decision', /porción pequeña/i], ['¿Dan el medicamento GLP-1?', 'glp1_scope', /no vende, entrega ni receta/i], ['¿Debo bajar mi dosis?', 'medical_boundary', /profesional/i], ['¿Cómo funciona?', 'how_it_works', /recomendación práctica/i], ['Gracias', 'acknowledgement', /con gusto/i], ['Quiero comprarlo.', 'purchase_intent', /prueba gratuita/i],
   ];
   for (const [message, type, match] of cases) {
     const result = vm.runInNewContext(`(function(){${resolver}})()`, { $input: { first: () => ({ json: { current_message: message, commercial_state: { purchase_context: false }, obligations: [{ id: 'o-1', type, evidence: message.replace(/[¿?.!¡]/g, '') || message, ...(type === 'purchase' ? { intent: 'explicit_current_request' } : {}) }] } }) } })[0].json;
@@ -104,22 +104,22 @@ test('required manual prompt cases map to the current Direct RAG resolver and ne
   }
 });
 
-test('harness cloned parser and resolver preserve GLP-1 nutrition context and mixed obligations', () => {
+test('harness cloned parser and resolver preserve food context and mixed obligations', () => {
   const parser = byName('Parse Direct RAG Obligations').parameters.jsCode;
   const resolver = byName('Resolve Direct RAG Obligations').parameters.jsCode;
   const runPath = (current_message, obligations) => {
-    const context = { current_message, commercial_state: { purchase_context: false }, offer_version: '28d-149-v1' };
+    const context = { current_message, commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' };
     const parsed = vm.runInNewContext(`(function(){${parser}})()`, {
       $: () => ({ item: { json: context } }), $input: { first: () => ({ json: { output: JSON.stringify({ obligations }) } }) },
     })[0].json;
     return vm.runInNewContext(`(function(){${resolver}})()`, { $input: { first: () => ({ json: parsed }) } })[0].json;
   };
-  const nutrition = runPath('Uso GLP-1 y casi no tengo hambre, ¿cómo me ayudaría Dietavity?', [{ type: 'glp1_nutrition_support', evidence: 'Uso GLP-1 y casi no tengo hambre, ¿cómo me ayudaría Dietavity?' }]);
-  assert.deepEqual(Array.from(nutrition.obligations, value => value.type), ['glp1_nutrition_support']);
-  assert.match(nutrition.permitted_claims.join(' '), /organizar comidas sencillas/i);
+  const nutrition = runPath('Uso GLP-1 y casi no tengo hambre, ¿cómo me ayudaría Dietavity?', [{ type: 'food_decision', evidence: 'casi no tengo hambre' }]);
+  assert.deepEqual(Array.from(nutrition.obligations, value => value.type), ['food_decision']);
+  assert.match(nutrition.permitted_claims.join(' '), /porción pequeña/i);
   assert.doesNotMatch(nutrition.permitted_claims.join(' '), /no vende|profesional que te lo prescribió/i);
-  const mixed = runPath('Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?', [{ type: 'price', evidence: 'cuánto cuesta' }, { type: 'glp1_nutrition_support', evidence: 'Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?' }]);
-  assert.deepEqual(Array.from(mixed.obligations, value => value.type), ['price', 'glp1_nutrition_support']);
-  assert.match(mixed.permitted_claims.join(' '), /149 MXN/);
+  const mixed = runPath('Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?', [{ type: 'price', evidence: 'cuánto cuesta' }, { type: 'food_decision', evidence: 'poco apetito' }]);
+  assert.deepEqual(Array.from(mixed.obligations, value => value.type), ['price', 'food_decision']);
+  assert.match(mixed.permitted_claims.join(' '), /probar Dietavity gratis/i);
   assert.doesNotMatch(mixed.permitted_claims.join(' '), /no vende|profesional que te lo prescribió/i);
 });
