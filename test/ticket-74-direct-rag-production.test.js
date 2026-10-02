@@ -54,6 +54,67 @@ test('generated interpreter, parser, and resolver keep GLP-1 context separate fr
 });
 test('final gate rejects unsupported claims, missing coverage, medical advice, and CTA', () => { const e = envelope('¿Dan GLP-1?', [{ type: 'glp1_scope', evidence: 'Dan GLP-1' }]); const ids = ['o-1']; assert.equal(rag.gateResponse({ envelope: e, response: 'Vendemos Ozempic.', coveredObligationIds: ids, usedClaims: ['Vendemos Ozempic.'] }).reason, 'UNSUPPORTED_ACTUAL_RESPONSE'); assert.equal(rag.gateResponse({ envelope: e, response: 'Dietavity no vende GLP-1.', coveredObligationIds: [], usedClaims: [] }).reason, 'OBLIGATION_COVERAGE_MISSING'); assert.equal(rag.gateResponse({ envelope: e, response: 'Baja tu dosis a 2 mg.', coveredObligationIds: ids, usedClaims: [] }).reason, 'MEDICATION_GUIDANCE'); assert.equal(rag.gateResponse({ envelope: e, response: 'No los vendemos. ¿Quieres comprar?', coveredObligationIds: ids, usedClaims: [] }).reason, 'UNAUTHORIZED_CTA'); });
 test('actual response grounding never trusts falsified used_claims', () => { const e = envelope('¿Cuánto cuesta?', [{ type: 'price', evidence: 'Cuánto cuesta' }]); const result = rag.gateResponse({ envelope: e, response: 'Dietavity incluye consultas médicas semanales y garantiza bajar 10 kg.', coveredObligationIds: ['o-1'], usedClaims: [] }); assert.equal(result.cleared, false); assert.equal(result.reason, 'UNSUPPORTED_ACTUAL_RESPONSE'); });
+test('first-contact generic interest alone permits one exact grounded discovery question', () => {
+  const message = '¡Hola! Quiero saber más.';
+  const result = harness.run({ message, obligations: [{ type: 'general_information', evidence: message }] });
+  assert.equal(result.conversation_policy.discovery_question_authorized, true);
+  assert.deepEqual(result.conversation_policy.required_questions, [rag.FIRST_CONTACT_DISCOVERY_QUESTION]);
+  assert.equal(result.composition_envelope.response_policy.max_questions, 1);
+  assert.deepEqual(result.composition_envelope.response_policy.required_questions, [rag.FIRST_CONTACT_DISCOVERY_QUESTION]);
+  assert.equal(result.final_customer_response, `Dietavity es un programa personalizado de alimentación de 28 días. Incluye desayuno, comida, cena y snack para cada día, adaptados a tus objetivos y preferencias. ${rag.FIRST_CONTACT_DISCOVERY_QUESTION}`);
+  assert.equal(result.authorized_action, null);
+});
+test('final gate requires one exact discovery question only when response policy authorizes it', () => {
+  const generic = envelope('¡Hola! Quiero saber más.', [{ type: 'general_information', evidence: '¡Hola! Quiero saber más.' }]);
+  const factsOnly = generic.permitted_claims.filter(claim => claim !== rag.FIRST_CONTACT_DISCOVERY_QUESTION).join(' ');
+  assert.equal(rag.gateResponse({ envelope: generic, response: factsOnly, coveredObligationIds: ['o-1'] }).reason, 'REQUIRED_QUESTION_MISSING');
+  assert.equal(rag.gateResponse({ envelope: generic, response: generic.permitted_claims.join(' '), coveredObligationIds: ['o-1'] }).cleared, true);
+  assert.equal(rag.gateResponse({ envelope: generic, response: `${generic.permitted_claims.join(' ')} ${rag.FIRST_CONTACT_DISCOVERY_QUESTION}`, coveredObligationIds: ['o-1'] }).cleared, false);
+  const specific = envelope('¿Cómo funciona el programa?', [{ type: 'how_it_works', evidence: 'Cómo funciona el programa' }]);
+  assert.equal(rag.gateResponse({ envelope: specific, response: `${specific.permitted_claims.join(' ')} ${rag.FIRST_CONTACT_DISCOVERY_QUESTION}`, coveredObligationIds: ['o-1'] }).reason, 'UNAUTHORIZED_QUESTION');
+});
+test('response-level discovery policy inserts the permitted question once across duplicate general-information obligations', () => {
+  const message = '¡Hola! Quiero saber más. Cuéntame más.';
+  const result = harness.run({ message, obligations: [{ type: 'general_information', evidence: 'Quiero saber más' }, { type: 'general_information', evidence: 'Cuéntame más' }] });
+  assert.equal(result.conversation_policy.discovery_question_authorized, true);
+  assert.equal(result.permitted_claims.filter(claim => claim === rag.FIRST_CONTACT_DISCOVERY_QUESTION).length, 1);
+  assert.equal(result.final_customer_response.split(rag.FIRST_CONTACT_DISCOVERY_QUESTION).length - 1, 1);
+});
+test('generated final gate requires the response-level discovery question exactly once', () => {
+  const code = name => workflow.nodes.find(node => node.name === name).parameters.jsCode;
+  const input = { current_message: '¡Hola! Quiero saber más.', history: [], most_recent_assistant_message: '', commercial_state: { purchase_context: false }, obligations: [{ id: 'o-1', type: 'general_information', evidence: '¡Hola! Quiero saber más.' }] };
+  const resolved = vm.runInNewContext(`(function(){${code('Resolve Direct RAG Obligations')}})()`, { $input: { first: () => ({ json: input }) } })[0].json;
+  const enveloped = vm.runInNewContext(`(function(){${code('Build Direct RAG Composition Envelope')}})()`, { $input: { first: () => ({ json: resolved }) } })[0].json;
+  const runGate = response => vm.runInNewContext(`(function(){${code('Final Direct RAG Customer Response Gate')}})()`, { $input: { first: () => ({ json: { output: JSON.stringify({ response, covered_obligation_ids: ['o-1'], used_claims: [] }) } }) }, $: () => ({ item: { json: enveloped } }) })[0].json;
+  const factsOnly = resolved.permitted_claims.filter(claim => claim !== rag.FIRST_CONTACT_DISCOVERY_QUESTION).join(' ');
+  assert.equal(runGate(factsOnly).final_gate.fallback_used, true);
+  assert.equal(runGate(factsOnly).output.split(rag.FIRST_CONTACT_DISCOVERY_QUESTION).length - 1, 1);
+  assert.equal(runGate(resolved.permitted_claims.join(' ')).final_gate.cleared, true);
+  assert.equal(runGate(`${resolved.permitted_claims.join(' ')} ${rag.FIRST_CONTACT_DISCOVERY_QUESTION}`).final_gate.fallback_used, true);
+});
+test('specific information and repeated history do not enter a generic discovery loop', () => {
+  const specific = harness.run({ message: '¿Cómo funciona el programa?', obligations: [{ type: 'how_it_works', evidence: 'Cómo funciona el programa' }] });
+  assert.equal(specific.composition_envelope.response_policy.max_questions, 0);
+  assert.doesNotMatch(specific.final_customer_response, /Qué te gustaría mejorar/i);
+  const repeated = harness.run({ message: 'Quiero saber más.', obligations: [{ type: 'general_information', evidence: 'Quiero saber más.' }], history: [{ role: 'customer', text: 'Hola' }, { role: 'assistant', text: 'Dietavity es un programa personalizado de alimentación de 28 días.' }] });
+  assert.equal(repeated.composition_envelope.response_policy.max_questions, 0);
+  assert.doesNotMatch(repeated.final_customer_response, /Qué te gustaría mejorar/i);
+});
+test('generic GLP-1 first contact remains non-clinical and can use only the authorized discovery question', () => {
+  const message = 'Hola, uso GLP-1 y quiero saber más.';
+  const result = harness.run({ message, obligations: [{ type: 'general_information', evidence: message }] });
+  assert.equal(result.composition_envelope.response_policy.max_questions, 1);
+  assert.match(result.final_customer_response, /programa personalizado/i);
+  assert.doesNotMatch(result.final_customer_response, /vende|entrega|prescribe|dosis|medicamento/i);
+  assert.equal((result.final_customer_response.match(/[¿?]/g) || []).length, 2);
+  assert.equal(result.authorized_action, null);
+});
+test('final gate rejects an invented or unpermitted discovery question', () => {
+  const generic = envelope('¡Hola! Quiero saber más.', [{ type: 'general_information', evidence: '¡Hola! Quiero saber más.' }]);
+  assert.equal(rag.gateResponse({ envelope: generic, response: 'Dietavity es un programa personalizado de alimentación de 28 días. ¿Cuál es tu meta?', coveredObligationIds: ['o-1'] }).cleared, false);
+  const specific = envelope('¿Cómo funciona el programa?', [{ type: 'how_it_works', evidence: 'Cómo funciona el programa' }]);
+  assert.equal(rag.gateResponse({ envelope: specific, response: `Después del pago verificado completas la personalización. ${rag.FIRST_CONTACT_DISCOVERY_QUESTION}`, coveredObligationIds: ['o-1'] }).reason, 'UNAUTHORIZED_QUESTION');
+});
 test('purchase confirmation remains valid for detection but is suppressed during the GLP-1 pilot', () => {
   const obligations = rag.validateObligations([{ type: 'purchase', evidence: 'Sí', intent: 'valid_current_confirmation' }], 'Sí');
   const resolve = state => rag.resolveObligations({ context: rag.buildConversationContext({ currentMessage: 'Sí', sessionId: 's', commercialState: state }), obligations }).authorized_action;
