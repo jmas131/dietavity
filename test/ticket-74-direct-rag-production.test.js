@@ -329,6 +329,28 @@ test('generated history aggregate contract always supplies one explicit bounded 
   assert.equal(bounded.history.length, 12);
   assert.equal(bounded.history[0].text, 'mensaje 2');
 });
+test('generated V3.1 resolver uses the immediate availability question only after explicit food semantics', () => {
+  const code = workflow.nodes.find(node => node.name === 'Resolve Direct RAG Obligations').parameters.jsCode;
+  const resolve = (current_message, most_recent_assistant_message = '', history = []) => vm.runInNewContext(`(function(){${code}})()`, {
+    $input: { first: () => ({ json: {
+      current_message, most_recent_assistant_message, history,
+      commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3',
+      obligations: [{ id: 'o-1', type: 'food_context', evidence: current_message }],
+    } }) },
+  })[0].json;
+  const question = '¿Qué alimentos tienes disponibles ahora?';
+  const answered = resolve('Huevos pollo pechuga vegetales arroz', question);
+  assert.deepEqual(JSON.parse(JSON.stringify(answered.resolved_obligations[0].food_context.available_foods)), ['huevos', 'pollo', 'pechuga', 'verduras', 'arroz']);
+  assert.equal(answered.conversation_policy.food_clarification_authorized, false);
+  assert.doesNotMatch(answered.permitted_claims.join(' '), /¿Qué alimentos tienes disponibles ahora\?/u);
+
+  const breakfast = resolve('2 huevos con tocino, aguacate, y un café sin azúcar de desayuno', question);
+  assert.deepEqual(JSON.parse(JSON.stringify(breakfast.resolved_obligations[0].food_context.recently_consumed)), ['huevos', 'aguacate', 'tocino', 'cafe']);
+  assert.deepEqual(JSON.parse(JSON.stringify(breakfast.resolved_obligations[0].food_context.available_foods)), []);
+
+  const noContext = resolve('Huevos pollo pechuga vegetales arroz');
+  assert.deepEqual(JSON.parse(JSON.stringify(noContext.resolved_obligations[0].food_context.available_foods)), []);
+});
 test('generated resolver, envelope, and gate execute with deterministic VM fixtures', () => {
   const code = name => workflow.nodes.find(node => node.name === name).parameters.jsCode;
   const input = { current_message: '¿Cuánto cuesta?', commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3', obligations: [{ id: 'o-1', type: 'price', evidence: 'Cuánto cuesta' }] };

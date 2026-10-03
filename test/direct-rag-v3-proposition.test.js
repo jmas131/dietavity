@@ -4,8 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const rag = require('../lib/sales-engine-v2/direct-rag-v3');
 
-function run(message, obligations, history = []) {
-  const context = rag.buildConversationContext({ currentMessage: message, sessionId: 'v3-test', history });
+function run(message, obligations, history = [], recentAssistantMessage = '') {
+  const context = rag.buildConversationContext({ currentMessage: message, sessionId: 'v3-test', history, recentAssistantMessage });
   const resolution = rag.resolveObligations({ context, obligations: rag.validateObligations(obligations, message) });
   const envelope = rag.buildCompositionEnvelope({ context, resolution });
   const response = resolution.permitted_claims.join(' ');
@@ -76,4 +76,60 @@ test('V3 separates recently consumed food from available food before recommendin
   assert.doesNotMatch(mixed.response, /2 huevos revueltos/u);
   assert.match(mixed.response, /tortilla con pollo y un poco de aguacate/u);
   assert.equal(mixed.gate.cleared, true);
+});
+
+test('V3.1 interprets an availability-question answer without repeating the availability loop', () => {
+  const availabilityQuestion = '¿Qué alimentos tienes disponibles ahora?';
+  const cases = [
+    ['Huevos pollo pechuga vegetales arroz', ['huevos', 'pollo', 'pechuga', 'verduras', 'arroz']],
+    ['Huevos\nVegetales\nPollo\nPescado\nArroz', ['huevos', 'pollo', 'verduras', 'arroz', 'pescado']],
+    ['Huevo, carne, leche verduras', ['huevos', 'verduras', 'carne', 'leche']],
+    ['Huevos, carne, verduras, leche y fruta', ['huevos', 'verduras', 'carne', 'leche', 'fruta']],
+  ];
+  for (const [message, foods] of cases) {
+    const result = run(message, [{ type: 'food_context', evidence: message }], [], availabilityQuestion);
+    const context = result.resolution.resolved_obligations[0].food_context;
+    assert.deepEqual(context.available_foods, foods, message);
+    assert.deepEqual(context.recently_consumed, [], message);
+    assert.equal(result.resolution.conversation_policy.food_clarification_authorized, false, message);
+    assert.doesNotMatch(result.response, /¿Qué alimentos tienes disponibles ahora\?/u, message);
+    assert.match(result.response, /^Con lo que tienes, prepara /u, message);
+    assert.equal(result.gate.cleared, true, message);
+  }
+});
+
+test('V3.1 gives explicit current consumption precedence over availability-question inference', () => {
+  const availabilityQuestion = 'Para recomendarte algo concreto, ¿Qué alimentos tienes disponibles ahora?';
+  const breakfast = '2 huevos con tocino, aguacate, y un café sin azúcar de desayuno';
+  const result = run(breakfast, [{ type: 'food_context', evidence: breakfast }], [], availabilityQuestion);
+  const context = result.resolution.resolved_obligations[0].food_context;
+  assert.deepEqual(context.recently_consumed, ['huevos', 'aguacate', 'tocino', 'cafe']);
+  assert.deepEqual(context.available_foods, []);
+  assert.match(result.response, /¿Qué alimentos tienes disponibles ahora\?/u);
+
+  const mixedMessage = 'Desayuné huevos, pero tengo pollo, tortillas y aguacate.';
+  const mixed = run(mixedMessage, [{ type: 'food_context', evidence: 'Desayuné huevos' }, { type: 'food_decision', evidence: 'tengo pollo, tortillas y aguacate' }], [], availabilityQuestion);
+  const mixedContext = mixed.resolution.resolved_obligations[0].food_context;
+  assert.deepEqual(mixedContext.recently_consumed, ['huevos']);
+  assert.deepEqual(mixedContext.available_foods, ['pollo', 'tortillas', 'aguacate']);
+  assert.match(mixed.response, /tortilla con pollo y un poco de aguacate/u);
+});
+
+test('V3.1 leaves a bare food list unclassified without the immediately preceding availability question', () => {
+  const message = 'Huevos pollo pechuga vegetales arroz';
+  const result = run(message, [{ type: 'food_context', evidence: message }]);
+  const context = result.resolution.resolved_obligations[0].food_context;
+  assert.deepEqual(context.available_foods, []);
+  assert.deepEqual(context.recently_consumed, []);
+  assert.equal(result.resolution.conversation_policy.food_clarification_authorized, true);
+});
+
+test('V3.1 uses bounded low-appetite context with an inventory outside the retired recipe combinations', () => {
+  const availabilityQuestion = '¿Qué alimentos tienes disponibles ahora?';
+  const history = [{ role: 'customer', text: 'No tengo hambre.' }, { role: 'assistant', text: availabilityQuestion }];
+  const message = 'Pescado, verduras y arroz';
+  const result = run(message, [{ type: 'food_context', evidence: message }], history, availabilityQuestion);
+  assert.match(result.response, /prepara pescado con verduras/u);
+  assert.match(result.response, /porción pequeña y come despacio/u);
+  assert.doesNotMatch(result.response, /¿Qué alimentos tienes disponibles ahora\?/u);
 });

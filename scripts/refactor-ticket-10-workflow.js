@@ -1371,7 +1371,7 @@ ${require('../lib/sales-engine-v2/direct-rag-v3').resolveFoodDecision.toString()
 ${require('../lib/sales-engine-v2/direct-rag-v3').permitsFirstContactDiscoveryQuestion.toString()}
 const claims = ${JSON.stringify(require('../lib/sales-engine-v2/direct-rag-v3').FACTS)};
 const firstContactDiscoveryQuestion = ${JSON.stringify(require('../lib/sales-engine-v2/direct-rag-v3').FIRST_CONTACT_DISCOVERY_QUESTION)};
-const foodDecision = input.obligations.some(obligation => ['food_decision','food_context','recommendation_feedback'].includes(obligation.type)) ? resolveFoodDecision(input.current_message) : null;
+const foodDecision = input.obligations.some(obligation => ['food_decision','food_context','recommendation_feedback'].includes(obligation.type)) ? resolveFoodDecision(input.current_message, input.most_recent_assistant_message, input.history) : null;
 let foodClaimAssigned = false;
 const resolved_obligations = input.obligations.map(obligation => {
   const food = ['food_decision','food_context','recommendation_feedback'].includes(obligation.type);
