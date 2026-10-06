@@ -36,11 +36,7 @@
 
     var pageEvent = loader.dataset.pageEvent;
     if (pageEvent === 'ViewContent') {
-      window.fbq('track', 'ViewContent', {
-        content_name: '28-Day Program',
-        value: 149,
-        currency: 'MXN'
-      });
+      window.fbq('track', 'ViewContent');
     }
 
     if (pageEvent === 'Purchase') {

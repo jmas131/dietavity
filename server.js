@@ -615,11 +615,11 @@ function buildShoppingListLegacy(mealPlan) {
 }
 
 app.get('/', (req, res) => {
-  res.render('home');
+  res.render('purchase');
 });
 
 app.get('/servicio', (req, res) => {
-  res.render('service-features');
+  res.render('purchase');
 });
 
 app.get('/programa-de-28-dias', (req, res) => {
@@ -627,11 +627,11 @@ app.get('/programa-de-28-dias', (req, res) => {
 });
 
 app.get('/programa-glp1', (req, res) => {
-  res.render('glp1-holding');
+  res.render('purchase');
 });
 
 app.get('/comprar', (req, res) => {
-  res.redirect(301, '/programa-de-28-dias');
+  res.redirect(301, '/');
 });
 
 app.get('/terminos-y-condiciones', (req, res) => {

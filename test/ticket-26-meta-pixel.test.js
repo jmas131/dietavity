@@ -184,56 +184,21 @@ test('missing and invalid Pixel configuration render no loader and do not affect
     const result = await invokeRoute(loadApp({ pixelId }), '/programa-de-28-dias');
     assert.equal(result.status, 200);
     assert.doesNotMatch(result.html, /id="meta-pixel-loader"|connect\.facebook\.net/);
-    assert.match(result.html, /id="purchase-button"/);
+    assert.match(result.html, /PROBAR GRATIS EN WHATSAPP/);
   }
 });
 
-test('/programa-de-28-dias emits ViewContent with only the approved commercial metadata', () => {
+test('/programa-de-28-dias emits ViewContent without retired commercial metadata', () => {
   const browser = runPixel({ event: 'ViewContent' });
-  assert.deepEqual(plain(browser.calls.at(-1)), ['track', 'ViewContent', {
-    content_name: '28-Day Program', value: 149, currency: 'MXN',
-  }]);
+  assert.deepEqual(plain(browser.calls.at(-1)), ['track', 'ViewContent']);
   assert.doesNotMatch(pixelSource,
     /whatsapp|portal_token|stripe|user_id|email|phone|health|dietary/i);
 });
 
-test('purchase CTA emits InitiateCheckout when the existing POST request begins', async () => {
-  const calls = [];
-  let resolveFetch;
-  const response = new Promise(resolve => { resolveFetch = resolve; });
-  const browser = checkoutBrowser({
-    fbq(...args) { calls.push(args); },
-    fetch(url, options) {
-      calls.push(['fetch', url, options.method]);
-      return response;
-    },
-  });
-
-  const pending = browser.click();
-  assert.deepEqual(plain(calls[0]), ['track', 'InitiateCheckout', {
-    content_name: '28-Day Program', value: 149, currency: 'MXN',
-  }]);
-  assert.deepEqual(calls[1], ['fetch', '/api/checkout', 'POST']);
-
-  resolveFetch({ ok: false, async json() { return {}; } });
-  await pending;
-  assert.equal(browser.error.textContent, 'No pudimos iniciar el pago. Intenta de nuevo.');
-});
-
-test('a blocked or throwing Pixel cannot prevent Checkout creation', async () => {
-  let checkoutCalls = 0;
-  const browser = checkoutBrowser({
-    fbq() { throw new Error('blocked'); },
-    async fetch() {
-      checkoutCalls += 1;
-      return { ok: false, async json() { return {}; } };
-    },
-  });
-
-  await browser.click();
-  assert.equal(checkoutCalls, 1);
-  assert.equal(browser.button.disabled, false);
-  assert.equal(browser.error.hidden, false);
+test('WhatsApp CTA records Contact without creating Checkout', () => {
+  assert.match(purchaseSource, /window\.fbq\('track', 'Contact'/);
+  assert.match(purchaseSource, /gtag\('event', 'whatsapp_cta_click'/);
+  assert.doesNotMatch(purchaseSource, /InitiateCheckout|fetch\('\/api\/checkout|purchase-checkout-script/);
 });
 
 test('Purchase is rendered only after durable paid state on a no-referrer clean URL', async () => {
