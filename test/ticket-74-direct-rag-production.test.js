@@ -522,6 +522,26 @@ test('V3.2B generated parser reconciles a weak support classification across the
   const foodContext = buildContext('¿Me ayudas a decidir qué comer?', canonicalHistory);
   const food = parse(foodContext, [{ type: 'food_decision', evidence: 'decidir qué comer' }]);
   assert.equal(food.obligations[0].type, 'food_decision');
+
+  const appetiteMessage = 'Me da mucha hambre por momentos y cuando como, como poco.';
+  const appetiteContext = buildContext(appetiteMessage, canonicalHistory);
+  assert.deepEqual(JSON.parse(JSON.stringify(appetiteContext.semantic_context.food_context.appetite_observation)), { kind: 'variable_hunger_with_small_intake', evidence: 'current_turn' });
+  const appetite = parse(appetiteContext, [{ type: 'nutrition_support_request', evidence: appetiteMessage }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(appetite.obligations)), [{ id: 'o-1', type: 'unsupported', evidence: appetiteMessage }]);
+  const appetiteResolved = resolve(appetite);
+  assert.match(appetiteResolved.permitted_claims.join(' '), /por momentos tienes mucha hambre/i);
+  assert.doesNotMatch(appetiteResolved.permitted_claims.join(' '), /mientras usas GLP-1|Dietavity es un asistente/u);
+  assert.equal(appetiteResolved.conversation_policy.food_clarification_authorized, false);
+  for (const [message, obligation] of [
+    ['Tengo poco apetito, ¿me pueden ayudar?', { type: 'nutrition_support_request', evidence: '¿me pueden ayudar?' }],
+    ['Tengo poco apetito, ¿qué puedo comer?', { type: 'food_decision', evidence: '¿qué puedo comer?' }],
+    ['Tengo poco apetito, ¿debo bajar mi dosis?', { type: 'medical_boundary', evidence: 'bajar mi dosis' }],
+    ['Tengo poco apetito, ¿cuánto cuesta?', { type: 'price', evidence: 'cuánto cuesta' }],
+    ['Tengo poco apetito, ¿es por WhatsApp?', { type: 'delivery_channel', evidence: 'WhatsApp' }],
+  ]) {
+    const parsed = parse(buildContext(message, canonicalHistory), [obligation]);
+    assert.equal(parsed.obligations[0].type, obligation.type, message);
+  }
 });
 
 test('V3.2B Patch 2 generated resolver consumes semantic context and limits inventory clarification', () => {

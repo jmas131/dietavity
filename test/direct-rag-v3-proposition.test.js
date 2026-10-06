@@ -212,6 +212,24 @@ test('V3.2B reconciles only weak generic support classifications with affirmativ
   assert.equal(rag.reconcileWeakNutritionSupportObligations(food, '¿Me ayudas a decidir qué comer?', usedGlp1), food);
 });
 
+test('V3.2B reconciles standalone appetite observations without erasing current obligations', () => {
+  const standaloneMessage = 'Me da mucha hambre por momentos y cuando como, como poco.';
+  const standaloneContext = rag.extractSemanticContext(standaloneMessage, [{ role: 'customer', text: 'Me están inyectando Mounjaro' }]);
+  const fallback = rag.reconcileStandaloneAppetiteObservationObligations([{ type: 'nutrition_support_request', evidence: standaloneMessage }], standaloneMessage, standaloneContext);
+  assert.deepEqual(fallback, [{ type: 'unsupported', evidence: standaloneMessage }]);
+  assert.match(rag.contextualSemanticClaim(standaloneContext), /mucha hambre/u);
+  for (const [message, obligation] of [
+    ['Tengo poco apetito, ¿me pueden ayudar?', { type: 'nutrition_support_request', evidence: '¿me pueden ayudar?' }],
+    ['Tengo poco apetito, ¿qué puedo comer?', { type: 'food_decision', evidence: '¿qué puedo comer?' }],
+    ['Tengo poco apetito, ¿debo bajar mi dosis?', { type: 'medical_boundary', evidence: 'bajar mi dosis' }],
+    ['Tengo poco apetito, ¿cuánto cuesta?', { type: 'price', evidence: 'cuánto cuesta' }],
+    ['Tengo poco apetito, ¿es por WhatsApp?', { type: 'delivery_channel', evidence: 'WhatsApp' }],
+  ]) {
+    const context = rag.extractSemanticContext(message, [{ role: 'customer', text: 'Me están inyectando Mounjaro' }]);
+    assert.equal(rag.reconcileStandaloneAppetiteObservationObligations([obligation], message, context)[0].type, obligation.type, message);
+  }
+});
+
 test('V3.2B Patch 1 distinguishes future meal language and consumption negation from actual food events', () => {
   for (const message of ['¿Qué puedo comer para la cena?', '¿Qué me recomiendas para desayunar?', 'Quiero preparar pollo para la comida', 'Voy a cenar pollo', 'Nunca comí pollo', 'Jamás comí pollo', 'No cené pollo', 'No desayuné huevos']) {
     const context = rag.extractSemanticContext(message);
