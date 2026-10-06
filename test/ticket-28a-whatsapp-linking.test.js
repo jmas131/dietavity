@@ -5,7 +5,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  hasDeterministicPaidAccountRequest,
   hasDeterministicPortalRecoveryRequest,
 } = require('../lib/sales-engine-v3');
 
@@ -29,34 +28,40 @@ function detect(message, user = {}) {
   return new Function('$', code)(lookup)[0].json.identity_verification_purpose;
 }
 
-test('deterministic paid-context gate distinguishes account requests from prospect requests', () => {
-  for (const message of [
-    '¿Dónde está mi programa?', '¿Dónde veo mi plan?',
-    '¿Cuándo empieza mi programa?', '¿Qué tengo de comida hoy?',
-    '¿Qué tengo de cena?', '¿Me das la receta de mi comida?',
-    '¿Me das la receta del pollo que tengo hoy?',
-    '¿Dónde está mi lista del súper?', 'Quiero cambiar esta comida',
-    'No puedo seguir esta comida hoy', '¿Qué puedo pedir según mi plan?'
-  ]) assert.equal(hasDeterministicPaidAccountRequest(message), true, message);
+function reaches(start, target) {
+  const seen = new Set([start]);
+  const queue = [start];
+  while (queue.length) {
+    const current = queue.shift();
+    for (const branch of workflow.connections[current]?.main || []) {
+      for (const edge of branch || []) {
+        if (edge.node === target) return true;
+        if (!seen.has(edge.node)) {
+          seen.add(edge.node);
+          queue.push(edge.node);
+        }
+      }
+    }
+  }
+  return false;
+}
 
+test('ordinary assistant messages never enter legacy recovery for unknown or known senders', () => {
   for (const message of [
-    '¿Cuánto cuesta?', '¿Qué incluye?', '¿Cómo funciona?', '¿Aceptan OXXO?',
-    '¿Es una suscripción?', 'Quiero comprarlo',
-    '¿Me puedes dar una receta de pollo?', '¿Qué puedo cenar hoy?',
-    '¿Dónde puedo comer saludable?'
-  ]) assert.equal(hasDeterministicPaidAccountRequest(message), false, message);
-});
+    'mi programa', 'mi plan', 'qué tengo de cena', 'mi receta',
+    'según mi plan', 'cómo se usa te digo mi comida',
+  ]) {
+    assert.equal(detect(message), null, `unknown sender: ${message}`);
+    assert.equal(detect(message, { id: 'legacy-user' }), null, `known sender: ${message}`);
+  }
 
-test('workflow verifies unknown paid context, preserves sales, and bypasses linking for known customers', () => {
-  assert.equal(detect('¿Qué tengo de cena?'), 'link_whatsapp');
-  assert.equal(detect('¿Cuánto cuesta?'), null);
-  assert.equal(detect('¿Me das una receta de pollo?'), null);
-  assert.equal(detect('¿Qué tengo de cena?', { id: 'paid-user' }), null);
   assert.equal(detect('Perdí mi enlace', { id: 'paid-user' }), 'recover_portal');
+  assert.equal(detect('Perdí mi enlace'), 'recover_portal');
   assert.equal(hasDeterministicPortalRecoveryRequest('Necesito entrar otra vez a mi programa'), true);
 
   assert.deepEqual(workflow.connections['If Portal Recovery Requested'].main[1]
     .map(connection => connection.node), ['Normalize User Data']);
+  assert.equal(reaches('Normalize User Data', 'Get Direct RAG Conversation History'), true);
 });
 
 test('Ticket 28 tables are generalized instead of creating a second token system', () => {
@@ -82,14 +87,7 @@ test('ordinary linking preserves the portal credential and recovery still rotate
   assert.match(migration, /eligible_count <> 1/);
 });
 
-test('canonical pending messages are referenced, reused, and resumed through Ticket 17 ordering', () => {
-  const initiation = nodes.get('Create WhatsApp Recovery Initiation').parameters.query;
-  assert.match(initiation, /pending_message_id/);
-  assert.match(initiation, /identity_verification_state', 'pending'/);
-  assert.match(initiation, /portal_recovery_requests[\s\S]*request_reused/);
-  assert.match(initiation, /WHERE NOT EXISTS \(SELECT 1 FROM active\)/);
-  assert.doesNotMatch(initiation, /message\.body|user_message/);
-
+test('historical pending WhatsApp links remain resumable through Ticket 17 ordering', () => {
   const finder = pollerNodes.get('Find Verified WhatsApp Sessions').parameters.query;
   assert.match(finder, /public\.messages/);
   assert.match(finder, /processing_completed_at IS NULL/);
@@ -101,15 +99,14 @@ test('canonical pending messages are referenced, reused, and resumed through Tic
   assert.doesNotMatch(JSON.stringify(pollerNodes.get('Find Verified WhatsApp Sessions')), /body|email|portal_token/);
 });
 
-test('linking reply is deterministic, opaque, and canonical-ledger idempotent', () => {
+test('new recovery replies are portal recovery only; no live route emits identity verification', () => {
   const prepare = nodes.get('Prepare Portal Recovery Reply').parameters.jsCode;
-  assert.match(prepare, /Para ayudarte con tu programa necesitamos vincular este WhatsApp/);
   assert.match(prepare, /Usa el correo con el que realizaste tu compra/);
   assert.match(prepare, /request_reused/);
   const prepared = new Function('$input', '$', prepare)(
     { first: () => ({ json: { request_reused: false, recovery_url: 'https://dietavity.com/recuperar-acceso/iniciar/opaque' } }) },
     name => ({ item: { json: name === 'Detect Portal Recovery Request'
-      ? { identity_verification_purpose: 'link_whatsapp' }
+      ? { identity_verification_purpose: 'recover_portal' }
       : name === 'Claim Next Session Inbound'
         ? { session_id: '+525500000000' }
         : {} } }),
@@ -118,9 +115,13 @@ test('linking reply is deterministic, opaque, and canonical-ledger idempotent', 
 
   const reserve = nodes.get('Reserve Portal Recovery Reply');
   assert.match(reserve.parameters.query, /public\.messages/);
-  assert.match(reserve.parameters.options.queryReplacement, /identity_verification/);
+  assert.match(reserve.parameters.options.queryReplacement, /message_kind: 'portal_recovery'/);
+  assert.doesNotMatch(reserve.parameters.options.queryReplacement, /identity_verification/);
   assert.match(reserve.parameters.options.queryReplacement, /provider_message_sid/);
   assert.doesNotMatch(reserve.parameters.options.queryReplacement, /email|portal_token/);
+
+  const detector = nodes.get('Detect Portal Recovery Request').parameters.jsCode;
+  assert.doesNotMatch(detector, /link_whatsapp|hasDeterministicPaidAccountRequest|Get User from Supabase/);
 
   for (const [source, groups] of Object.entries(workflow.connections)) {
     assert.ok(nodes.has(source), `Missing source ${source}`);

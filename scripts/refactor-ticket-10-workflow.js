@@ -308,11 +308,12 @@ workflow.connections['If Customer Has WhatsApp'] = {
   main: [[{ node: 'Reserve Setup Link', type: 'main', index: 0 }], []],
 };
 
-// Tickets 28/28A: route portal recovery and clear paid-account requests from an
-// unknown WhatsApp identity through the same email-verification infrastructure.
+// Legacy portal recovery is an explicit access-recovery path. Ordinary food
+// assistant messages must always proceed to Direct RAG, regardless of whether
+// their WhatsApp identity has a historical users row.
 const detectRecovery = {
   parameters: {
-    jsCode: `${policy.normalizeMessage.toString()}\n${policy.hasDeterministicPortalRecoveryRequest.toString()}\n${policy.hasDeterministicPaidAccountRequest.toString()}\nconst message = $('Claim Next Session Inbound').item.json.body;\nconst knownCustomer = Boolean($('Get User from Supabase').item.json.id);\nconst recovery = hasDeterministicPortalRecoveryRequest(message);\nconst linking = !knownCustomer && !recovery && hasDeterministicPaidAccountRequest(message);\nreturn [{ json: { identity_verification_purpose: recovery ? 'recover_portal' : (linking ? 'link_whatsapp' : null) } }];`,
+    jsCode: `${policy.normalizeMessage.toString()}\n${policy.hasDeterministicPortalRecoveryRequest.toString()}\nconst message = $('Claim Next Session Inbound').item.json.body;\nconst recovery = hasDeterministicPortalRecoveryRequest(message);\nreturn [{ json: { identity_verification_purpose: recovery ? 'recover_portal' : null } }];`,
   },
   type: 'n8n-nodes-base.code', typeVersion: 2,
   position: [64320, 47024], id: 'a28c036d-8c15-4454-a776-defba0280001',
@@ -327,17 +328,7 @@ const ifRecovery = {
 const createRecovery = {
   parameters: {
     operation: 'executeQuery',
-    query: `WITH input AS (SELECT $1::jsonb AS payload), pending_message AS (
-  UPDATE public.messages AS message
-  SET metadata = message.metadata || jsonb_build_object(
-    'identity_verification_state', 'pending',
-    'identity_verification_purpose', input.payload->>'purpose'
-  )
-  FROM input
-  WHERE message.id = NULLIF(input.payload->>'pending_message_id', '')::uuid
-    AND input.payload->>'purpose' = 'link_whatsapp'
-  RETURNING message.id
-), active_candidates AS (
+    query: `WITH input AS (SELECT $1::jsonb AS payload), active_candidates AS (
   SELECT 1 AS priority, 'email_sent'::text AS active_stage
   FROM public.portal_recovery_requests AS request CROSS JOIN input
   WHERE request.initiating_whatsapp_id = input.payload->>'session_id'
@@ -387,8 +378,6 @@ if (row.request_reused) {
   body = row.active_stage === 'email_sent'
     ? 'Ya enviamos las instrucciones de verificación a tu correo. Revisa tu bandeja de entrada para continuar.'
     : 'Ya tienes un enlace de verificación activo. Usa el enlace anterior para continuar de forma segura.';
-} else if (purpose === 'link_whatsapp') {
-  body = 'Para ayudarte con tu programa necesitamos vincular este WhatsApp con tu cuenta de Dietavity.\\nPuedes hacerlo de forma segura aquí:\\n' + row.recovery_url + '\\nUsa el correo con el que realizaste tu compra.';
 } else {
   body = 'Claro 😊 Puedes recuperar tu acceso de forma segura aquí:\\n' + row.recovery_url + '\\nUsa el correo con el que realizaste tu compra.';
 }
@@ -410,7 +399,7 @@ reserveRecovery.parameters.options.queryReplacement = `={{ JSON.stringify({
   session_id: $('Claim Next Session Inbound').item.json.session_id,
   user_id: $('Prepare Portal Recovery Reply').item.json.user_id,
   body: $('Prepare Portal Recovery Reply').item.json.body,
-  message_kind: $('Prepare Portal Recovery Reply').item.json.purpose === 'link_whatsapp' ? 'identity_verification' : 'portal_recovery',
+  message_kind: 'portal_recovery',
   idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':' + $('Prepare Portal Recovery Reply').item.json.purpose,
   in_reply_to_id: $('Claim Next Session Inbound').item.json.id,
   processing_owner: $execution.id,
