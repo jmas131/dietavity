@@ -28,6 +28,25 @@ test('V3 acceptance contract covers proposition, food use, safety, and checkout 
   assert.equal(purchase.resolution.checkout_suppressed_reason, 'proposition_test_no_checkout');
 });
 
+test('delivery-channel obligations answer install and current-chat questions directly', () => {
+  const cases = [
+    ['¿Cómo lo descargo?', 'Dietavity funciona directamente por WhatsApp; no necesitas descargar una app ni entrar a un portal para usarlo.'],
+    ['¿Tengo que descargar una app?', 'Dietavity funciona directamente por WhatsApp; no necesitas descargar una app ni entrar a un portal para usarlo.'],
+    ['¿Es este número?', 'Sí 😊 Puedes usar Dietavity directamente en este chat de WhatsApp.'],
+    ['¿Es por este número?', 'Sí 😊 Puedes usar Dietavity directamente en este chat de WhatsApp.'],
+    ['¿Aquí mismo?', 'Sí 😊 Puedes usar Dietavity directamente en este chat de WhatsApp.', [{ role: 'assistant', text: 'Dietavity funciona por WhatsApp para ayudarte con decisiones de comida.' }]],
+    ['¿Tienen app?', 'Dietavity funciona por WhatsApp; no necesitas un portal para usarlo.'],
+    ['¿Se usa por WhatsApp?', 'Dietavity funciona por WhatsApp; no necesitas un portal para usarlo.'],
+    ['¿Necesito entrar al portal?', 'Dietavity funciona por WhatsApp; no necesitas un portal para usarlo.'],
+  ];
+  for (const [message, expected, history = []] of cases) {
+    const result = run(message, [{ type: 'delivery_channel', evidence: message }], history);
+    assert.equal(result.response, expected, message);
+    assert.equal(result.envelope.response_policy.max_questions, 0, message);
+    assert.equal(result.gate.cleared, true, message);
+  }
+});
+
 test('V3 gate rejects obsolete, unsupported, and medical-management claims while preserving mixed obligations', () => {
   const mixed = run('Quiero contratarlo y ¿me dan Ozempic? ¿Debo bajar mi dosis?', [
     { type: 'purchase_intent', evidence: 'Quiero contratarlo' },

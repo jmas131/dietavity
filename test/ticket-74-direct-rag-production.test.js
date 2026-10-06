@@ -25,8 +25,8 @@ test('generated interpreter, parser, and resolver enforce V3 food and safety obl
   const prompt = node('Interpret Sales Obligations').parameters.options.systemMessage;
   assert.match(prompt, /food_decision/);
   assert.match(prompt, /A contextual rejection is not a durable preference/);
-  const parseAndResolve = (current_message, modelObligations) => {
-    const context = { current_message, commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' };
+  const parseAndResolve = (current_message, modelObligations, contextExtras = {}) => {
+    const context = { current_message, commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3', ...contextExtras };
     const parsed = vm.runInNewContext(`(function(){${node('Parse Direct RAG Obligations').parameters.jsCode}})()`, {
       $: () => ({ item: { json: context } }), $input: { first: () => ({ json: { output: JSON.stringify({ obligations: modelObligations }) } }) },
     })[0].json;
@@ -45,6 +45,16 @@ test('generated interpreter, parser, and resolver enforce V3 food and safety obl
   const scope = parseAndResolve('¿Dan el medicamento GLP-1?', [{ type: 'glp1_scope', evidence: '¿Dan el medicamento GLP-1?' }]);
   assert.deepEqual(Array.from(scope.obligations, value => value.type), ['glp1_scope']);
   assert.match(scope.permitted_claims.join(' '), /no vende, entrega ni receta/i);
+  for (const [message, expected, contextExtras = {}] of [
+    ['¿Cómo lo descargo?', 'Dietavity funciona directamente por WhatsApp; no necesitas descargar una app ni entrar a un portal para usarlo.'],
+    ['¿Es este número?', 'Sí 😊 Puedes usar Dietavity directamente en este chat de WhatsApp.'],
+    ['¿Aquí mismo?', 'Sí 😊 Puedes usar Dietavity directamente en este chat de WhatsApp.', { history: [{ role: 'assistant', text: 'Dietavity funciona por WhatsApp para ayudarte con decisiones de comida.' }], most_recent_assistant_message: 'Dietavity funciona por WhatsApp para ayudarte con decisiones de comida.' }],
+    ['¿Se usa por WhatsApp?', 'Dietavity funciona por WhatsApp; no necesitas un portal para usarlo.'],
+    ['¿Necesito entrar al portal?', 'Dietavity funciona por WhatsApp; no necesitas un portal para usarlo.'],
+  ]) {
+    const delivery = parseAndResolve(message, [{ type: 'delivery_channel', evidence: message }], contextExtras);
+    assert.equal(delivery.permitted_claims.join(' '), expected, message);
+  }
   const mixed = parseAndResolve('Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?', [{ type: 'price', evidence: 'cuánto cuesta' }, { type: 'food_decision', evidence: 'poco apetito' }]);
   assert.deepEqual(Array.from(mixed.obligations, value => value.type), ['price', 'food_decision']);
   assert.match(mixed.permitted_claims.join(' '), /gratis/i);
