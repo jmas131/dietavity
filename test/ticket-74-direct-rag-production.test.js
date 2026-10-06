@@ -481,6 +481,49 @@ test('V3.2B Patch 1 generated parser validates semantic context separately from 
   assert.equal(malformed.obligations[0].type, 'unsupported');
 });
 
+test('V3.2B generated parser reconciles a weak support classification across the canonical two-turn history boundary', () => {
+  const node = name => workflow.nodes.find(value => value.name === name);
+  const contextCode = node('Build Direct RAG Conversation Context').parameters.jsCode;
+  const parserCode = node('Parse Direct RAG Obligations').parameters.jsCode;
+  const resolverCode = node('Resolve Direct RAG Obligations').parameters.jsCode;
+  const buildContext = (current_message, history) => vm.runInNewContext(`(function(){${contextCode}})()`, {
+    $input: { first: () => ({ json: { history } }) },
+    $: name => ({ item: { json: name === 'Claim Next Session Inbound' ? { id: 'inbound-2', session_id: 'production-boundary', provider_message_sid: 'SM00000000000000000000000000000000', body: current_message } : name === 'Get Onboarding Session' ? {} : name === 'Get User from Supabase' ? { is_active: false } : {} } }),
+  })[0].json;
+  const parse = (context, obligations) => vm.runInNewContext(`(function(){${parserCode}})()`, {
+    $: () => ({ item: { json: context } }),
+    $input: { first: () => ({ json: { output: JSON.stringify({ obligations, semantic_context: { recommendation_request_evidence: null } }) } }) },
+  })[0].json;
+  const resolve = parsed => vm.runInNewContext(`(function(){${resolverCode}})()`, { $input: { first: () => ({ json: parsed }) } })[0].json;
+  const canonicalHistory = [
+    { direction: 'inbound', body: 'Me están inyectando Mounjaro' },
+    { direction: 'outbound', body: '¡Con gusto! 😊' },
+  ];
+  const context = buildContext('¿Me pueden ayudar?', canonicalHistory);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.semantic_context.glp1_context)), { mentioned: true, usage_reported: true, source: 'history' });
+  const reconciled = parse(context, [{ type: 'general_information', evidence: '¿Me pueden ayudar?' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(reconciled.obligations)), [{ id: 'o-1', type: 'nutrition_support_request', evidence: '¿Me pueden ayudar?' }]);
+  const resolved = resolve(reconciled);
+  assert.match(resolved.permitted_claims.join(' '), /mientras usas GLP-1/i);
+  assert.doesNotMatch(resolved.permitted_claims.join(' '), /Dietavity es un asistente de alimentación/u);
+  assert.equal(resolved.conversation_policy.food_clarification_authorized, false);
+
+  for (const priorInbound of ['No uso Mounjaro', '¿Qué es Mounjaro?', 'Mi hermana usa Mounjaro']) {
+    const noUsageContext = buildContext('¿Me pueden ayudar?', [{ direction: 'inbound', body: priorInbound }, { direction: 'outbound', body: '¡Con gusto! 😊' }]);
+    const retained = parse(noUsageContext, [{ type: 'general_information', evidence: '¿Me pueden ayudar?' }]);
+    assert.equal(retained.semantic_context.glp1_context.usage_reported, false, priorInbound);
+    assert.equal(retained.obligations[0].type, 'general_information', priorInbound);
+  }
+
+  const medicalContext = buildContext('¿Me puedes ayudar a bajar mi dosis?', canonicalHistory);
+  const medical = parse(medicalContext, [{ type: 'medical_boundary', evidence: 'bajar mi dosis' }]);
+  assert.equal(medical.obligations[0].type, 'medical_boundary');
+  assert.match(resolve(medical).permitted_claims.join(' '), /Consulta al profesional/u);
+  const foodContext = buildContext('¿Me ayudas a decidir qué comer?', canonicalHistory);
+  const food = parse(foodContext, [{ type: 'food_decision', evidence: 'decidir qué comer' }]);
+  assert.equal(food.obligations[0].type, 'food_decision');
+});
+
 test('V3.2B Patch 2 generated resolver consumes semantic context and limits inventory clarification', () => {
   const node = name => workflow.nodes.find(value => value.name === name);
   const parser = node('Parse Direct RAG Obligations').parameters.jsCode;

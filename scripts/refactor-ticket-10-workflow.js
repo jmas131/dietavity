@@ -1348,6 +1348,7 @@ semantic_context.recommendation_request_evidence must be null or an exact contig
 const directParser = { name: 'Parse Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000004', type: 'n8n-nodes-base.code', typeVersion: 2, position: [68864, 49536], parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(require('../lib/sales-engine-v2/direct-rag-v3').SEMANTIC_CONTEXT_VERSION)};
 ${require('../lib/sales-engine-v2/direct-rag-v3').extractSemanticContext.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').validateInterpreterSemanticContext.toString()}
+${require('../lib/sales-engine-v2/direct-rag-v3').reconcileWeakNutritionSupportObligations.toString()}
 const context = $('Build Direct RAG Conversation Context').item.json;
 const allowed = new Set(${JSON.stringify(require('../lib/sales-engine-v2/direct-rag-v3').INTERPRETER_OBLIGATION_TYPES)});
 try { const raw = String($input.first().json.output || '').replace(/^\\x60\\x60\\x60(?:json)?\\s*|\\s*\\x60\\x60\\x60$/g, ''); const parsed = JSON.parse(raw); const obligations = parsed.obligations;
@@ -1360,8 +1361,11 @@ try { const raw = String($input.first().json.output || '').replace(/^\\x60\\x60\
     seen.add(key); normalized.push({ id: 'o-' + (normalized.length + 1), type: o.type, evidence: o.evidence });
   }
   const interpreterContext = validateInterpreterSemanticContext(parsed.semantic_context, context.current_message);
-  return [{ json: { ...context, semantic_context: extractSemanticContext(context.current_message, context.history, interpreterContext), obligations: normalized.length ? normalized : [{ id: 'o-1', type: 'unsupported', evidence: context.current_message }] } }];
-} catch { return [{ json: { ...context, semantic_context: extractSemanticContext(context.current_message, context.history), obligations: [{ id: 'o-1', type: 'unsupported', evidence: context.current_message }] } }]; }` }, notes: 'Rejects malformed extraction into a bounded-unknown obligation; semantic context is bounded conversation meaning and never action authority.' };
+  const semantic_context = extractSemanticContext(context.current_message, context.history, interpreterContext);
+  const accepted = normalized.length ? normalized : [{ type: 'unsupported', evidence: context.current_message }];
+  const reconciled = reconcileWeakNutritionSupportObligations(accepted, context.current_message, semantic_context);
+  return [{ json: { ...context, semantic_context, obligations: reconciled.map((obligation, index) => ({ id: 'o-' + (index + 1), type: obligation.type, evidence: obligation.evidence })) } }];
+} catch { const semantic_context = extractSemanticContext(context.current_message, context.history); const reconciled = reconcileWeakNutritionSupportObligations([{ type: 'unsupported', evidence: context.current_message }], context.current_message, semantic_context); return [{ json: { ...context, semantic_context, obligations: reconciled.map((obligation, index) => ({ id: 'o-' + (index + 1), type: obligation.type, evidence: obligation.evidence })) } }]; }` }, notes: 'Rejects malformed extraction into a bounded-unknown obligation; semantic context is bounded conversation meaning and never action authority. A generic standalone help request after affirmative GLP-1 usage is deterministically reconciled to nutrition support without overriding material obligations.' };
 const directResolver = { name: 'Resolve Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000005', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69120, 49536], parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(require('../lib/sales-engine-v2/direct-rag-v3').SEMANTIC_CONTEXT_VERSION)};
 ${require('../lib/sales-engine-v2/direct-rag-v3').extractSemanticContext.toString()}
 const input = $input.first().json;
