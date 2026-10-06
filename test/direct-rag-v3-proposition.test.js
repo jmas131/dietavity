@@ -143,12 +143,170 @@ test('V3.1 leaves a bare food list unclassified without the immediately precedin
   assert.equal(result.resolution.conversation_policy.food_clarification_authorized, true);
 });
 
-test('V3.1 uses bounded low-appetite context with an inventory outside the retired recipe combinations', () => {
+test('V3.2B does not carry transient appetite into a later inventory recommendation', () => {
   const availabilityQuestion = '¿Qué alimentos tienes disponibles ahora?';
   const history = [{ role: 'customer', text: 'No tengo hambre.' }, { role: 'assistant', text: availabilityQuestion }];
   const message = 'Pescado, verduras y arroz';
   const result = run(message, [{ type: 'food_context', evidence: message }], history, availabilityQuestion);
   assert.match(result.response, /prepara pescado con verduras/u);
-  assert.match(result.response, /porción pequeña y come despacio/u);
+  assert.doesNotMatch(result.response, /porción pequeña y come despacio/u);
   assert.doesNotMatch(result.response, /¿Qué alimentos tienes disponibles ahora\?/u);
+});
+
+test('V3.2B Patch 1 extracts bounded semantic context without promoting observations to obligations', () => {
+  const prepared = rag.extractSemanticContext('Me preparé un arroz chino con pollo y verduras con salsa de soya');
+  assert.deepEqual(prepared.food_context.available_foods, []);
+  assert.deepEqual(prepared.food_context.recent_food_events, [{ kind: 'prepared', foods: ['pollo', 'verduras', 'arroz'], evidence: 'me prepare' }]);
+  assert.deepEqual(prepared.food_context.recently_consumed, []);
+
+  const consumed = rag.extractSemanticContext('No tengo pollo, pero comí pollo ayer');
+  assert.deepEqual(consumed.food_context.available_foods, []);
+  assert.deepEqual(consumed.food_context.recently_consumed, ['pollo']);
+
+  const appetite = rag.extractSemanticContext('Me da hambre por momentos mucha hambre y cuando como poco');
+  assert.deepEqual(appetite.food_context.appetite_observation, { kind: 'variable_hunger_with_small_intake', evidence: 'current_turn' });
+
+  const professional = rag.extractSemanticContext('Estoy yendo con una nutrióloga que no tiene idea qué es Mounjaro');
+  assert.deepEqual(professional.glp1_context, { mentioned: true, usage_reported: false, source: null });
+  assert.deepEqual(professional.professional_support_context, { mentioned: true, dissatisfaction_reported: true });
+  for (const message of ['¿Qué es Mounjaro?', 'No uso Mounjaro', 'Mi hermana usa Mounjaro', 'Antes usaba Mounjaro']) {
+    const context = rag.extractSemanticContext(message);
+    assert.equal(context.glp1_context.mentioned, true, message);
+    assert.equal(context.glp1_context.usage_reported, false, message);
+  }
+  for (const message of ['Uso Mounjaro', 'Me están inyectando Mounjaro', 'Tomo semaglutida']) {
+    const context = rag.extractSemanticContext(message);
+    assert.equal(context.glp1_context.usage_reported, true, message);
+    assert.equal(context.glp1_context.source, 'current_turn', message);
+  }
+  assert.equal(rag.INTERPRETER_OBLIGATION_TYPES.includes('medical_boundary'), true);
+  assert.equal(rag.INTERPRETER_OBLIGATION_TYPES.includes('food_context'), false);
+  assert.equal(rag.INTERPRETER_OBLIGATION_TYPES.includes('nutrition_support_request'), true);
+});
+
+test('V3.2B Patch 1 history is bounded context, never current inventory or durable preference', () => {
+  const context = rag.extractSemanticContext('Me pueden ayudar', [{ role: 'customer', text: 'Hola, me están inyectando Mounjaro' }]);
+  assert.deepEqual(context.glp1_context, { mentioned: true, usage_reported: true, source: 'history' });
+  assert.deepEqual(context.food_context.available_foods, []);
+  const negatedGlp1History = rag.extractSemanticContext('Me pueden ayudar', [{ role: 'customer', text: 'No uso Mounjaro' }]);
+  assert.deepEqual(negatedGlp1History.glp1_context, { mentioned: true, usage_reported: false, source: null });
+  const foodHistory = rag.extractSemanticContext('¿Qué puedo comer?', [{ role: 'customer', text: 'Ayer comí pollo y arroz' }]);
+  assert.deepEqual(foodHistory.food_context.available_foods, []);
+  assert.deepEqual(foodHistory.food_context.recently_consumed, []);
+});
+
+test('V3.2B Patch 1 distinguishes future meal language and consumption negation from actual food events', () => {
+  for (const message of ['¿Qué puedo comer para la cena?', '¿Qué me recomiendas para desayunar?', 'Quiero preparar pollo para la comida', 'Voy a cenar pollo', 'Nunca comí pollo', 'Jamás comí pollo', 'No cené pollo', 'No desayuné huevos']) {
+    const context = rag.extractSemanticContext(message);
+    assert.deepEqual(context.food_context.recent_food_events, [], message);
+    assert.deepEqual(context.food_context.recently_consumed, [], message);
+  }
+  for (const [message, kind, foods] of [
+    ['Cené pollo', 'consumed', ['pollo']],
+    ['Comí pollo en la cena', 'consumed', ['pollo']],
+    ['Para desayunar comí huevos', 'consumed', ['huevos']],
+    ['Me preparé arroz con pollo', 'prepared', ['pollo', 'arroz']],
+  ]) {
+    const context = rag.extractSemanticContext(message);
+    assert.equal(context.food_context.recent_food_events[0].kind, kind, message);
+    assert.deepEqual(context.food_context.recent_food_events[0].foods, foods, message);
+  }
+  const mixed = rag.extractSemanticContext('No cené pollo, pero comí huevos y tengo verduras');
+  assert.deepEqual(mixed.food_context.recently_consumed, ['huevos']);
+  assert.deepEqual(mixed.food_context.available_foods, ['verduras']);
+});
+
+test('V3.2B semantic food assertions keep polarity per item and exclude interrogative events', () => {
+  const availability = [
+    ['Tengo pollo y verduras', ['pollo', 'verduras']],
+    ['Tengo pollo y no verduras', ['pollo']],
+    ['Tengo pollo, pero no verduras', ['pollo']],
+    ['No tengo pollo, pero tengo verduras', ['verduras']],
+    ['No tengo pollo ni verduras', []],
+  ];
+  for (const [message, expected] of availability) {
+    assert.deepEqual(rag.extractSemanticContext(message).food_context.available_foods, expected, message);
+  }
+
+  const consumption = [
+    ['Comí pollo y verduras', ['pollo', 'verduras']],
+    ['Comí pollo y no verduras', ['pollo']],
+    ['Comí pollo, pero no verduras', ['pollo']],
+    ['No comí pollo, pero comí verduras', ['verduras']],
+    ['Nunca comí pollo', []],
+    ['Jamás comí pollo', []],
+  ];
+  for (const [message, expected] of consumption) {
+    assert.deepEqual(rag.extractSemanticContext(message).food_context.recently_consumed, expected, message);
+  }
+
+  const prepared = rag.extractSemanticContext('Me preparé arroz y no pollo');
+  assert.deepEqual(prepared.food_context.recent_food_events, [{ kind: 'prepared', foods: ['arroz'], evidence: 'me prepare' }]);
+  assert.deepEqual(prepared.food_context.recently_consumed, []);
+  assert.deepEqual(rag.extractSemanticContext('No preparé pollo, pero preparé arroz').food_context.recent_food_events, [{ kind: 'prepared', foods: ['arroz'], evidence: 'prepare' }]);
+
+  for (const message of ['¿Cené pollo ayer?', '¿Comí pollo ayer?', '¿Me preparé pollo ayer?']) {
+    assert.deepEqual(rag.extractSemanticContext(message).food_context.recent_food_events, [], message);
+  }
+  assert.deepEqual(rag.extractSemanticContext('¿Tengo pollo?').food_context.available_foods, []);
+  const mixedTurn = rag.extractSemanticContext('Comí pollo. ¿Qué puedo comer ahora?');
+  assert.deepEqual(mixedTurn.food_context.recently_consumed, ['pollo']);
+  assert.deepEqual(rag.extractSemanticContext('Tengo pollo. ¿Qué me recomiendas?').food_context.available_foods, ['pollo']);
+  const crossed = rag.extractSemanticContext('No tengo pollo, pero comí pollo ayer');
+  assert.deepEqual(crossed.food_context.available_foods, []);
+  assert.deepEqual(crossed.food_context.recently_consumed, ['pollo']);
+  const multiAssertion = rag.extractSemanticContext('No cené pollo, pero comí huevos y tengo verduras');
+  assert.deepEqual(multiAssertion.food_context.recently_consumed, ['huevos']);
+  assert.deepEqual(multiAssertion.food_context.available_foods, ['verduras']);
+});
+
+test('V3.2B Patch 2 resolves support and semantic context without inventory leakage', () => {
+  const glpHistory = [{ role: 'customer', text: 'Hola, a mí me están inyectando Mounjaro' }, { role: 'assistant', text: 'Gracias por contármelo.' }];
+  const support = run('¿Me pueden ayudar?', [{ type: 'nutrition_support_request', evidence: '¿Me pueden ayudar?' }], glpHistory);
+  assert.match(support.response, /mientras usas GLP-1/i);
+  assert.match(support.response, /No doy indicaciones sobre dosis/i);
+  assert.equal(support.resolution.conversation_policy.food_clarification_authorized, false);
+  assert.doesNotMatch(support.response, /¿Qué alimentos tienes disponibles ahora\?/u);
+
+  const professional = run('Estoy yendo con una nutrióloga que no tiene idea qué es Mounjaro', [{ type: 'nutrition_support_request', evidence: 'Estoy yendo con una nutrióloga' }]);
+  assert.match(professional.response, /buscas apoyo claro/i);
+  assert.doesNotMatch(professional.response, /no tiene idea|incompetente|superior/i);
+  assert.equal(professional.resolution.conversation_policy.food_clarification_authorized, false);
+
+  const appetite = run('Me da mucha hambre por momentos y cuando como, como poco.', [{ type: 'unsupported', evidence: 'Me da mucha hambre por momentos y cuando como, como poco.' }]);
+  assert.match(appetite.response, /mucha hambre/i);
+  assert.equal(appetite.resolution.conversation_policy.food_clarification_authorized, false);
+  assert.doesNotMatch(appetite.response, /¿Qué alimentos tienes disponibles ahora\?/u);
+
+  const prepared = run('Me preparé un arroz con pollo y verduras', [{ type: 'unsupported', evidence: 'Me preparé un arroz con pollo y verduras' }]);
+  assert.match(prepared.response, /preparaste una comida/i);
+  assert.doesNotMatch(prepared.response, /Con lo que tienes|¿Qué alimentos tienes disponibles/u);
+  assert.equal(prepared.resolution.semantic_context.food_context.recently_consumed.length, 0);
+
+  const laterDecision = run('¿Qué puedo comer ahora?', [{ type: 'food_decision', evidence: '¿Qué puedo comer ahora?' }], [{ role: 'customer', text: 'Comí pollo y arroz' }, { role: 'assistant', text: 'Gracias por contármelo.' }]);
+  assert.match(laterDecision.response, /¿Qué alimentos tienes disponibles ahora\?/u);
+  assert.doesNotMatch(laterDecision.response, /pollo con arroz|arroz con pollo/i);
+
+  const availabilityAnswer = run('Huevos pollo pechuga vegetales arroz', [{ type: 'food_decision', evidence: 'Huevos pollo pechuga vegetales arroz' }], [{ role: 'assistant', text: '¿Qué alimentos tienes disponibles ahora?' }]);
+  assert.match(availabilityAnswer.response, /^Con lo que tienes, prepara /u);
+  assert.equal(availabilityAnswer.resolution.conversation_policy.food_clarification_authorized, false);
+
+  const explicitInventory = run('Tengo pechuga asada, verduras y huevo. ¿Qué me puedo hacer?', [{ type: 'food_decision', evidence: '¿Qué me puedo hacer?' }]);
+  assert.match(explicitInventory.response, /^Con lo que tienes, prepara /u);
+
+  const medication = run('¿Debo bajar mi dosis?', [{ type: 'medical_boundary', evidence: '¿Debo bajar mi dosis?' }], glpHistory);
+  assert.match(medication.response, /Consulta al profesional/u);
+  assert.doesNotMatch(medication.response, /mientras usas GLP-1/i);
+
+  const negatedUsage = run('¿Me pueden ayudar?', [{ type: 'nutrition_support_request', evidence: '¿Me pueden ayudar?' }], [{ role: 'customer', text: 'No uso Mounjaro' }]);
+  assert.match(negatedUsage.response, /^Puedo ayudarte con decisiones prácticas/u);
+  assert.doesNotMatch(negatedUsage.response, /mientras usas GLP-1/i);
+
+  const future = run('¿Qué puedo comer para la cena?', [{ type: 'food_decision', evidence: '¿Qué puedo comer para la cena?' }]);
+  assert.deepEqual(future.resolution.semantic_context.food_context.recent_food_events, []);
+  assert.match(future.response, /¿Qué alimentos tienes disponibles ahora\?/u);
+
+  const mixedUnsupported = run('Me da mucha hambre. ¿Pueden hacer videollamada?', [{ type: 'unsupported', evidence: 'videollamada' }, { type: 'nutrition_support_request', evidence: 'Me da mucha hambre' }]);
+  assert.match(mixedUnsupported.response, /No tengo información confirmada/u);
+  assert.doesNotMatch(mixedUnsupported.response, /por momentos tienes mucha hambre/u);
 });

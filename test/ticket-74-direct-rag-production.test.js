@@ -412,3 +412,93 @@ test('generated final gate rejects adversarial actual prose despite falsified us
   const omitted = runGate({ response: base.permitted_claims.join(' '), covered_obligation_ids: ['o-1'], used_claims: base.permitted_claims });
   assert.equal(omitted.final_gate.fallback_used, true);
 });
+
+test('V3.2B Patch 1 generated parser validates semantic context separately from response obligations', () => {
+  const node = name => workflow.nodes.find(value => value.name === name);
+  const prompt = node('Interpret Sales Obligations').parameters.options.systemMessage;
+  assert.match(prompt, /nutrition_support_request/);
+  assert.match(prompt, /semantic context, not response obligations/i);
+  const parser = node('Parse Direct RAG Obligations').parameters.jsCode;
+  const parse = (current_message, output, history = []) => vm.runInNewContext(`(function(){${parser}})()`, {
+    $: () => ({ item: { json: { current_message, history, commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' } } }),
+    $input: { first: () => ({ json: { output: JSON.stringify(output) } }) },
+  })[0].json;
+  const prepared = parse('Me preparé un arroz chino con pollo y verduras', { obligations: [{ type: 'acknowledgement', evidence: 'Me preparé' }], semantic_context: { recommendation_request_evidence: null } });
+  assert.deepEqual(JSON.parse(JSON.stringify(prepared.semantic_context.food_context.available_foods)), []);
+  assert.equal(prepared.semantic_context.food_context.recent_food_events[0].kind, 'prepared');
+  const negated = parse('No tengo pollo, pero comí pollo ayer', { obligations: [{ type: 'acknowledgement', evidence: 'comí pollo' }], semantic_context: { recommendation_request_evidence: null } });
+  assert.deepEqual(JSON.parse(JSON.stringify(negated.semantic_context.food_context.available_foods)), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(negated.semantic_context.food_context.recently_consumed)), ['pollo']);
+  const request = parse('Tengo pechuga y verduras. ¿Qué me puedo hacer?', { obligations: [{ type: 'food_decision', evidence: '¿Qué me puedo hacer?' }], semantic_context: { recommendation_request_evidence: '¿Qué me puedo hacer?' } });
+  assert.equal(request.semantic_context.recommendation_request.current_food_decision, true);
+  const support = parse('Me pueden ayudar', { obligations: [{ type: 'nutrition_support_request', evidence: 'Me pueden ayudar' }], semantic_context: { recommendation_request_evidence: null } }, [{ role: 'customer', text: 'Me están inyectando Mounjaro' }]);
+  assert.equal(support.obligations[0].type, 'nutrition_support_request');
+  assert.deepEqual(JSON.parse(JSON.stringify(support.semantic_context.glp1_context)), { mentioned: true, usage_reported: true, source: 'history' });
+  const professionalMention = parse('Mi nutrióloga no tiene idea qué es Mounjaro', { obligations: [{ type: 'acknowledgement', evidence: 'Mi nutrióloga' }], semantic_context: { recommendation_request_evidence: null } });
+  assert.deepEqual(JSON.parse(JSON.stringify(professionalMention.semantic_context.glp1_context)), { mentioned: true, usage_reported: false, source: null });
+  assert.equal(professionalMention.semantic_context.professional_support_context.dissatisfaction_reported, true);
+  for (const message of ['¿Qué puedo comer para la cena?', 'Quiero preparar pollo para la comida', 'Nunca comí pollo', 'No cené pollo']) {
+    const result = parse(message, { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } });
+    assert.deepEqual(JSON.parse(JSON.stringify(result.semantic_context.food_context.recent_food_events)), [], message);
+  }
+  const positive = parse('Cené pollo y tengo verduras', { obligations: [{ type: 'food_decision', evidence: 'Cené pollo' }], semantic_context: { recommendation_request_evidence: null } });
+  assert.deepEqual(JSON.parse(JSON.stringify(positive.semantic_context.food_context.recently_consumed)), ['pollo']);
+  assert.deepEqual(JSON.parse(JSON.stringify(positive.semantic_context.food_context.available_foods)), ['verduras']);
+  for (const [message, available, consumed, eventFoods] of [
+    ['Tengo pollo y verduras', ['pollo', 'verduras'], [], []],
+    ['Tengo pollo y no verduras', ['pollo'], [], []],
+    ['Tengo pollo, pero no verduras', ['pollo'], [], []],
+    ['No tengo pollo, pero tengo verduras', ['verduras'], [], []],
+    ['No tengo pollo ni verduras', [], [], []],
+    ['Comí pollo y verduras', [], ['pollo', 'verduras'], ['pollo', 'verduras']],
+    ['Comí pollo y no verduras', [], ['pollo'], ['pollo']],
+    ['Comí pollo, pero no verduras', [], ['pollo'], ['pollo']],
+    ['No comí pollo, pero comí verduras', [], ['verduras'], ['verduras']],
+    ['Nunca comí pollo', [], [], []],
+    ['Jamás comí pollo', [], [], []],
+    ['Me preparé arroz con pollo', [], [], ['pollo', 'arroz']],
+    ['Me preparé arroz y no pollo', [], [], ['arroz']],
+  ]) {
+    const result = parse(message, { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } });
+    assert.deepEqual(JSON.parse(JSON.stringify(result.semantic_context.food_context.available_foods)), available, message);
+    assert.deepEqual(JSON.parse(JSON.stringify(result.semantic_context.food_context.recently_consumed)), consumed, message);
+    assert.deepEqual(JSON.parse(JSON.stringify(result.semantic_context.food_context.recent_food_events.map(event => event.foods))), eventFoods.length ? [eventFoods] : [], message);
+  }
+  for (const message of ['¿Cené pollo ayer?', '¿Comí pollo ayer?', '¿Me preparé pollo ayer?']) {
+    const result = parse(message, { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } });
+    assert.deepEqual(JSON.parse(JSON.stringify(result.semantic_context.food_context.recent_food_events)), [], message);
+  }
+  const inventoryQuestion = parse('¿Tengo pollo?', { obligations: [{ type: 'acknowledgement', evidence: '¿Tengo pollo?' }], semantic_context: { recommendation_request_evidence: null } });
+  assert.deepEqual(JSON.parse(JSON.stringify(inventoryQuestion.semantic_context.food_context.available_foods)), []);
+  const mixedQuestion = parse('Comí pollo. ¿Qué puedo comer ahora?', { obligations: [{ type: 'food_decision', evidence: '¿Qué puedo comer ahora?' }], semantic_context: { recommendation_request_evidence: '¿Qué puedo comer ahora?' } });
+  assert.deepEqual(JSON.parse(JSON.stringify(mixedQuestion.semantic_context.food_context.recently_consumed)), ['pollo']);
+  const separated = parse('No cené pollo, pero comí huevos y tengo verduras', { obligations: [{ type: 'acknowledgement', evidence: 'No cené pollo' }], semantic_context: { recommendation_request_evidence: null } });
+  assert.deepEqual(JSON.parse(JSON.stringify(separated.semantic_context.food_context.recently_consumed)), ['huevos']);
+  assert.deepEqual(JSON.parse(JSON.stringify(separated.semantic_context.food_context.available_foods)), ['verduras']);
+  const legacyContextObligation = parse('Comí pollo', { obligations: [{ type: 'food_context', evidence: 'Comí pollo' }], semantic_context: { recommendation_request_evidence: null } });
+  assert.equal(legacyContextObligation.obligations[0].type, 'unsupported');
+  const malformed = parse('¿Qué puedo comer?', { obligations: [{ type: 'food_decision', evidence: '¿Qué puedo comer?' }], semantic_context: { recommendation_request_evidence: 'inventado' } });
+  assert.equal(malformed.obligations[0].type, 'unsupported');
+});
+
+test('V3.2B Patch 2 generated resolver consumes semantic context and limits inventory clarification', () => {
+  const node = name => workflow.nodes.find(value => value.name === name);
+  const parser = node('Parse Direct RAG Obligations').parameters.jsCode;
+  const resolver = node('Resolve Direct RAG Obligations').parameters.jsCode;
+  const resolve = (current_message, obligations, history = []) => {
+    const context = { current_message, history, most_recent_assistant_message: history.at(-1)?.role === 'assistant' ? history.at(-1).text : '', commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' };
+    const parsed = vm.runInNewContext(`(function(){${parser}})()`, {
+      $: () => ({ item: { json: context } }), $input: { first: () => ({ json: { output: JSON.stringify({ obligations, semantic_context: { recommendation_request_evidence: null } }) } }) },
+    })[0].json;
+    return vm.runInNewContext(`(function(){${resolver}})()`, { $input: { first: () => ({ json: parsed }) } })[0].json;
+  };
+  const support = resolve('¿Me pueden ayudar?', [{ type: 'nutrition_support_request', evidence: '¿Me pueden ayudar?' }], [{ role: 'customer', text: 'Me están inyectando Mounjaro' }]);
+  assert.match(support.permitted_claims.join(' '), /mientras usas GLP-1/i);
+  assert.equal(support.conversation_policy.food_clarification_authorized, false);
+  const appetite = resolve('Me da mucha hambre por momentos y cuando como, como poco.', [{ type: 'unsupported', evidence: 'Me da mucha hambre por momentos y cuando como, como poco.' }]);
+  assert.match(appetite.permitted_claims.join(' '), /mucha hambre/i);
+  assert.equal(appetite.conversation_policy.food_clarification_authorized, false);
+  const decision = resolve('¿Qué puedo comer ahora?', [{ type: 'food_decision', evidence: '¿Qué puedo comer ahora?' }]);
+  assert.equal(decision.conversation_policy.food_clarification_authorized, true);
+  assert.match(decision.permitted_claims.join(' '), /¿Qué alimentos tienes disponibles ahora\?/u);
+});
