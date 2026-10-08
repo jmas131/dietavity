@@ -37,7 +37,7 @@ test('rendering references are structural, so bread and broccoli do not create s
 test('opaque prepared dishes remain one atomic rendered reference', () => {
   const mole = candidateFor('prepared_dish_complement', ['chicken_with_mole']);
   assert.equal(mole.name, 'pollo con mole');
-  assert.deepEqual(mole.rendering.parts, [{ type: 'food', food_id: 'chicken_with_mole', text: 'pollo con mole', atomic: true }]);
+  assert.deepEqual(mole.rendering, { template: 'prepared_dish_complement', bindings: [], parts: [{ type: 'food', food_id: 'chicken_with_mole', text: 'pollo con mole', atomic: true }], text: 'pollo con mole' });
   assert.equal(engine.renderedFoodIds(mole).includes('chicken'), false);
   assert.equal(engine.validateRenderedCandidate(mole).valid, true);
 });
@@ -86,10 +86,10 @@ test('direct mutation of either cached visible field cannot survive reconstructi
   assert.equal(engine.validateCandidate({ ...taco, rendering: { ...taco.rendering, text: 'taco de huevo con aguacate' } }, { available_foods: ['corn_tortilla', 'egg'] }).failure, 'rendered_output_not_grounded');
 });
 
-test('chilaquiles render every defining structured component', () => {
+test('chilaquiles use their archetype-owned name while retaining visible defining components', () => {
   const chilaquiles = candidateFor('chilaquiles', ['tostada', 'green_salsa', 'fresh_cheese']);
-  assert.equal(chilaquiles.name, 'chilaquiles de tostada con salsa verde y queso fresco');
-  assert.deepEqual(engine.renderedFoodIds(chilaquiles), ['tostada', 'green_salsa', 'fresh_cheese']);
+  assert.equal(chilaquiles.name, 'chilaquiles con salsa verde y queso fresco');
+  assert.deepEqual(engine.renderedFoodIds(chilaquiles), ['green_salsa', 'fresh_cheese']);
   assert.equal(engine.validateRenderedCandidate(chilaquiles).valid, true);
 });
 
