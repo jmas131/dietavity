@@ -21,6 +21,22 @@ const resolve = (following, boundary = '.', options = {}) => {
   };
 };
 
+const resolveAfter = (prefix, following, boundary = '', options = {}) => {
+  const rawMessage = `${prefix}${boundary}${following}`;
+  const start = prefix.length + boundary.length;
+  return {
+    rawMessage,
+    start,
+    result: __testOnly.resolveCandidateBoundary({
+      rawMessage,
+      proposition: Object.freeze({ relation: 'available' }),
+      boundary: { kind: boundary, start: start - boundary.length, end: start },
+      followingStart: start,
+      ...options
+    })
+  };
+};
+
 test('boundary resolver classifies backward modifiers across supported delimiters', () => {
   for (const boundary of [',', ';', '.', '\n', ':', ' — ', ' (']) {
     for (const [following, modifier] of [['¿verdad?', 'confirmation_tag'], ['dijo Ana', 'attribution'], ['mañana', 'future_qualifier'], ['si viene Ana', 'conditional'], ['tal vez', 'uncertainty']]) {
@@ -39,7 +55,7 @@ test('boundary resolver distinguishes actual EOF from bounded lookahead exhausti
   assert.equal(terminal.result.consumedThrough, terminal.rawMessage.length);
 
   for (const [following, maxLookahead] of [
-    ['      ¿verdad?', 3], ['¿verdad?', 7], ['Quiero cocinarlo.', 9], ['¿Qué puedo cenar?', 4],
+    ['      ¿verdad?', 3], ['¿verdad?', 7], ['¿Qué puedo cenar?', 4],
     ['según Ana', 3], ['mañana', 3], ['si viene Ana', 5], ['tal vez', 5]
   ]) {
     const { result } = resolve(following, '.', { maxLookahead });
@@ -47,6 +63,7 @@ test('boundary resolver distinguishes actual EOF from bounded lookahead exhausti
     assert.equal(result.consumedThrough, PREFIX.length + 1);
     assert.equal(result.followingRange, null);
   }
+  assert.equal(resolve('Quiero cocinarlo.', '.', { maxLookahead: 9 }).result.disposition, 'independent_proposition');
 });
 
 test('confirmation tags require question syntax and negative starts are independent', () => {
@@ -94,8 +111,11 @@ test('shared raw token boundary rejects Unicode marks, digits, and token continu
     'cierto2', 'verdad\u0301', 'noX', 'dijo Ana2', 'según Ana\u0301',
     'mañana2', 'mañanaX', 'si viene2', 'cuando llegueX',
     'tal vez\u0301', 'quizás2', 'probablementeX',
-    'Quiero cocinarlo2', 'ComíX pollo', 'TengoX arroz', 'HayX huevo', 'No tengo arroz2'
+    'QuieroX cocinarlo', 'ComíX pollo', 'TengoX arroz', 'HayX huevo', 'No tengoX arroz'
   ]) assert.equal(resolve(continuation).result.disposition, 'ambiguous', continuation);
+  for (const continuation of ['Quiero cocinarlo2', 'No tengo arroz2']) {
+    assert.equal(resolve(continuation).result.disposition, 'independent_proposition', continuation);
+  }
 });
 
 test('lookahead edges are bounded and never manufacture terminal or completion', () => {
@@ -130,6 +150,106 @@ test('independent continuations expose only a restart point, never a consumed se
     assert.equal(rawMessage.slice(result.independentStart), continuation);
   }
 });
+
+test('coordinated continuations prove a separate proposition without consuming it', () => {
+  for (const [following, predicate] of [
+    ['pero no sé qué cocinar', 'no sé qué cocinar'],
+    ['y quiero cocinarlo', 'quiero cocinarlo'],
+    ['aunque tal vez cocino arroz', 'tal vez cocino'],
+    ['entonces si viene Ana, cocino', 'si viene Ana'],
+    ['pero Ana dice que cocine arroz', 'Ana dice que']
+  ]) {
+    const { rawMessage, result } = resolve(following);
+    assert.equal(result.disposition, 'independent_proposition', following);
+    assert.equal(result.independentStart, rawMessage.indexOf(predicate));
+    assert.equal(result.consumedThrough, result.independentStart);
+    assert.equal(result.followingRange, null);
+  }
+  assert.equal(resolveAfter('Hay espacio', ' y quiero usarlo').result.disposition, 'independent_proposition');
+});
+
+test('coordinated continuation grammar keeps P1 modifiers and non-predicate P2 starts fail closed', () => {
+  for (const following of ['pero quizá', 'y entonces', 'aunque arroz', 'aunque tal vez pollo', 'aunque Ana', 'aunque ¿qué pollo']) {
+    assert.equal(resolve(following).result.disposition, 'ambiguous', following);
+  }
+  assert.equal(resolve('pero no sé qué cocinar', '.', { maxLookahead: 'pero no s'.length }).result.disposition, 'ambiguous');
+  for (const following of ['si viene Ana', 'cuando llegue Ana', 'tal vez', 'creo']) {
+    const result = resolve(following).result;
+    assert.notEqual(result.disposition, 'independent_proposition', following);
+  }
+  assert.equal(resolve('pero no sé qué cocinar', ';').result.disposition, 'independent_proposition');
+  assert.equal(resolve(', pero no sé qué cocinar').result.disposition, 'independent_proposition');
+  assert.equal(resolveAfter('Hay pollo', ' en casa').result.disposition, 'ambiguous');
+});
+
+test('coordinated conditional continuations require a bounded predicate, not arbitrary words', () => {
+  for (const continuation of [
+    'pero si acaso', 'pero si mañana', 'pero cuando mañana', 'y si', 'pero cuando'
+  ]) assert.equal(resolve(continuation).result.disposition, 'ambiguous', continuation);
+
+  for (const continuation of [
+    'entonces si viene Ana, cocino', 'pero cuando llegue Ana, cocino'
+  ]) {
+    const { rawMessage, result } = resolve(continuation);
+    assert.equal(result.disposition, 'independent_proposition', continuation);
+    assert.equal(rawMessage.slice(result.independentStart), continuation.replace(/^(?:entonces|pero)\s+/u, ''));
+    assert.equal(result.consumedThrough, result.independentStart);
+  }
+
+  for (const continuation of ['pero si viene Ana, cocino', 'pero cuando llegue Ana, cocino']) {
+    const { result } = resolve(continuation, '.', { maxLookahead: continuation.indexOf('Ana') + 2 });
+    assert.equal(result.disposition, 'ambiguous', `${continuation} truncated`);
+  }
+});
+
+test('independent predicate starts separate P1 without certifying P2 completion', () => {
+  const starts = [
+    'no sé', 'no sé qué', 'no sé qué cocinar', 'quiero', 'quiero el', 'quiero arroz',
+    'quiero si', 'no quiero', 'no quiero eso', 'comí', 'comí arroz', 'tengo',
+    'tengo hambre', 'hay', 'hay espacio', 'tal vez cocino', 'probablemente preparo',
+    'Ana dice', 'Ana dice que', 'Ana dice que cocine', '¿qué puedo',
+    '¿qué puedo cocinar', '¿cómo puedo', '¿cómo puedo prepararlo'
+  ];
+  const ambiguous = [
+    '', 'arroz', 'el arroz', 'mañana arroz', 'tal vez', 'tal vez pollo',
+    'probablemente', 'probablemente arroz', 'Ana', '¿qué pollo', '¿cómo arroz', '¿cuál pollo'
+  ];
+  for (const coordinator of ['y', 'e', 'pero', 'aunque', 'mientras', 'entonces']) {
+    for (const predicate of starts) {
+      const { rawMessage, result } = resolve(`${coordinator} ${predicate}`);
+      assert.equal(result.disposition, 'independent_proposition', `${coordinator} ${predicate}`);
+      const start = rawMessage.indexOf(predicate);
+      assert.equal(result.independentStart, start);
+      assert.equal(result.consumedThrough, start);
+      assert.equal(result.followingRange, null);
+    }
+    for (const prefix of ambiguous) {
+      assert.equal(resolve(`${coordinator} ${prefix}`).result.disposition, 'ambiguous', `${coordinator} ${prefix}`);
+    }
+  }
+});
+
+test('predicate starts require complete lexical tokens but later P2 truncation does not revoke P1 separation', () => {
+  for (const [continuation, minimum] of [
+    ['pero quiero arroz', 'pero quiero'],
+    ['pero no sé qué cocinar', 'pero no sé'],
+    ['pero tal vez cocino arroz', 'pero tal vez cocino'],
+    ['pero probablemente preparo algo', 'pero probablemente preparo'],
+    ['pero Ana dice que cocine arroz', 'pero Ana dice'],
+    ['pero ¿qué puedo cocinar', 'pero ¿qué puedo']
+  ]) {
+    for (const cut of [0, minimum.length - 2, minimum.length - 1]) {
+      assert.equal(resolve(continuation, '.', { maxLookahead: cut }).result.disposition, 'ambiguous', `${continuation} @ ${cut}`);
+    }
+    const atMinimum = resolve(continuation, '.', { maxLookahead: minimum.length }).result;
+    assert.equal(atMinimum.disposition, 'independent_proposition', `${continuation} minimum body`);
+    assert.equal(atMinimum.followingRange, null);
+  }
+  for (const continuation of ['pero quier', 'pero quieroX', 'pero teng', 'pero tengoX', 'pero dic', 'pero diceX', 'pero ¿qué pued', 'pero ¿qué puedoX', 'pero tal vez cocin', 'pero tal vez cocinoX']) {
+    assert.equal(resolve(continuation).result.disposition, 'ambiguous', continuation);
+  }
+});
+
 
 test('boundary resolver is pure, relation-independent, deeply frozen, bounded, and raw-offset based', () => {
   const proposition = Object.freeze({ relation: 'consumed', nested: Object.freeze({ value: 1 }) });
