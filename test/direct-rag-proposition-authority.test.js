@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const vm = require('node:vm');
 const { __testOnly } = require('../lib/sales-engine-v2/direct-rag-v3');
 
 const { classifyPropositionOwnership, evaluatePropositionAuthority } = __testOnly;
@@ -136,6 +137,51 @@ test('ownership and authority snapshot data descriptors without invoking untrust
   });
   assert.deepEqual(evaluatePropositionAuthority(changing), { authoritative: true, mode: 'asserted', reason: 'user_context' });
   assert.deepEqual(evaluatePropositionAuthority(changing), { authoritative: false, mode: 'unsupported', reason: 'unsupported' });
+});
+
+test('ownership and authority accept only realm-safe plain descriptors', () => {
+  const crossRealm = source => vm.runInNewContext(`(${source})`);
+  const ownership = { construction: 'tengo' };
+  const authority = base();
+  const nullPrototypeAuthority = Object.assign(Object.create(null), base());
+  const crossRealmOwnership = crossRealm("({ construction: 'tengo' })");
+  const crossRealmAuthority = crossRealm("({ ownership: 'user_context', assertionMode: 'asserted', boundaryDisposition: 'terminal', modifier: null, ambiguous: false, relation: 'available' })");
+  const crossRealmCustomAuthority = crossRealm("new (class Descriptor { constructor() { Object.assign(this, { ownership: 'user_context', assertionMode: 'asserted', boundaryDisposition: 'terminal', modifier: null, ambiguous: false, relation: 'available' }); } })()");
+
+  assert.notEqual(Object.getPrototypeOf(crossRealmOwnership), Object.prototype);
+  assert.notEqual(Object.getPrototypeOf(crossRealmAuthority), Object.prototype);
+  assert.deepEqual(classifyPropositionOwnership(ownership), classifyPropositionOwnership(crossRealmOwnership));
+  assert.deepEqual(evaluatePropositionAuthority(authority), evaluatePropositionAuthority(crossRealmAuthority));
+  assert.deepEqual(evaluatePropositionAuthority(nullPrototypeAuthority), evaluatePropositionAuthority(authority));
+
+  class CustomAuthorityDescriptor {
+    constructor() { Object.assign(this, base()); }
+  }
+  const customPrototype = Object.create(null);
+  Object.assign(customPrototype, base());
+  const customPrototypeInstance = Object.create(customPrototype);
+  Object.assign(customPrototypeInstance, base());
+  for (const descriptor of [
+    null,
+    [],
+    'descriptor',
+    1,
+    () => base(),
+    new CustomAuthorityDescriptor(),
+    crossRealmCustomAuthority,
+    customPrototypeInstance,
+    { ...base(), relation: 'unsupported' },
+    { ownership: 'user_context' },
+  ]) assert.deepEqual(evaluatePropositionAuthority(descriptor), { authoritative: false, mode: 'unsupported', reason: 'unsupported' });
+
+  for (const descriptor of [
+    null,
+    [],
+    'descriptor',
+    () => ({ construction: 'tengo' }),
+    Object.assign(Object.create({}), { construction: 'tengo' }),
+    { construction: 'tengo', extra: true },
+  ]) assert.deepEqual(classifyPropositionOwnership(descriptor), { ownership: 'unknown' });
 });
 
 test('ownership classifier rejects inherited, accessor, extra, symbol, and contradictory descriptors', () => {

@@ -339,6 +339,25 @@ test('generated history aggregate contract always supplies one explicit bounded 
   assert.equal(bounded.history.length, 12);
   assert.equal(bounded.history[0].text, 'mensaje 2');
 });
+
+test('generated Build preserves trusted P1 inventory before a separate recommendation question', () => {
+  const code = workflow.nodes.find(node => node.name === 'Build Direct RAG Conversation Context').parameters.jsCode;
+  const message = 'Tengo pollo. ¿Qué me recomiendas?';
+  const context = vm.runInNewContext(`(function(){${code}})()`, {
+    Date,
+    $input: { first: () => ({ json: { history: [] } }) },
+    $: name => ({ item: { json: name === 'Claim Next Session Inbound'
+      ? { id: 'inbound-1', session_id: 'session-1', provider_message_sid: 'SM0123456789abcdef0123456789abcdef', body: message }
+      : name === 'Get Onboarding Session' ? {} : name === 'Get User from Supabase' ? { is_active: false } : {} } }),
+  })[0].json.semantic_context;
+  assert.deepEqual(JSON.parse(JSON.stringify(context.food_context.structured_food_mentions)), [{
+    surface: 'pollo', relation: 'available', polarity: 'affirmed', temporal_scope: 'current',
+    state: { cooked: null, canned: null, readiness: null },
+    evidence: { start: 6, end: 11, clause_index: 0 },
+  }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.food_context.available_foods)), ['pollo']);
+});
+
 test('generated V3.1 resolver uses the immediate availability question only after explicit food semantics', () => {
   const code = workflow.nodes.find(node => node.name === 'Resolve Direct RAG Obligations').parameters.jsCode;
   const resolve = (current_message, most_recent_assistant_message = '', history = []) => vm.runInNewContext(`(function(){${code}})()`, {
@@ -371,6 +390,7 @@ test('exact generated Direct RAG semantic Code nodes compile their runtime bundl
     const code = workflow.nodes.find(node => node.name === name).parameters.jsCode;
     assert.match(code, /function normalized\(value\)/, name);
     assert.match(code, /function resolveCandidateBoundary\(/, name);
+    assert.match(code, /function hasPlainRecordPrototype\(/, name);
     assert.match(code, /function classifyPropositionOwnership\(/, name);
     assert.match(code, /function evaluatePropositionAuthority\(/, name);
     assert.doesNotThrow(() => new vm.Script(`(function(){\n${code}\n})`), name);
