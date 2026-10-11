@@ -76,8 +76,20 @@ const byName = (name) => {
   return found;
 };
 
+const canonicalPostgresCredential = byName('Reserve Canonical Inbound Message').credentials?.postgres;
+if (!canonicalPostgresCredential?.id || !canonicalPostgresCredential?.name) {
+  throw new Error('Missing canonical Postgres credential binding');
+}
+
 workflow.name = 'Dietavity Sales Engine (Ticket 10)';
 workflow.active = false;
+
+// This retained known-customer query executes SQL on the ordinary customer
+// path. Its credential must survive generation just like every other Postgres
+// node, rather than relying on an operator-side repair after import.
+byName('Get Customer Assistant Context').credentials = {
+  postgres: { ...canonicalPostgresCredential },
+};
 
 // Ticket 38: one-time purchases retain their existing provisioning path.
 // A purchase-free successor requires a current profile, current consent and

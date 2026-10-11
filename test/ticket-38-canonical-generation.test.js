@@ -107,6 +107,13 @@ test('existing provisioning, persistence, event, and later-week connections are 
   assert.match(plan, /status = 'personalization'/);
 });
 
+test('retained customer-context SQL keeps the canonical Postgres credential binding', () => {
+  assert.deepEqual(
+    node('Get Customer Assistant Context').credentials?.postgres,
+    node('Reserve Canonical Inbound Message').credentials?.postgres,
+  );
+});
+
 test('Ticket 10 artifact is byte-for-byte synchronized and inactive', () => {
   const generatorPath = path.join(root, 'scripts/refactor-ticket-10-workflow.js');
   const source = fs.readFileSync(generatorPath, 'utf8');
