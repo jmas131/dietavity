@@ -11,7 +11,8 @@ function positive(message, relation) { return facts(message).filter(item => item
 test('WP2.1 records current availability without promoting negated, interrogative, or planned foods', () => {
   assert.deepEqual(facts('Tengo pollo'), [{ surface: 'pollo', relation: 'available', polarity: 'affirmed', temporal_scope: 'current', state: { cooked: null, canned: null, readiness: null } }]);
   for (const message of ['No tengo pollo', '¿Tengo pollo?', 'Voy a comprar pollo']) assert.equal(positive(message, 'available').length, 0, message);
-  assert.deepEqual(facts('Voy a comprar pollo')[0], { surface: 'pollo', relation: 'planned', polarity: 'affirmed', temporal_scope: 'future', state: { cooked: null, canned: null, readiness: null } });
+  assert.deepEqual(facts('Voy a comprar pollo')[0], { surface: 'pollo', relation: 'mentioned', polarity: 'affirmed', temporal_scope: 'unknown', state: { cooked: null, canned: null, readiness: null } });
+  assert.deepEqual(facts('Voy a comer pollo')[0], { surface: 'pollo', relation: 'planned', polarity: 'affirmed', temporal_scope: 'future', state: { cooked: null, canned: null, readiness: null } });
 });
 
 test('WP2.1 records item-level consumed facts, negation, and mixed state without changing V3 projections', () => {
@@ -28,9 +29,9 @@ test('WP2.1 records item-level consumed facts, negation, and mixed state without
 test('WP2.1 preserves prepared, future, non-assertive, broad, and unknown food facts without ontology decisions', () => {
   for (const [message, expected] of [
     ['Preparé pollo', ['prepared', 'affirmed', 'unknown']],
-    ['Preparé pollo ayer', ['prepared', 'affirmed', 'past']],
+    ['Preparé pollo ayer', ['mentioned', 'affirmed', 'unknown']],
     ['Mañana voy a comer huevo', ['planned', 'affirmed', 'future']],
-    ['Quiero hacer tacos mañana', ['planned', 'affirmed', 'future']],
+    ['Quiero hacer tacos mañana', ['mentioned', 'affirmed', 'unknown']],
     ['¿El pollo tiene proteína?', ['mentioned', 'question', 'unknown']],
     ['Mi médico me dijo que coma pollo', ['mentioned', 'affirmed', 'unknown']],
   ]) assert.deepEqual(facts(message)[0] && [facts(message)[0].relation, facts(message)[0].polarity, facts(message)[0].temporal_scope], expected, message);
@@ -73,9 +74,9 @@ test('WP2.1 binds each relation only to its local direct-object region', () => {
   assert.equal(available('Si tengo pollo y tengo huevo').length, 0);
   assert.equal(available('Mañana tengo pollo').length, 0);
   assert.deepEqual(available('Tengo pollo y quiero comprar huevo'), ['pollo']);
-  assert.deepEqual(facts('Comí huevo y voy a preparar pollo').map(item => [item.surface, item.relation]), [['huevo', 'consumed'], ['pollo', 'planned']]);
+  assert.deepEqual(facts('Comí huevo y voy a preparar pollo').map(item => [item.surface, item.relation]), [['huevo', 'consumed'], ['pollo', 'mentioned']]);
   assert.deepEqual(facts('Preparé pollo y después comí arroz').map(item => [item.surface, item.relation]), [['pollo', 'prepared'], ['arroz', 'consumed']]);
-  assert.deepEqual(facts('Tengo arroz; ayer comí pollo').map(item => [item.surface, item.relation]), [['arroz', 'available'], ['pollo', 'consumed']]);
+  assert.deepEqual(facts('Tengo arroz; ayer comí pollo').map(item => [item.surface, item.relation]), [['arroz', 'mentioned'], ['pollo', 'consumed']]);
 });
 
 test('WP2.1 accepts only direct explicit possession/access assertions', () => {

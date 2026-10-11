@@ -151,6 +151,68 @@ test('independent continuations expose only a restart point, never a consumed se
   }
 });
 
+test('bounded interrogative predicate starts include the optional reflexive marker without certifying P2', () => {
+  const questions = ['¿Qué puedo comer?', '¿Cómo puedo prepararlo?', '¿Qué me puedo hacer?', '¿Cómo me puedo preparar algo?'];
+  for (const question of questions) {
+    const { rawMessage, start, result } = resolve(question);
+    assert.equal(result.disposition, 'independent_proposition', question);
+    assert.equal(result.independentStart, start, question);
+    assert.equal(result.consumedThrough, start, question);
+    assert.equal(result.followingRange, null, question);
+    assert.equal(rawMessage.slice(result.independentStart), question, question);
+  }
+
+  for (const coordinator of ['pero', 'aunque', 'y', 'e']) for (const question of questions) {
+    const { rawMessage, result } = resolve(`${coordinator} ${question}`);
+    const start = rawMessage.indexOf(question);
+    assert.equal(result.disposition, 'independent_proposition', `${coordinator} ${question}`);
+    assert.equal(result.independentStart, start, `${coordinator} ${question}`);
+    assert.equal(result.consumedThrough, start, `${coordinator} ${question}`);
+  }
+
+  for (const question of ['¿Qué puedox comer?', '¿Qué me puedox hacer?', '¿Cómo puedo2 prepararlo?', '¿Cómo me puedo_ preparar algo?', '¿Qué puedo\u0301 comer?', '¿Cómo me puedo\u0301 preparar algo?']) {
+    assert.equal(resolve(question).result.disposition, 'ambiguous', question);
+  }
+});
+
+test('bounded recommendation questions separate P1 without certifying P2', () => {
+  // This is exactly the recommendation-question vocabulary recognized by the
+  // current Direct RAG food-decision path: recomienda/recomiendas, optionally
+  // addressed with "me". Plural "recomiendan" is not a current bounded form.
+  const questions = ['¿Qué recomiendas?', '¿Qué me recomiendas?', '¿Qué me recomienda?'];
+  for (const question of questions) {
+    const { rawMessage, start, result } = resolve(question);
+    assert.equal(result.disposition, 'independent_proposition', question);
+    assert.equal(result.independentStart, start, question);
+    assert.equal(result.consumedThrough, start, question);
+    assert.equal(result.followingRange, null, question);
+    assert.equal(rawMessage.slice(result.independentStart), question, question);
+  }
+
+  for (const coordinator of ['pero', 'aunque', 'y', 'e']) for (const question of questions) {
+    const { rawMessage, result } = resolve(`${coordinator} ${question}`);
+    const start = rawMessage.indexOf(question);
+    assert.equal(result.disposition, 'independent_proposition', `${coordinator} ${question}`);
+    assert.equal(result.independentStart, start, `${coordinator} ${question}`);
+    assert.equal(result.consumedThrough, start, `${coordinator} ${question}`);
+  }
+
+  for (const question of [
+    '¿Qué me recomiendan?', '¿Qué me recomend?', '¿Qué me recomiendasX?',
+    '¿Qué me recomiendas_?', '¿Qué me recomiendas2?', '¿Qué me recomiendas\u0301?'
+  ]) assert.equal(resolve(question).result.disposition, 'ambiguous', question);
+});
+
+test('recommendation-question starts require a completed bounded predicate token', () => {
+  const continuation = 'pero ¿Qué me recomiendas arroz';
+  const minimum = 'pero ¿Qué me recomiendas'.length;
+  for (let cut = 0; cut < minimum; cut += 1) {
+    assert.equal(resolve(continuation, '.', { maxLookahead: cut }).result.disposition, 'ambiguous', `cut ${cut}`);
+  }
+  assert.equal(resolve(continuation, '.', { maxLookahead: minimum }).result.disposition, 'independent_proposition');
+  assert.equal(resolve('pero ¿Qué me recomiendasX', '.', { maxLookahead: minimum }).result.disposition, 'ambiguous');
+});
+
 test('coordinated continuations prove a separate proposition without consuming it', () => {
   for (const [following, predicate] of [
     ['pero no sé qué cocinar', 'no sé qué cocinar'],
@@ -248,6 +310,105 @@ test('predicate starts require complete lexical tokens but later P2 truncation d
   for (const continuation of ['pero quier', 'pero quieroX', 'pero teng', 'pero tengoX', 'pero dic', 'pero diceX', 'pero ¿qué pued', 'pero ¿qué puedoX', 'pero tal vez cocin', 'pero tal vez cocinoX']) {
     assert.equal(resolve(continuation).result.disposition, 'ambiguous', continuation);
   }
+});
+
+test('B.1.2 closes required explicit P2 starts without accepting ellipsis', () => {
+  const required = [
+    ['pero sí tengo huevo', 'sí tengo huevo'],
+    ['pero sí hay espacio', 'sí hay espacio'],
+    ['pero sí quiero arroz', 'sí quiero arroz'],
+    ['pero sí comí arroz', 'sí comí arroz'],
+    ['pero preparé arroz', 'preparé arroz'],
+    ['y después comí arroz', 'comí arroz'],
+  ];
+  for (const [continuation, predicate] of required) {
+    const { rawMessage, result } = resolve(continuation);
+    assert.equal(result.disposition, 'independent_proposition', continuation);
+    assert.equal(rawMessage.slice(result.independentStart), predicate, continuation);
+    assert.equal(result.consumedThrough, result.independentStart, continuation);
+    assert.equal(result.followingRange, null, continuation);
+  }
+  for (const continuation of [
+    'pero si tengo huevo', 'pero sí huevo', 'pero sí verduras',
+    'y después arroz', 'y después sí huevo',
+    'pero sí teng', 'pero sí tengoX', 'pero sí_tengo', 'pero sí tengo2', 'pero sí tengo\u0301',
+    'y después comíX', 'y después_comí', 'y después comí2',
+  ]) assert.equal(resolve(continuation).result.disposition, 'ambiguous', continuation);
+  for (const [continuation, completed] of [
+    ['pero sí tengo huevo', 'pero sí tengo'.length],
+    ['y después comí arroz', 'y después comí'.length],
+  ]) {
+    for (const cut of [0, completed - 2, completed - 1]) assert.equal(resolve(continuation, '.', { maxLookahead: cut }).result.disposition, 'ambiguous', `${continuation} @ ${cut}`);
+    assert.equal(resolve(continuation, '.', { maxLookahead: completed }).result.disposition, 'independent_proposition', `${continuation} @ exact start`);
+  }
+});
+
+test('B.1.2A covers every scanner-supported explicit coordinated P2 construction', () => {
+  const constructions = [
+    ['cuento con', 'pollo'],
+    ['dispongo de', 'pescado'],
+    ['ya comí', 'arroz'],
+    ['me comí', 'arroz'],
+    ['desayuné', 'huevos'],
+    ['cené', 'arroz'],
+    ['almorcé', 'arroz'],
+    ['merendé', 'fruta'],
+    ['me preparé', 'arroz'],
+    ['voy a comer', 'arroz'],
+  ];
+  for (const [predicate, object] of constructions) {
+    for (const prefix of ['pero ', 'pero sí ']) {
+      const continuation = `${prefix}${predicate} ${object}`;
+      const { rawMessage, result } = resolve(continuation);
+      assert.equal(result.disposition, 'independent_proposition', continuation);
+      const expectedStart = rawMessage.indexOf(prefix.includes('sí') ? `sí ${predicate}` : predicate);
+      assert.equal(result.independentStart, expectedStart, continuation);
+      assert.equal(result.consumedThrough, expectedStart, continuation);
+      assert.equal(result.followingRange, null, continuation);
+    }
+  }
+});
+
+test('B.1.2A requires complete bounded tokens for aligned P2 constructions', () => {
+  const predicates = ['cuento con', 'dispongo de', 'ya comí', 'me comí', 'desayuné', 'cené', 'almorcé', 'merendé', 'me preparé', 'voy a comer'];
+  for (const predicate of predicates) {
+    const prefix = `pero ${predicate}`;
+    const exact = resolve(`${prefix} arroz`, '.', { maxLookahead: prefix.length }).result;
+    assert.equal(exact.disposition, 'independent_proposition', `${predicate} exact start`);
+    for (const suffix of ['X', '2', '_', '\u0301']) {
+      assert.equal(resolve(`${prefix}${suffix} arroz`).result.disposition, 'ambiguous', `${predicate}${suffix}`);
+    }
+    for (let cut = Math.max(0, prefix.length - 3); cut < prefix.length; cut += 1) {
+      assert.equal(resolve(`${prefix} arroz`, '.', { maxLookahead: cut }).result.disposition, 'ambiguous', `${predicate} @ ${cut}`);
+    }
+  }
+  for (const continuation of ['pero si cuento con pollo', 'pero sí cuento pollo', 'pero sí dispongo pescado']) {
+    assert.equal(resolve(continuation).result.disposition, 'ambiguous', continuation);
+  }
+});
+
+test('B.1.2B separates scanner-supported unsupported planned P2 starts without granting authority', () => {
+  for (const [continuation, start] of [
+    ['pero voy a preparar arroz', 'voy a preparar arroz'],
+    ['pero voy a comprar arroz', 'voy a comprar arroz'],
+    ['pero quiero preparar arroz', 'quiero preparar arroz'],
+    ['pero quiero comer arroz', 'quiero comer arroz'],
+    ['pero mañana voy a comer arroz', 'mañana voy a comer arroz'],
+    ['pero mañana voy a preparar arroz', 'mañana voy a preparar arroz'],
+    ['pero mañana hacer arroz', 'mañana hacer arroz'],
+  ]) {
+    const { rawMessage, result } = resolve(continuation);
+    assert.equal(result.disposition, 'independent_proposition', continuation);
+    assert.equal(result.independentStart, rawMessage.indexOf(start), continuation);
+    assert.equal(result.consumedThrough, result.independentStart, continuation);
+    assert.equal(result.followingRange, null, continuation);
+  }
+  for (const continuation of [
+    'pero mañana', 'pero mañana arroz', 'pero mañana voy',
+    'pero voy a prepar', 'pero voy a prepararX', 'pero voy a comprar2',
+    'pero voy a preparar_arroz', 'pero mañana voy a comer\u0301 arroz',
+  ]) assert.equal(resolve(continuation).result.disposition, 'ambiguous', continuation);
+  assert.deepEqual([resolve('mañana').result.disposition, resolve('mañana arroz').result.disposition], ['backward_modifier', 'ambiguous']);
 });
 
 

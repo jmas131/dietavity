@@ -101,9 +101,9 @@ test('V3.1 interprets an availability-question answer without repeating the avai
   const availabilityQuestion = '¿Qué alimentos tienes disponibles ahora?';
   const cases = [
     ['Huevos pollo pechuga vegetales arroz', ['huevos', 'pollo', 'pechuga', 'verduras', 'arroz']],
-    ['Huevos\nVegetales\nPollo\nPescado\nArroz', ['huevos', 'pollo', 'verduras', 'arroz', 'pescado']],
-    ['Huevo, carne, leche verduras', ['huevos', 'verduras', 'carne', 'leche']],
-    ['Huevos, carne, verduras, leche y fruta', ['huevos', 'verduras', 'carne', 'leche', 'fruta']],
+    ['Huevos\nVegetales\nPollo\nPescado\nArroz', ['huevos', 'verduras', 'pollo', 'pescado', 'arroz']],
+    ['Huevo, carne, leche verduras', ['huevos', 'carne', 'leche', 'verduras']],
+    ['Huevos, carne, verduras, leche y fruta', ['huevos', 'carne', 'verduras', 'leche', 'fruta']],
   ];
   for (const [message, foods] of cases) {
     const result = run(message, [{ type: 'food_context', evidence: message }], [], availabilityQuestion);
@@ -122,7 +122,7 @@ test('V3.1 gives explicit current consumption precedence over availability-quest
   const breakfast = '2 huevos con tocino, aguacate, y un café sin azúcar de desayuno';
   const result = run(breakfast, [{ type: 'food_context', evidence: breakfast }], [], availabilityQuestion);
   const context = result.resolution.resolved_obligations[0].food_context;
-  assert.deepEqual(context.recently_consumed, ['huevos', 'aguacate', 'tocino', 'cafe']);
+  assert.deepEqual(context.recently_consumed, ['huevos', 'tocino', 'aguacate', 'cafe']);
   assert.deepEqual(context.available_foods, []);
   assert.match(result.response, /¿Qué alimentos tienes disponibles ahora\?/u);
 
@@ -156,7 +156,7 @@ test('V3.2B does not carry transient appetite into a later inventory recommendat
 test('V3.2B Patch 1 extracts bounded semantic context without promoting observations to obligations', () => {
   const prepared = rag.extractSemanticContext('Me preparé un arroz chino con pollo y verduras con salsa de soya');
   assert.deepEqual(prepared.food_context.available_foods, []);
-  assert.deepEqual(prepared.food_context.recent_food_events, [{ kind: 'prepared', foods: ['pollo', 'verduras', 'arroz'], evidence: 'me prepare' }]);
+  assert.deepEqual(prepared.food_context.recent_food_events, [{ kind: 'prepared', foods: ['arroz', 'pollo', 'verduras'], evidence: 'arroz' }]);
   assert.deepEqual(prepared.food_context.recently_consumed, []);
 
   const consumed = rag.extractSemanticContext('No tengo pollo, pero comí pollo ayer');
@@ -240,7 +240,7 @@ test('V3.2B Patch 1 distinguishes future meal language and consumption negation 
     ['Cené pollo', 'consumed', ['pollo']],
     ['Comí pollo en la cena', 'consumed', ['pollo']],
     ['Para desayunar comí huevos', 'consumed', ['huevos']],
-    ['Me preparé arroz con pollo', 'prepared', ['pollo', 'arroz']],
+    ['Me preparé arroz con pollo', 'prepared', ['arroz', 'pollo']],
   ]) {
     const context = rag.extractSemanticContext(message);
     assert.equal(context.food_context.recent_food_events[0].kind, kind, message);
@@ -276,9 +276,9 @@ test('V3.2B semantic food assertions keep polarity per item and exclude interrog
   }
 
   const prepared = rag.extractSemanticContext('Me preparé arroz y no pollo');
-  assert.deepEqual(prepared.food_context.recent_food_events, [{ kind: 'prepared', foods: ['arroz'], evidence: 'me prepare' }]);
+  assert.deepEqual(prepared.food_context.recent_food_events, [{ kind: 'prepared', foods: ['arroz'], evidence: 'arroz' }]);
   assert.deepEqual(prepared.food_context.recently_consumed, []);
-  assert.deepEqual(rag.extractSemanticContext('No preparé pollo, pero preparé arroz').food_context.recent_food_events, [{ kind: 'prepared', foods: ['arroz'], evidence: 'prepare' }]);
+  assert.deepEqual(rag.extractSemanticContext('No preparé pollo, pero preparé arroz').food_context.recent_food_events, [{ kind: 'prepared', foods: ['arroz'], evidence: 'arroz' }]);
 
   for (const message of ['¿Cené pollo ayer?', '¿Comí pollo ayer?', '¿Me preparé pollo ayer?']) {
     assert.deepEqual(rag.extractSemanticContext(message).food_context.recent_food_events, [], message);

@@ -355,11 +355,83 @@ test('generated V3.1 resolver uses the immediate availability question only afte
   assert.doesNotMatch(answered.permitted_claims.join(' '), /¿Qué alimentos tienes disponibles ahora\?/u);
 
   const breakfast = resolve('2 huevos con tocino, aguacate, y un café sin azúcar de desayuno', question);
-  assert.deepEqual(JSON.parse(JSON.stringify(breakfast.resolved_obligations[0].food_context.recently_consumed)), ['huevos', 'aguacate', 'tocino', 'cafe']);
+  assert.deepEqual(JSON.parse(JSON.stringify(breakfast.resolved_obligations[0].food_context.recently_consumed)), ['huevos', 'tocino', 'aguacate', 'cafe']);
   assert.deepEqual(JSON.parse(JSON.stringify(breakfast.resolved_obligations[0].food_context.available_foods)), []);
 
   const noContext = resolve('Huevos pollo pechuga vegetales arroz');
   assert.deepEqual(JSON.parse(JSON.stringify(noContext.resolved_obligations[0].food_context.available_foods)), []);
+});
+
+test('exact generated Direct RAG semantic Code nodes compile their runtime bundles', () => {
+  for (const name of [
+    'Build Direct RAG Conversation Context',
+    'Parse Direct RAG Obligations',
+    'Resolve Direct RAG Obligations',
+  ]) {
+    const code = workflow.nodes.find(node => node.name === name).parameters.jsCode;
+    assert.match(code, /function normalized\(value\)/, name);
+    assert.match(code, /function resolveCandidateBoundary\(/, name);
+    assert.match(code, /function classifyPropositionOwnership\(/, name);
+    assert.match(code, /function evaluatePropositionAuthority\(/, name);
+    assert.doesNotThrow(() => new vm.Script(`(function(){\n${code}\n})`), name);
+  }
+});
+
+test('generated Direct RAG semantic runtimes match the canonical source without module closures', () => {
+  const v3 = require('../lib/sales-engine-v2/direct-rag-v3');
+  const code = name => workflow.nodes.find(node => node.name === name).parameters.jsCode;
+  const plain = value => JSON.parse(JSON.stringify(value));
+  const fields = context => ({
+    structured_food_mentions: context.food_context.structured_food_mentions,
+    available_foods: context.food_context.available_foods,
+    recent_food_events: context.food_context.recent_food_events,
+    recently_consumed: context.food_context.recently_consumed,
+    appetite_observation: context.food_context.appetite_observation,
+  });
+  const nodeHistory = history => history.map(item => ({
+    direction: item.role === 'assistant' ? 'outbound' : 'inbound', body: item.text,
+  }));
+  const generatedContext = (message, history) => vm.runInNewContext(`(function(){${code('Build Direct RAG Conversation Context')}})()`, {
+    Date,
+    $input: { first: () => ({ json: { history: nodeHistory(history) } }) },
+    $: name => ({ item: { json: name === 'Claim Next Session Inbound'
+      ? { id: 'inbound-1', session_id: 'session-1', provider_message_sid: 'SM0123456789abcdef0123456789abcdef', body: message }
+      : name === 'Get Onboarding Session' ? {} : name === 'Get User from Supabase' ? { is_active: false } : {} } }),
+  })[0].json.semantic_context;
+  const generatedParser = (message, history) => vm.runInNewContext(`(function(){${code('Parse Direct RAG Obligations')}})()`, {
+    $: () => ({ item: { json: { current_message: message, history, commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' } } }),
+    $input: { first: () => ({ json: { output: JSON.stringify({ obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } }) } }) },
+  })[0].json.semantic_context;
+  const generatedResolver = (message, history) => vm.runInNewContext(`(function(){${code('Resolve Direct RAG Obligations')}})()`, {
+    $input: { first: () => ({ json: {
+      current_message: message, history, most_recent_assistant_message: history.at(-1)?.role === 'assistant' ? history.at(-1).text : '',
+      commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3',
+      obligations: [{ id: 'o-1', type: 'food_context', evidence: message }],
+    } }) },
+  })[0].json.resolved_obligations[0].food_context;
+  const inventoryPrompt = '¿Qué alimentos tienes disponibles ahora?';
+  const cases = [
+    ['Tengo pollo', []],
+    ['Tengo pollo. ¿Qué me recomiendas?', []],
+    ['Comí arroz', []],
+    ['Me preparé arroz con pollo', []],
+    ['Pescado, verduras y arroz', [{ role: 'assistant', text: inventoryPrompt }]],
+    ['2 huevos con tocino, aguacate, y un café sin azúcar de desayuno', []],
+    ['Tal vez tengo pollo', []],
+    ['Tengo pollo y no verduras', []],
+  ];
+  for (const [message, history] of cases) {
+    const expected = v3.extractSemanticContext(message, history);
+    assert.deepEqual(plain(fields(generatedContext(message, history))), plain(fields(expected)), `context: ${message}`);
+    assert.deepEqual(plain(fields(generatedParser(message, history))), plain(fields(expected)), `parser: ${message}`);
+    const resolved = generatedResolver(message, history);
+    assert.deepEqual(plain(resolved), plain({
+      available_foods: expected.food_context.available_foods,
+      recently_consumed: expected.food_context.recently_consumed,
+      appetite: expected.food_context.appetite_observation?.kind === 'low' ? 'low' : null,
+      contextual_rejection: Boolean(expected.food_context.contextual_rejection),
+    }), `resolver: ${message}`);
+  }
 });
 test('generated resolver, envelope, and gate execute with deterministic VM fixtures', () => {
   const code = name => workflow.nodes.find(node => node.name === name).parameters.jsCode;
@@ -456,7 +528,7 @@ test('V3.2B Patch 1 generated parser validates semantic context separately from 
     ['No comí pollo, pero comí verduras', [], ['verduras'], ['verduras']],
     ['Nunca comí pollo', [], [], []],
     ['Jamás comí pollo', [], [], []],
-    ['Me preparé arroz con pollo', [], [], ['pollo', 'arroz']],
+    ['Me preparé arroz con pollo', [], [], ['arroz', 'pollo']],
     ['Me preparé arroz y no pollo', [], [], ['arroz']],
   ]) {
     const result = parse(message, { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } });

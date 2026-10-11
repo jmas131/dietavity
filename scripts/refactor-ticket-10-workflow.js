@@ -7,11 +7,69 @@ const policy = require('../lib/sales-engine-v3');
 const ordering = require('../lib/session-ordering');
 const twilioDelivery = require('../lib/twilio-delivery');
 const whatsappMessage = require('../lib/whatsapp-message');
+const directRag = require('../lib/sales-engine-v2/direct-rag-v3');
 
 const root = path.resolve(__dirname, '..');
 const sourcePath = path.join(root, 'n8n', 'Dietavity Canonical Ledger (Ticket 9).json');
 const outputPath = path.join(root, 'n8n', 'Dietavity Sales Engine (Ticket 10).json');
 const workflow = JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
+
+// Direct RAG code nodes run as isolated n8n VM scripts. `Function#toString`
+// preserves a function body, but not the module closure it normally captures.
+// Keep the complete semantic helper prefix in one ordered build-time bundle so
+// every node that executes extractSemanticContext has the same closed runtime.
+const directRagSourcePath = path.join(root, 'lib', 'sales-engine-v2', 'direct-rag-v3.js');
+const directRagSource = fs.readFileSync(directRagSourcePath, 'utf8');
+const runtimeDependencyStart = directRagSource.indexOf('function normalized(value)');
+const runtimeDependencyEnd = directRagSource.indexOf('function extractSemanticContext(');
+if (runtimeDependencyStart < 0 || runtimeDependencyEnd <= runtimeDependencyStart) {
+  throw new Error('Direct RAG runtime dependency block is not delimited');
+}
+const DIRECT_RAG_RUNTIME_DEPENDENCIES = directRagSource.slice(runtimeDependencyStart, runtimeDependencyEnd).trim();
+const DIRECT_RAG_RUNTIME_DEPENDENCY_NAMES = Object.freeze([
+  'normalized',
+  'canonical',
+  'isTokenContinuation',
+  'hasVisibleModifierCompletion',
+  'OWNERSHIP_CONSTRUCTIONS',
+  'AUTHORITY_MODIFIERS',
+  'AUTHORITY_RELATIONS',
+  'AUTHORITY_BOUNDARIES',
+  'snapshotClosedDescriptor',
+  'classifyPropositionOwnership',
+  'isCoherentAuthorityDescriptor',
+  'evaluatePropositionAuthority',
+  'resolveCandidateBoundary',
+]);
+
+function assertDirectRagRuntimeDependencyClosure() {
+  for (const name of DIRECT_RAG_RUNTIME_DEPENDENCY_NAMES) {
+    if (!new RegExp(`\\b${name}\\b`, 'u').test(DIRECT_RAG_RUNTIME_DEPENDENCIES)) {
+      throw new Error(`Missing Direct RAG runtime dependency: ${name}`);
+    }
+  }
+  const extractSource = directRag.extractSemanticContext.toString();
+  for (const name of DIRECT_RAG_RUNTIME_DEPENDENCY_NAMES) {
+    if (new RegExp(`\\b${name}\\b`, 'u').test(extractSource)
+      && !new RegExp(`\\b${name}\\b`, 'u').test(DIRECT_RAG_RUNTIME_DEPENDENCIES)) {
+      throw new Error(`Unbundled Direct RAG semantic dependency: ${name}`);
+    }
+  }
+  // A helper declared after extractSemanticContext cannot be part of the
+  // ordered prefix above. Fail generation rather than emitting a node that
+  // relies on an unavailable module closure.
+  const laterDeclarations = directRagSource.slice(runtimeDependencyEnd + extractSource.length)
+    .matchAll(/^(?:function|const)\s+([A-Za-z_$][\w$]*)/gmu);
+  for (const declaration of laterDeclarations) {
+    const name = declaration[1];
+    if (new RegExp(`\\b${name}\\b`, 'u').test(extractSource)) {
+      throw new Error(`Direct RAG runtime dependency must precede extractSemanticContext: ${name}`);
+    }
+  }
+}
+
+assertDirectRagRuntimeDependencyClosure();
+const DIRECT_RAG_RUNTIME_BUNDLE = `${DIRECT_RAG_RUNTIME_DEPENDENCIES}\n\n${directRag.extractSemanticContext.toString()}`;
 const byName = (name) => {
   const found = workflow.nodes.find((node) => node.name === name);
   if (!found) throw new Error(`Missing workflow node: ${name}`);
@@ -1320,8 +1378,8 @@ FROM eligible_history;`, options: { queryReplacement: "={{ [ $('Claim Next Sessi
 const directContext = {
   name: 'Build Direct RAG Conversation Context', id: 'd74a0001-0000-4000-8000-000000000002',
   type: 'n8n-nodes-base.code', typeVersion: 2, position: [68352, 49536],
-  parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(require('../lib/sales-engine-v2/direct-rag-v3').SEMANTIC_CONTEXT_VERSION)};
-${require('../lib/sales-engine-v2/direct-rag-v3').extractSemanticContext.toString()}
+  parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(directRag.SEMANTIC_CONTEXT_VERSION)};
+${DIRECT_RAG_RUNTIME_BUNDLE}
 const current = $('Claim Next Session Inbound').item.json;
 const session = $('Get Onboarding Session').item.json || {};
 const historyValue = $input.first().json.history;
@@ -1345,8 +1403,8 @@ Use purchase_intent only for an explicit present request to buy/pay. It communic
 Evidence MUST be a short contiguous verbatim substring copied exactly from current_message. Never use ellipses, paraphrase, join separated spans, or invent punctuation/text. Each obligation needs its own exact supporting span.
 Use nutrition_support_request when the customer asks whether Dietavity can help with food or nutrition support, including a short contextual follow-up resolved by prior GLP-1 context. Use general_information for generic first contact, how_it_works for the situation-to-recommendation loop, food_decision only for an immediate request to decide what to eat, and recommendation_feedback for accepting, rejecting, or modifying the prior recommendation. Available food, prepared/consumed food, appetite observations, GLP-1 disclosure, and professional-support context are semantic context, not response obligations by themselves. A contextual rejection is not a durable preference. Use delivery_channel for download/install, current WhatsApp chat or number, WhatsApp, or portal-access questions. Use glp1_scope only when the customer asks whether Dietavity sells, delivers, provides, or prescribes GLP-1 medication. Use medical_boundary only for medication or clinical management questions. Split price or other independent current questions into their own obligations. Specific informational turns must not receive a discovery obligation. Use unsupported when a requested capability is not established by context. Do not create obligations from history.
 semantic_context.recommendation_request_evidence must be null or an exact contiguous current-message span that explicitly asks for a current food decision. It is context only and never grants an action.`;
-const directParser = { name: 'Parse Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000004', type: 'n8n-nodes-base.code', typeVersion: 2, position: [68864, 49536], parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(require('../lib/sales-engine-v2/direct-rag-v3').SEMANTIC_CONTEXT_VERSION)};
-${require('../lib/sales-engine-v2/direct-rag-v3').extractSemanticContext.toString()}
+const directParser = { name: 'Parse Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000004', type: 'n8n-nodes-base.code', typeVersion: 2, position: [68864, 49536], parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(directRag.SEMANTIC_CONTEXT_VERSION)};
+${DIRECT_RAG_RUNTIME_BUNDLE}
 ${require('../lib/sales-engine-v2/direct-rag-v3').validateInterpreterSemanticContext.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').reconcileWeakNutritionSupportObligations.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').reconcileStandaloneAppetiteObservationObligations.toString()}
@@ -1367,8 +1425,8 @@ try { const raw = String($input.first().json.output || '').replace(/^\\x60\\x60\
   const reconciled = reconcileStandaloneAppetiteObservationObligations(reconcileWeakNutritionSupportObligations(accepted, context.current_message, semantic_context), context.current_message, semantic_context);
   return [{ json: { ...context, semantic_context, obligations: reconciled.map((obligation, index) => ({ id: 'o-' + (index + 1), type: obligation.type, evidence: obligation.evidence })) } }];
 } catch { const semantic_context = extractSemanticContext(context.current_message, context.history); const reconciled = reconcileStandaloneAppetiteObservationObligations(reconcileWeakNutritionSupportObligations([{ type: 'unsupported', evidence: context.current_message }], context.current_message, semantic_context), context.current_message, semantic_context); return [{ json: { ...context, semantic_context, obligations: reconciled.map((obligation, index) => ({ id: 'o-' + (index + 1), type: obligation.type, evidence: obligation.evidence })) } }]; }` }, notes: 'Rejects malformed extraction into a bounded-unknown obligation; semantic context is bounded conversation meaning and never action authority. A generic standalone help request after affirmative GLP-1 usage is deterministically reconciled to nutrition support, while a standalone appetite observation uses the contextual fallback; neither overrides material obligations.' };
-const directResolver = { name: 'Resolve Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000005', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69120, 49536], parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(require('../lib/sales-engine-v2/direct-rag-v3').SEMANTIC_CONTEXT_VERSION)};
-${require('../lib/sales-engine-v2/direct-rag-v3').extractSemanticContext.toString()}
+const directResolver = { name: 'Resolve Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000005', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69120, 49536], parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(directRag.SEMANTIC_CONTEXT_VERSION)};
+${DIRECT_RAG_RUNTIME_BUNDLE}
 const input = $input.first().json;
 ${require('../lib/sales-engine-v2/direct-rag-v3').extractFoodContext.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').foodContextForResolution.toString()}
