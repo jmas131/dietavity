@@ -390,7 +390,6 @@ test('exact generated Direct RAG semantic Code nodes compile their runtime bundl
     const code = workflow.nodes.find(node => node.name === name).parameters.jsCode;
     assert.match(code, /function normalized\(value\)/, name);
     assert.match(code, /function resolveCandidateBoundary\(/, name);
-    assert.match(code, /function hasPlainRecordPrototype\(/, name);
     assert.match(code, /function classifyPropositionOwnership\(/, name);
     assert.match(code, /function evaluatePropositionAuthority\(/, name);
     assert.doesNotThrow(() => new vm.Script(`(function(){\n${code}\n})`), name);

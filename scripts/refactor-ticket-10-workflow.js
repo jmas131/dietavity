@@ -35,7 +35,6 @@ const DIRECT_RAG_RUNTIME_DEPENDENCY_NAMES = Object.freeze([
   'AUTHORITY_MODIFIERS',
   'AUTHORITY_RELATIONS',
   'AUTHORITY_BOUNDARIES',
-  'hasPlainRecordPrototype',
   'snapshotClosedDescriptor',
   'classifyPropositionOwnership',
   'isCoherentAuthorityDescriptor',
