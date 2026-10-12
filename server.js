@@ -13,6 +13,9 @@ const {
   portalRequestTimeoutMs
 } = require('./lib/portal-deadline');
 const { parseListenerConfig } = require('./lib/listener-config');
+const { createConversationEngine } = require('./lib/conversation-engine/service');
+const { createOpenAiConversationLlmClient } = require('./lib/conversation-engine/llm-client');
+const { createConversationEngineHandler } = require('./lib/conversation-engine/internal-route');
 
 const app = express();
 
@@ -25,6 +28,15 @@ app.use(express.urlencoded({
   limit: '32kb',
   parameterLimit: 100
 }));
+
+// This route is loopback-only with a dedicated shared secret. n8n retains
+// canonical message ordering, reservation, and delivery; the Node app owns
+// only the side-effect-free conversational intelligence transaction.
+const conversationEngine = createConversationEngine({
+  llmClient: createOpenAiConversationLlmClient(),
+  logger: event => console.info(JSON.stringify(event)),
+});
+app.post('/internal/conversation-engine/v1/resolve', createConversationEngineHandler({ engine: conversationEngine }));
 
 app.set('view engine', 'ejs');
 
