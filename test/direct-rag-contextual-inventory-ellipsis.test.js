@@ -27,5 +27,5 @@ test('WP2.1C.1 authorization is immediate, exact, and operationally usable', () 
   assert.deepEqual(rag.extractSemanticContext('pollo', [{ role: 'assistant', text: prompt }, { role: 'customer', text: 'otra cosa' }]).food_context.available_foods, []);
   assert.deepEqual(rag.extractSemanticContext('pollo', [{ role: 'assistant', text: '¿Qué comida tienes?' }]).food_context.available_foods, []);
   const context = authorized('pollo, arroz');
-  assert.match(rag.resolveFoodDecision('pollo, arroz', '', [], context, false).permitted_claims.join(' '), /prepara pollo/u);
+  assert.match(rag.resolveFoodDecision('pollo, arroz', '', [], context, false).permitted_claims.join(' '), /pollo con arroz/u);
 });

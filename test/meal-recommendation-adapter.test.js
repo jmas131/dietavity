@@ -129,16 +129,15 @@ test('adapter snapshots input and has no mutable references to untrusted caller 
   assert.deepEqual(result.grounding.confirmed_constraints, []);
 });
 
-test('adapter contract tests preserve Direct RAG food-state distinctions but do not claim an upstream canonical handoff', () => {
+test('adapter contract tests preserve Direct RAG food-state distinctions for the upstream handoff', () => {
   const prepared = rag.extractSemanticContext('Me preparé huevos con jitomate');
   const consumed = rag.extractSemanticContext('Cené huevos y tengo verduras');
-  // Intentionally fail closed under the current bounded prepared-description
-  // grammar; broader "con jitomate" coverage is deferred semantic debt.
   assert.deepEqual(prepared.food_context.available_foods, []);
   assert.deepEqual(prepared.food_context.structured_food_mentions.map(({ surface, relation, polarity, temporal_scope }) => ({ surface, relation, polarity, temporal_scope })), [
-    { surface: 'huevos', relation: 'mentioned', polarity: 'affirmed', temporal_scope: 'unknown' },
+    { surface: 'huevos', relation: 'prepared', polarity: 'affirmed', temporal_scope: 'unknown' },
+    { surface: 'jitomate', relation: 'prepared', polarity: 'affirmed', temporal_scope: 'unknown' },
   ]);
-  assert.deepEqual(prepared.food_context.recent_food_events, []);
+  assert.deepEqual(prepared.food_context.recent_food_events, [{ kind: 'prepared', foods: ['huevos', 'jitomate'], evidence: 'huevos' }]);
   assert.deepEqual(prepared.food_context.recently_consumed, []);
   assert.deepEqual(consumed.food_context.recently_consumed, ['huevos']);
   assert.deepEqual(consumed.food_context.available_foods, ['verduras']);

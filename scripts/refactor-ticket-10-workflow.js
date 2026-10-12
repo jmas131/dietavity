@@ -70,6 +70,31 @@ function assertDirectRagRuntimeDependencyClosure() {
 
 assertDirectRagRuntimeDependencyClosure();
 const DIRECT_RAG_RUNTIME_BUNDLE = `${DIRECT_RAG_RUNTIME_DEPENDENCIES}\n\n${directRag.extractSemanticContext.toString()}`;
+
+// The production resolver runs in an isolated n8n Code-node VM. Bundle the
+// frozen V1.3 engine and its strict adapter as source, never as a Node module
+// closure. Any source-shape drift fails generation rather than emitting an
+// artifact whose recommendation path silently cannot run in production.
+function bundleCommonJsModule(sourcePath, exportDeclaration, rewrites = []) {
+  let source = fs.readFileSync(sourcePath, 'utf8').replace(/^'use strict';\n/u, '');
+  for (const [from, to] of rewrites) {
+    if (!source.includes(from)) throw new Error(`Missing expected runtime bundle anchor in ${path.basename(sourcePath)}`);
+    source = source.replace(from, to);
+  }
+  const exportLine = 'module.exports = Object.freeze(';
+  if (!source.includes(exportLine)) throw new Error(`Missing CommonJS export in ${path.basename(sourcePath)}`);
+  return source.replace(exportLine, `${exportDeclaration} = Object.freeze(`);
+}
+const mealEngineRuntime = bundleCommonJsModule(
+  path.join(root, 'lib', 'meal-recommendation-engine.js'),
+  'const MEAL_RECOMMENDATION_ENGINE',
+);
+const mealAdapterRuntime = bundleCommonJsModule(
+  path.join(root, 'lib', 'meal-recommendation-adapter.js'),
+  'const MEAL_RECOMMENDATION_ADAPTER',
+  [["const frozenEngine = require('./meal-recommendation-engine');", 'const frozenEngine = MEAL_RECOMMENDATION_ENGINE;']],
+);
+const MEAL_RECOMMENDATION_RUNTIME_BUNDLE = `${mealEngineRuntime}\n\n${mealAdapterRuntime}`;
 const byName = (name) => {
   const found = workflow.nodes.find((node) => node.name === name);
   if (!found) throw new Error(`Missing workflow node: ${name}`);
@@ -1439,9 +1464,15 @@ try { const raw = String($input.first().json.output || '').replace(/^\\x60\\x60\
 } catch { const semantic_context = extractSemanticContext(context.current_message, context.history); const reconciled = reconcileStandaloneAppetiteObservationObligations(reconcileWeakNutritionSupportObligations([{ type: 'unsupported', evidence: context.current_message }], context.current_message, semantic_context), context.current_message, semantic_context); return [{ json: { ...context, semantic_context, obligations: reconciled.map((obligation, index) => ({ id: 'o-' + (index + 1), type: obligation.type, evidence: obligation.evidence })) } }]; }` }, notes: 'Rejects malformed extraction into a bounded-unknown obligation; semantic context is bounded conversation meaning and never action authority. A generic standalone help request after affirmative GLP-1 usage is deterministically reconciled to nutrition support, while a standalone appetite observation uses the contextual fallback; neither overrides material obligations.' };
 const directResolver = { name: 'Resolve Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000005', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69120, 49536], parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(directRag.SEMANTIC_CONTEXT_VERSION)};
 ${DIRECT_RAG_RUNTIME_BUNDLE}
+${MEAL_RECOMMENDATION_RUNTIME_BUNDLE}
+const mealRecommendationAdapter = MEAL_RECOMMENDATION_ADAPTER;
+const DIRECT_RAG_FOOD_TO_ENGINE_ID = ${JSON.stringify({ pollo: 'chicken', pechuga: 'chicken_breast', huevos: 'egg', huevo: 'egg', tortillas: 'corn_tortilla', tortilla: 'corn_tortilla', aguacate: 'avocado', jitomate: 'red_tomato', jitomates: 'red_tomato', arroz: 'rice', pescado: 'fish', carne: 'ground_beef', leche: 'milk', fruta: 'apple', frutas: 'apple', frijoles: 'common_beans', frijol: 'common_beans', tocino: 'pork' })};
 const input = $input.first().json;
 ${require('../lib/sales-engine-v2/direct-rag-v3').extractFoodContext.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').foodContextForResolution.toString()}
+${require('../lib/sales-engine-v2/direct-rag-v3').buildMealRecommendationInput.toString()}
+${require('../lib/sales-engine-v2/direct-rag-v3').recommendationClaim.toString()}
+${require('../lib/sales-engine-v2/direct-rag-v3').singleFoodDecisionClaim.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').resolveFoodDecision.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').nutritionSupportClaim.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').contextualSemanticClaim.toString()}
@@ -1462,7 +1493,7 @@ const resolved_obligations = input.obligations.map(obligation => {
   const food = ['food_decision','food_context','recommendation_feedback'].includes(obligation.type);
   const permitted_claims = food && !foodClaimAssigned ? foodDecision.permitted_claims : food ? [] : obligation.type === 'nutrition_support_request' ? [nutritionSupportClaim(semantic_context)] : obligation.type === 'unsupported' && semanticFallbackAllowed && contextualClaim ? [contextualClaim] : obligation.type === 'delivery_channel' ? [deliveryChannelFact(input.current_message)] : [...(claims[obligation.type] || claims.unsupported)];
   if (food) foodClaimAssigned = true;
-  return { obligation, resolution: obligation.type === 'unsupported' ? 'bounded_unknown' : 'resolved', permitted_claims, ...(food ? { food_context: foodDecision.context } : {}), prohibited_or_boundary_claims: ['obsolete_28_day_offer','portal_access','price_149','four_meal_product','checkout', ...(obligation.type === 'medical_boundary' ? ['medication_management_advice'] : []), ...(obligation.type === 'glp1_scope' ? ['medication_sale_delivery_or_prescription'] : [])], action_authorization: null, ...(obligation.type === 'purchase_intent' ? { checkout_suppressed_reason: 'proposition_test_no_checkout' } : {}) };
+  return { obligation, resolution: obligation.type === 'unsupported' ? 'bounded_unknown' : 'resolved', permitted_claims, ...(food ? { food_context: foodDecision.context, recommendation_source: foodDecision.recommendation?.source || null, recommendation_status: foodDecision.recommendation?.status || null } : {}), prohibited_or_boundary_claims: ['obsolete_28_day_offer','portal_access','price_149','four_meal_product','checkout', ...(obligation.type === 'medical_boundary' ? ['medication_management_advice'] : []), ...(obligation.type === 'glp1_scope' ? ['medication_sale_delivery_or_prescription'] : [])], action_authorization: null, ...(obligation.type === 'purchase_intent' ? { checkout_suppressed_reason: 'proposition_test_no_checkout' } : {}) };
 });
 const checkout_suppressed_reason = resolved_obligations.find(x => x.checkout_suppressed_reason)?.checkout_suppressed_reason || null;
 const discovery_question_authorized = permitsFirstContactDiscoveryQuestion(input, input.obligations);

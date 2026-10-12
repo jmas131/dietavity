@@ -19,8 +19,8 @@ test('V3 acceptance contract covers proposition, food use, safety, and checkout 
   assert.equal(opener.gate.cleared, true);
   assert.equal(run('¿Cómo funciona?', [{ type: 'how_it_works', evidence: 'Cómo funciona' }]).response.includes(rag.FIRST_CONTACT_DISCOVERY_QUESTION), false);
   assert.match(run('¿Cuánto cuesta?', [{ type: 'price', evidence: 'Cuánto cuesta' }]).response, /gratis/u);
-  assert.match(run('Tengo poca hambre, ¿qué puedo comer?', [{ type: 'food_decision', evidence: 'poca hambre' }]).response, /porción pequeña/u);
-  assert.match(run('Tengo huevos, tortillas y aguacate.', [{ type: 'food_context', evidence: 'huevos, tortillas y aguacate' }]).response, /2 huevos revueltos con una tortilla y un poco de aguacate/u);
+  assert.match(run('Tengo poca hambre, ¿qué puedo comer?', [{ type: 'food_decision', evidence: 'poca hambre' }]).response, /¿Qué alimentos tienes disponibles ahora\?/u);
+  assert.match(run('Tengo huevos, tortillas y aguacate.', [{ type: 'food_context', evidence: 'huevos, tortillas y aguacate' }]).response, /taco de huevo con aguacate/u);
   assert.match(run('No se me antoja eso.', [{ type: 'recommendation_feedback', evidence: 'No se me antoja eso' }]).response, /para este momento/u);
   assert.match(run('¿Me dan Ozempic?', [{ type: 'glp1_scope', evidence: 'Me dan Ozempic' }]).response, /no vende, entrega ni receta/u);
   assert.match(run('¿Debo bajar mi dosis?', [{ type: 'medical_boundary', evidence: 'bajar mi dosis' }]).response, /Consulta al profesional/u);
@@ -79,7 +79,7 @@ test('V3 explicitly authorizes one necessary food clarification and rejects subs
 test('V3 separates recently consumed food from available food before recommending', () => {
   const available = run('Tengo huevos, tortillas y aguacate.', [{ type: 'food_context', evidence: 'Tengo huevos, tortillas y aguacate' }]);
   assert.deepEqual(available.resolution.resolved_obligations[0].food_context, { recently_consumed: [], available_foods: ['huevos', 'tortillas', 'aguacate'], appetite: null, contextual_rejection: false });
-  assert.match(available.response, /2 huevos revueltos con una tortilla y un poco de aguacate/u);
+  assert.match(available.response, /taco de huevo con aguacate/u);
   assert.equal(available.gate.cleared, true);
 
   const consumed = run('Ya comí huevos, tortillas y aguacate.', [{ type: 'food_context', evidence: 'Ya comí huevos, tortillas y aguacate' }]);
@@ -93,7 +93,7 @@ test('V3 separates recently consumed food from available food before recommendin
   assert.deepEqual(foodContext.recently_consumed, ['huevos']);
   assert.deepEqual(foodContext.available_foods, ['pollo', 'tortillas', 'aguacate']);
   assert.doesNotMatch(mixed.response, /2 huevos revueltos/u);
-  assert.match(mixed.response, /tortilla con pollo y un poco de aguacate/u);
+  assert.match(mixed.response, /taco de pollo con aguacate/u);
   assert.equal(mixed.gate.cleared, true);
 });
 
@@ -112,7 +112,7 @@ test('V3.1 interprets an availability-question answer without repeating the avai
     assert.deepEqual(context.recently_consumed, [], message);
     assert.equal(result.resolution.conversation_policy.food_clarification_authorized, false, message);
     assert.doesNotMatch(result.response, /¿Qué alimentos tienes disponibles ahora\?/u, message);
-    assert.match(result.response, /^Con lo que tienes, prepara /u, message);
+    assert.match(result.response, /^Puedes preparar /u, message);
     assert.equal(result.gate.cleared, true, message);
   }
 });
@@ -131,7 +131,7 @@ test('V3.1 gives explicit current consumption precedence over availability-quest
   const mixedContext = mixed.resolution.resolved_obligations[0].food_context;
   assert.deepEqual(mixedContext.recently_consumed, ['huevos']);
   assert.deepEqual(mixedContext.available_foods, ['pollo', 'tortillas', 'aguacate']);
-  assert.match(mixed.response, /tortilla con pollo y un poco de aguacate/u);
+  assert.match(mixed.response, /taco de pollo con aguacate/u);
 });
 
 test('V3.1 leaves a bare food list unclassified without the immediately preceding availability question', () => {
@@ -148,7 +148,7 @@ test('V3.2B does not carry transient appetite into a later inventory recommendat
   const history = [{ role: 'customer', text: 'No tengo hambre.' }, { role: 'assistant', text: availabilityQuestion }];
   const message = 'Pescado, verduras y arroz';
   const result = run(message, [{ type: 'food_context', evidence: message }], history, availabilityQuestion);
-  assert.match(result.response, /prepara pescado con verduras/u);
+  assert.match(result.response, /pescado con arroz/u);
   assert.doesNotMatch(result.response, /porción pequeña y come despacio/u);
   assert.doesNotMatch(result.response, /¿Qué alimentos tienes disponibles ahora\?/u);
 });
@@ -323,11 +323,11 @@ test('V3.2B Patch 2 resolves support and semantic context without inventory leak
   assert.doesNotMatch(laterDecision.response, /pollo con arroz|arroz con pollo/i);
 
   const availabilityAnswer = run('Huevos pollo pechuga vegetales arroz', [{ type: 'food_decision', evidence: 'Huevos pollo pechuga vegetales arroz' }], [{ role: 'assistant', text: '¿Qué alimentos tienes disponibles ahora?' }]);
-  assert.match(availabilityAnswer.response, /^Con lo que tienes, prepara /u);
+  assert.match(availabilityAnswer.response, /^Puedes preparar /u);
   assert.equal(availabilityAnswer.resolution.conversation_policy.food_clarification_authorized, false);
 
   const explicitInventory = run('Tengo pechuga asada, verduras y huevo. ¿Qué me puedo hacer?', [{ type: 'food_decision', evidence: '¿Qué me puedo hacer?' }]);
-  assert.match(explicitInventory.response, /^Con lo que tienes, prepara /u);
+  assert.match(explicitInventory.response, /^Puedes preparar /u);
 
   const medication = run('¿Debo bajar mi dosis?', [{ type: 'medical_boundary', evidence: '¿Debo bajar mi dosis?' }], glpHistory);
   assert.match(medication.response, /Consulta al profesional/u);

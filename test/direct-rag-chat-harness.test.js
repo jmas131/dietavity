@@ -96,7 +96,7 @@ test('the no-action guard preserves the GLP-1 pilot safeguard before memory pers
 test('required manual prompt cases map to the current Direct RAG resolver and never execute Checkout', () => {
   const resolver = byName('Resolve Direct RAG Obligations').parameters.jsCode;
   const cases = [
-    ['¡Hola! Quiero saber más.', 'general_information', /asistente de alimentación por WhatsApp/i], ['¿Cuánto cuesta?', 'price', /probar Dietavity gratis/i], ['Tengo poca hambre, ¿qué puedo comer?', 'food_decision', /porción pequeña/i], ['¿Dan el medicamento GLP-1?', 'glp1_scope', /no vende, entrega ni receta/i], ['¿Debo bajar mi dosis?', 'medical_boundary', /profesional/i], ['¿Cómo funciona?', 'how_it_works', /recomendación práctica/i], ['Gracias', 'acknowledgement', /con gusto/i], ['Quiero comprarlo.', 'purchase_intent', /prueba gratuita/i],
+    ['¡Hola! Quiero saber más.', 'general_information', /asistente de alimentación por WhatsApp/i], ['¿Cuánto cuesta?', 'price', /probar Dietavity gratis/i], ['Tengo poca hambre, ¿qué puedo comer?', 'food_decision', /¿Qué alimentos tienes disponibles ahora\?/i], ['¿Dan el medicamento GLP-1?', 'glp1_scope', /no vende, entrega ni receta/i], ['¿Debo bajar mi dosis?', 'medical_boundary', /profesional/i], ['¿Cómo funciona?', 'how_it_works', /recomendación práctica/i], ['Gracias', 'acknowledgement', /con gusto/i], ['Quiero comprarlo.', 'purchase_intent', /prueba gratuita/i],
   ];
   for (const [message, type, match] of cases) {
     const result = vm.runInNewContext(`(function(){${resolver}})()`, { $input: { first: () => ({ json: { current_message: message, commercial_state: { purchase_context: false }, obligations: [{ id: 'o-1', type, evidence: message.replace(/[¿?.!¡]/g, '') || message, ...(type === 'purchase' ? { intent: 'explicit_current_request' } : {}) }] } }) } })[0].json;
@@ -116,7 +116,7 @@ test('harness cloned parser and resolver preserve food context and mixed obligat
   };
   const nutrition = runPath('Uso GLP-1 y casi no tengo hambre, ¿cómo me ayudaría Dietavity?', [{ type: 'food_decision', evidence: 'casi no tengo hambre' }]);
   assert.deepEqual(Array.from(nutrition.obligations, value => value.type), ['food_decision']);
-  assert.match(nutrition.permitted_claims.join(' '), /porción pequeña/i);
+  assert.match(nutrition.permitted_claims.join(' '), /¿Qué alimentos tienes disponibles ahora\?/i);
   assert.doesNotMatch(nutrition.permitted_claims.join(' '), /no vende|profesional que te lo prescribió/i);
   const mixed = runPath('Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?', [{ type: 'price', evidence: 'cuánto cuesta' }, { type: 'food_decision', evidence: 'poco apetito' }]);
   assert.deepEqual(Array.from(mixed.obligations, value => value.type), ['price', 'food_decision']);

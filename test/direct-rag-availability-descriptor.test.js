@@ -24,7 +24,7 @@ test('C.4B binds the required closed availability descriptor without changing au
 
   const decision = rag.resolveFoodDecision(message, '', [], rag.extractSemanticContext(message));
   assert.equal(decision.clarification_question, null);
-  assert.match(decision.permitted_claims[0], /^Con lo que tienes, prepara /u);
+  assert.match(decision.permitted_claims[0], /^Puedes preparar /u);
 });
 
 test('C.4B accepts only the closed asada descriptor in an explicit availability proposition', () => {

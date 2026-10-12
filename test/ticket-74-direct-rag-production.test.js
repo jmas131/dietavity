@@ -30,7 +30,7 @@ test('generated interpreter, parser, and resolver enforce V3 food and safety obl
     const parsed = vm.runInNewContext(`(function(){${node('Parse Direct RAG Obligations').parameters.jsCode}})()`, {
       $: () => ({ item: { json: context } }), $input: { first: () => ({ json: { output: JSON.stringify({ obligations: modelObligations }) } }) },
     })[0].json;
-    return vm.runInNewContext(`(function(){${node('Resolve Direct RAG Obligations').parameters.jsCode}})()`, { $input: { first: () => ({ json: parsed }) } })[0].json;
+    return vm.runInNewContext(`(function(){const structuredClone = value => JSON.parse(JSON.stringify(value));${node('Resolve Direct RAG Obligations').parameters.jsCode}})()`, { $input: { first: () => ({ json: parsed }) } })[0].json;
   };
   const intro = parseAndResolve('¡Hola! Quiero saber más.', [{ type: 'general_information', evidence: '¡Hola! Quiero saber más.' }]);
   assert.deepEqual(Array.from(intro.obligations, value => value.type), ['general_information']);
@@ -38,7 +38,7 @@ test('generated interpreter, parser, and resolver enforce V3 food and safety obl
   assert.equal(intro.permitted_claims.join(' ').split('¿Qué necesitas resolver con tu alimentación ahora?').length - 1, 1);
   const nutrition = parseAndResolve('Uso GLP-1 y casi no tengo hambre, ¿cómo me ayudaría Dietavity?', [{ type: 'food_decision', evidence: 'casi no tengo hambre' }]);
   assert.deepEqual(Array.from(nutrition.obligations, value => value.type), ['food_decision']);
-  assert.match(nutrition.permitted_claims.join(' '), /porción pequeña/i);
+  assert.match(nutrition.permitted_claims.join(' '), /¿Qué alimentos tienes disponibles ahora\?/i);
   const medication = parseAndResolve('¿Debo bajar mi dosis si casi no tengo hambre?', [{ type: 'medical_boundary', evidence: '¿Debo bajar mi dosis si casi no tengo hambre?' }]);
   assert.deepEqual(Array.from(medication.obligations, value => value.type), ['medical_boundary']);
   assert.match(medication.permitted_claims.join(' '), /profesional/i);
@@ -58,7 +58,7 @@ test('generated interpreter, parser, and resolver enforce V3 food and safety obl
   const mixed = parseAndResolve('Uso GLP-1, ¿cuánto cuesta y cómo me ayudaría si tengo poco apetito?', [{ type: 'price', evidence: 'cuánto cuesta' }, { type: 'food_decision', evidence: 'poco apetito' }]);
   assert.deepEqual(Array.from(mixed.obligations, value => value.type), ['price', 'food_decision']);
   assert.match(mixed.permitted_claims.join(' '), /gratis/i);
-  assert.match(mixed.permitted_claims.join(' '), /porción pequeña/i);
+  assert.match(mixed.permitted_claims.join(' '), /¿Qué alimentos tienes disponibles ahora\?/i);
   assert.doesNotMatch(mixed.permitted_claims.join(' '), /no vende|profesional que te lo prescribió/i);
 });
 test('final gate rejects unsupported claims, missing coverage, medical advice, and CTA', () => { const e = envelope('¿Dan GLP-1?', [{ type: 'glp1_scope', evidence: 'Dan GLP-1' }]); const ids = ['o-1']; assert.equal(rag.gateResponse({ envelope: e, response: 'Vendemos Ozempic.', coveredObligationIds: ids, usedClaims: ['Vendemos Ozempic.'] }).reason, 'UNSUPPORTED_ACTUAL_RESPONSE'); assert.equal(rag.gateResponse({ envelope: e, response: 'Dietavity no vende GLP-1.', coveredObligationIds: [], usedClaims: [] }).reason, 'OBLIGATION_COVERAGE_MISSING'); assert.equal(rag.gateResponse({ envelope: e, response: 'Baja tu dosis a 2 mg.', coveredObligationIds: ids, usedClaims: [] }).reason, 'MEDICATION_GUIDANCE'); assert.equal(rag.gateResponse({ envelope: e, response: 'No los vendemos. ¿Quieres comprar?', coveredObligationIds: ids, usedClaims: [] }).reason, 'UNAUTHORIZED_CTA'); });
@@ -360,7 +360,7 @@ test('generated Build preserves trusted P1 inventory before a separate recommend
 
 test('generated V3.1 resolver uses the immediate availability question only after explicit food semantics', () => {
   const code = workflow.nodes.find(node => node.name === 'Resolve Direct RAG Obligations').parameters.jsCode;
-  const resolve = (current_message, most_recent_assistant_message = '', history = []) => vm.runInNewContext(`(function(){${code}})()`, {
+  const resolve = (current_message, most_recent_assistant_message = '', history = []) => vm.runInNewContext(`(function(){const structuredClone = value => JSON.parse(JSON.stringify(value));${code}})()`, {
     $input: { first: () => ({ json: {
       current_message, most_recent_assistant_message, history,
       commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3',
@@ -379,6 +379,51 @@ test('generated V3.1 resolver uses the immediate availability question only afte
 
   const noContext = resolve('Huevos pollo pechuga vegetales arroz');
   assert.deepEqual(JSON.parse(JSON.stringify(noContext.resolved_obligations[0].food_context.available_foods)), []);
+});
+
+test('generated Ticket 10 resolver invokes V1.3 across the bounded ephemeral food-state sequence', () => {
+  const node = name => workflow.nodes.find(value => value.name === name);
+  const contextCode = node('Build Direct RAG Conversation Context').parameters.jsCode;
+  const resolverCode = node('Resolve Direct RAG Obligations').parameters.jsCode;
+  const toRows = history => history.map(item => ({ direction: item.role === 'assistant' ? 'outbound' : 'inbound', body: item.text }));
+  const contextFor = (message, history) => vm.runInNewContext(`(function(){${contextCode}})()`, {
+    $input: { first: () => ({ json: { history: toRows(history) } }) },
+    $: name => ({ item: { json: name === 'Claim Next Session Inbound'
+      ? { id: 'wp25a-inbound', session_id: 'wp25a-session', provider_message_sid: 'SM00000000000000000000000000000000', body: message }
+      : name === 'Get Onboarding Session' ? {} : name === 'Get User from Supabase' ? { is_active: false } : {} } }),
+  })[0].json;
+  const resolve = (context, type) => vm.runInNewContext(`(function(){const structuredClone = value => JSON.parse(JSON.stringify(value));${resolverCode}})()`, {
+    $input: { first: () => ({ json: { ...context, obligations: [{ id: 'o-1', type, evidence: context.current_message }] } }) },
+  })[0].json.resolved_obligations[0];
+
+  const firstMessage = 'Tengo pollo. ¿Qué me recomiendas?';
+  const first = resolve(contextFor(firstMessage, []), 'food_decision');
+  assert.deepEqual(JSON.parse(JSON.stringify(first.food_context.available_foods)), ['pollo']);
+  assert.equal(first.recommendation_source, 'meal_recommendation_engine_v1_3');
+  assert.equal(first.recommendation_status, 'needs_clarification');
+  assert.match(first.permitted_claims.join(' '), /Con pollo, arma un plato sencillo/u);
+  assert.doesNotMatch(first.permitted_claims.join(' '), /^Con lo que tienes, prepara pollo\.$/u);
+
+  const secondMessage = 'También tengo tortillas, aguacate y jitomate.';
+  const second = resolve(contextFor(secondMessage, [{ role: 'customer', text: firstMessage }, { role: 'assistant', text: first.permitted_claims.join(' ') }]), 'food_context');
+  assert.deepEqual(JSON.parse(JSON.stringify(second.food_context.available_foods)), ['pollo', 'tortillas', 'aguacate', 'jitomate']);
+  assert.equal(second.recommendation_source, 'meal_recommendation_engine_v1_3');
+  assert.equal(second.recommendation_status, 'recommendation');
+  assert.match(second.permitted_claims.join(' '), /taco de pollo con aguacate/u);
+
+  const thirdMessage = 'Ya comí pollo. ¿Qué puedo comer ahora?';
+  const third = resolve(contextFor(thirdMessage, [
+    { role: 'customer', text: firstMessage }, { role: 'assistant', text: first.permitted_claims.join(' ') },
+    { role: 'customer', text: secondMessage }, { role: 'assistant', text: second.permitted_claims.join(' ') },
+  ]), 'food_decision');
+  assert.deepEqual(JSON.parse(JSON.stringify(third.food_context.recently_consumed)), ['pollo']);
+  assert.deepEqual(JSON.parse(JSON.stringify(third.food_context.available_foods)), ['tortillas', 'aguacate', 'jitomate']);
+  assert.equal(third.recommendation_source, 'meal_recommendation_engine_v1_3');
+  assert.equal(third.recommendation_status, 'needs_clarification');
+  assert.match(third.permitted_claims.join(' '), /¿Qué alimentos tienes disponibles ahora\?/u);
+
+  const medication = resolve(contextFor('¿Debería bajar mi dosis de Mounjaro si estoy comiendo poco?', []), 'medical_boundary');
+  assert.match(medication.permitted_claims.join(' '), /Consulta al profesional/u);
 });
 
 test('exact generated Direct RAG semantic Code nodes compile their runtime bundles', () => {
