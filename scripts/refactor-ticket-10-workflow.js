@@ -94,7 +94,27 @@ const mealAdapterRuntime = bundleCommonJsModule(
   'const MEAL_RECOMMENDATION_ADAPTER',
   [["const frozenEngine = require('./meal-recommendation-engine');", 'const frozenEngine = MEAL_RECOMMENDATION_ENGINE;']],
 );
-const MEAL_RECOMMENDATION_RUNTIME_BUNDLE = `${mealEngineRuntime}\n\n${mealAdapterRuntime}`;
+// n8n's isolated Code-node realm does not guarantee the Node global
+// structuredClone. The adapter needs only closed parsed-JSON data at this
+// boundary, so provide a realm-local clone that rejects non-plain records
+// instead of changing the adapter's validation contract.
+const MEAL_RECOMMENDATION_RUNTIME_COMPATIBILITY = `function __directRagClonePlainData(value, seen = new WeakSet()) {
+  if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) throw new TypeError('CYCLIC_VALUE');
+  seen.add(value);
+  if (Array.isArray(value)) {
+    const result = value.map(item => __directRagClonePlainData(item, seen));
+    seen.delete(value);
+    return result;
+  }
+  if (Object.getPrototypeOf(value) !== Object.prototype) throw new TypeError('NON_PLAIN_VALUE');
+  const result = {};
+  for (const key of Object.keys(value)) result[key] = __directRagClonePlainData(value[key], seen);
+  seen.delete(value);
+  return result;
+}
+const structuredClone = value => __directRagClonePlainData(value);`;
+const MEAL_RECOMMENDATION_RUNTIME_BUNDLE = `${MEAL_RECOMMENDATION_RUNTIME_COMPATIBILITY}\n\n${mealEngineRuntime}\n\n${mealAdapterRuntime}`;
 const byName = (name) => {
   const found = workflow.nodes.find((node) => node.name === name);
   if (!found) throw new Error(`Missing workflow node: ${name}`);
@@ -1445,6 +1465,7 @@ ${DIRECT_RAG_RUNTIME_BUNDLE}
 ${require('../lib/sales-engine-v2/direct-rag-v3').validateInterpreterSemanticContext.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').reconcileWeakNutritionSupportObligations.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').reconcileStandaloneAppetiteObservationObligations.toString()}
+${require('../lib/sales-engine-v2/direct-rag-v3').reconcileAuthoritativeContextualInventoryObligations.toString()}
 const context = $('Build Direct RAG Conversation Context').item.json;
 const allowed = new Set(${JSON.stringify(require('../lib/sales-engine-v2/direct-rag-v3').INTERPRETER_OBLIGATION_TYPES)});
 try { const raw = String($input.first().json.output || '').replace(/^\\x60\\x60\\x60(?:json)?\\s*|\\s*\\x60\\x60\\x60$/g, ''); const parsed = JSON.parse(raw); const obligations = parsed.obligations;
@@ -1459,9 +1480,9 @@ try { const raw = String($input.first().json.output || '').replace(/^\\x60\\x60\
   const interpreterContext = validateInterpreterSemanticContext(parsed.semantic_context, context.current_message);
   const semantic_context = extractSemanticContext(context.current_message, context.history, interpreterContext);
   const accepted = normalized.length ? normalized : [{ type: 'unsupported', evidence: context.current_message }];
-  const reconciled = reconcileStandaloneAppetiteObservationObligations(reconcileWeakNutritionSupportObligations(accepted, context.current_message, semantic_context), context.current_message, semantic_context);
+  const reconciled = reconcileAuthoritativeContextualInventoryObligations(reconcileStandaloneAppetiteObservationObligations(reconcileWeakNutritionSupportObligations(accepted, context.current_message, semantic_context), context.current_message, semantic_context), context.current_message, semantic_context, context.history);
   return [{ json: { ...context, semantic_context, obligations: reconciled.map((obligation, index) => ({ id: 'o-' + (index + 1), type: obligation.type, evidence: obligation.evidence })) } }];
-} catch { const semantic_context = extractSemanticContext(context.current_message, context.history); const reconciled = reconcileStandaloneAppetiteObservationObligations(reconcileWeakNutritionSupportObligations([{ type: 'unsupported', evidence: context.current_message }], context.current_message, semantic_context), context.current_message, semantic_context); return [{ json: { ...context, semantic_context, obligations: reconciled.map((obligation, index) => ({ id: 'o-' + (index + 1), type: obligation.type, evidence: obligation.evidence })) } }]; }` }, notes: 'Rejects malformed extraction into a bounded-unknown obligation; semantic context is bounded conversation meaning and never action authority. A generic standalone help request after affirmative GLP-1 usage is deterministically reconciled to nutrition support, while a standalone appetite observation uses the contextual fallback; neither overrides material obligations.' };
+} catch { const semantic_context = extractSemanticContext(context.current_message, context.history); const reconciled = reconcileAuthoritativeContextualInventoryObligations(reconcileStandaloneAppetiteObservationObligations(reconcileWeakNutritionSupportObligations([{ type: 'unsupported', evidence: context.current_message }], context.current_message, semantic_context), context.current_message, semantic_context), context.current_message, semantic_context, context.history); return [{ json: { ...context, semantic_context, obligations: reconciled.map((obligation, index) => ({ id: 'o-' + (index + 1), type: obligation.type, evidence: obligation.evidence })) } }]; }` }, notes: 'Rejects malformed extraction into a bounded-unknown obligation; semantic context is bounded conversation meaning and never action authority. A generic standalone help request after affirmative GLP-1 usage is deterministically reconciled to nutrition support, while a standalone appetite observation uses the contextual fallback; neither overrides material obligations.' };
 const directResolver = { name: 'Resolve Direct RAG Obligations', id: 'd74a0001-0000-4000-8000-000000000005', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69120, 49536], parameters: { jsCode: `const SEMANTIC_CONTEXT_VERSION = ${JSON.stringify(directRag.SEMANTIC_CONTEXT_VERSION)};
 ${DIRECT_RAG_RUNTIME_BUNDLE}
 ${MEAL_RECOMMENDATION_RUNTIME_BUNDLE}
@@ -1474,6 +1495,7 @@ ${require('../lib/sales-engine-v2/direct-rag-v3').buildMealRecommendationInput.t
 ${require('../lib/sales-engine-v2/direct-rag-v3').recommendationClaim.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').singleFoodDecisionClaim.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').resolveFoodDecision.toString()}
+${require('../lib/sales-engine-v2/direct-rag-v3').recommendationFailureCode.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').nutritionSupportClaim.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').contextualSemanticClaim.toString()}
 ${require('../lib/sales-engine-v2/direct-rag-v3').permitsFirstContactDiscoveryQuestion.toString()}
@@ -1493,7 +1515,7 @@ const resolved_obligations = input.obligations.map(obligation => {
   const food = ['food_decision','food_context','recommendation_feedback'].includes(obligation.type);
   const permitted_claims = food && !foodClaimAssigned ? foodDecision.permitted_claims : food ? [] : obligation.type === 'nutrition_support_request' ? [nutritionSupportClaim(semantic_context)] : obligation.type === 'unsupported' && semanticFallbackAllowed && contextualClaim ? [contextualClaim] : obligation.type === 'delivery_channel' ? [deliveryChannelFact(input.current_message)] : [...(claims[obligation.type] || claims.unsupported)];
   if (food) foodClaimAssigned = true;
-  return { obligation, resolution: obligation.type === 'unsupported' ? 'bounded_unknown' : 'resolved', permitted_claims, ...(food ? { food_context: foodDecision.context, recommendation_source: foodDecision.recommendation?.source || null, recommendation_status: foodDecision.recommendation?.status || null } : {}), prohibited_or_boundary_claims: ['obsolete_28_day_offer','portal_access','price_149','four_meal_product','checkout', ...(obligation.type === 'medical_boundary' ? ['medication_management_advice'] : []), ...(obligation.type === 'glp1_scope' ? ['medication_sale_delivery_or_prescription'] : [])], action_authorization: null, ...(obligation.type === 'purchase_intent' ? { checkout_suppressed_reason: 'proposition_test_no_checkout' } : {}) };
+  return { obligation, resolution: obligation.type === 'unsupported' ? 'bounded_unknown' : 'resolved', permitted_claims, ...(food ? { food_context: foodDecision.context, recommendation_source: foodDecision.recommendation?.source || null, recommendation_status: foodDecision.recommendation?.status || null, recommendation_failure_code: recommendationFailureCode(foodDecision.recommendation) } : {}), prohibited_or_boundary_claims: ['obsolete_28_day_offer','portal_access','price_149','four_meal_product','checkout', ...(obligation.type === 'medical_boundary' ? ['medication_management_advice'] : []), ...(obligation.type === 'glp1_scope' ? ['medication_sale_delivery_or_prescription'] : [])], action_authorization: null, ...(obligation.type === 'purchase_intent' ? { checkout_suppressed_reason: 'proposition_test_no_checkout' } : {}) };
 });
 const checkout_suppressed_reason = resolved_obligations.find(x => x.checkout_suppressed_reason)?.checkout_suppressed_reason || null;
 const discovery_question_authorized = permitsFirstContactDiscoveryQuestion(input, input.obligations);

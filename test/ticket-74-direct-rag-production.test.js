@@ -30,7 +30,7 @@ test('generated interpreter, parser, and resolver enforce V3 food and safety obl
     const parsed = vm.runInNewContext(`(function(){${node('Parse Direct RAG Obligations').parameters.jsCode}})()`, {
       $: () => ({ item: { json: context } }), $input: { first: () => ({ json: { output: JSON.stringify({ obligations: modelObligations }) } }) },
     })[0].json;
-    return vm.runInNewContext(`(function(){const structuredClone = value => JSON.parse(JSON.stringify(value));${node('Resolve Direct RAG Obligations').parameters.jsCode}})()`, { $input: { first: () => ({ json: parsed }) } })[0].json;
+    return vm.runInNewContext(`(function(){${node('Resolve Direct RAG Obligations').parameters.jsCode}})()`, { $input: { first: () => ({ json: parsed }) } })[0].json;
   };
   const intro = parseAndResolve('¡Hola! Quiero saber más.', [{ type: 'general_information', evidence: '¡Hola! Quiero saber más.' }]);
   assert.deepEqual(Array.from(intro.obligations, value => value.type), ['general_information']);
@@ -360,7 +360,7 @@ test('generated Build preserves trusted P1 inventory before a separate recommend
 
 test('generated V3.1 resolver uses the immediate availability question only after explicit food semantics', () => {
   const code = workflow.nodes.find(node => node.name === 'Resolve Direct RAG Obligations').parameters.jsCode;
-  const resolve = (current_message, most_recent_assistant_message = '', history = []) => vm.runInNewContext(`(function(){const structuredClone = value => JSON.parse(JSON.stringify(value));${code}})()`, {
+  const resolve = (current_message, most_recent_assistant_message = '', history = []) => vm.runInNewContext(`(function(){${code}})()`, {
     $input: { first: () => ({ json: {
       current_message, most_recent_assistant_message, history,
       commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3',
@@ -392,7 +392,9 @@ test('generated Ticket 10 resolver invokes V1.3 across the bounded ephemeral foo
       ? { id: 'wp25a-inbound', session_id: 'wp25a-session', provider_message_sid: 'SM00000000000000000000000000000000', body: message }
       : name === 'Get Onboarding Session' ? {} : name === 'Get User from Supabase' ? { is_active: false } : {} } }),
   })[0].json;
-  const resolve = (context, type) => vm.runInNewContext(`(function(){const structuredClone = value => JSON.parse(JSON.stringify(value));${resolverCode}})()`, {
+  // Deliberately do not inject structuredClone: this is the isolated
+  // n8n-Code-node compatibility boundary that production executes.
+  const resolve = (context, type) => vm.runInNewContext(`(function(){${resolverCode}})()`, {
     $input: { first: () => ({ json: { ...context, obligations: [{ id: 'o-1', type, evidence: context.current_message }] } }) },
   })[0].json.resolved_obligations[0];
 
@@ -424,6 +426,94 @@ test('generated Ticket 10 resolver invokes V1.3 across the bounded ephemeral foo
 
   const medication = resolve(contextFor('¿Debería bajar mi dosis de Mounjaro si estoy comiendo poco?', []), 'medical_boundary');
   assert.match(medication.permitted_claims.join(' '), /Consulta al profesional/u);
+});
+
+test('generated Ticket 10 reconciles authoritative contextual inventory across the observed model boundary', () => {
+  const node = name => workflow.nodes.find(value => value.name === name);
+  const contextCode = node('Build Direct RAG Conversation Context').parameters.jsCode;
+  const parserCode = node('Parse Direct RAG Obligations').parameters.jsCode;
+  const resolverCode = node('Resolve Direct RAG Obligations').parameters.jsCode;
+  const toRows = history => history.map(item => ({ direction: item.role === 'assistant' ? 'outbound' : 'inbound', body: item.text }));
+  const contextFor = (message, history = []) => vm.runInNewContext(`(function(){${contextCode}})()`, {
+    $input: { first: () => ({ json: { history: toRows(history) } }) },
+    $: name => ({ item: { json: name === 'Claim Next Session Inbound'
+      ? { id: 'runtime-fixture', session_id: 'runtime-session', provider_message_sid: 'SM00000000000000000000000000000001', body: message }
+      : name === 'Get Onboarding Session' ? {} : name === 'Get User from Supabase' ? { is_active: false } : {} } }),
+  })[0].json;
+  const parse = (context, model) => vm.runInNewContext(`(function(){${parserCode}})()`, {
+    $: () => ({ item: { json: context } }),
+    $input: { first: () => ({ json: { output: JSON.stringify(model) } }) },
+  })[0].json;
+  // No convenience globals: this must exercise the exact generated resolver
+  // in a realm that lacks structuredClone, like the production Code node.
+  const resolve = parsed => vm.runInNewContext(`(function(){${resolverCode}})()`, {
+    $input: { first: () => ({ json: parsed }) },
+  })[0].json;
+
+  const firstMessage = 'Tengo pollo. ¿Qué me recomiendas?';
+  const first = resolve(parse(contextFor(firstMessage), {
+    obligations: [{ type: 'food_decision', evidence: '¿Qué me recomiendas?' }],
+    semantic_context: { recommendation_request_evidence: '¿Qué me recomiendas?' },
+  }));
+  const firstResolution = first.resolved_obligations[0];
+  assert.deepEqual(JSON.parse(JSON.stringify(firstResolution.food_context.available_foods)), ['pollo']);
+  assert.equal(firstResolution.recommendation_source, 'meal_recommendation_engine_v1_3');
+  assert.notEqual(firstResolution.recommendation_status, 'integration_failure');
+  assert.equal(firstResolution.recommendation_failure_code, null);
+
+  const secondMessage = 'También tengo tortillas, aguacate y jitomate.';
+  const secondContext = contextFor(secondMessage, [{ role: 'customer', text: firstMessage }, { role: 'assistant', text: first.permitted_claims.join(' ') }]);
+  const observedAcknowledgement = {
+    obligations: [{ type: 'acknowledgement', evidence: secondMessage }],
+    semantic_context: { recommendation_request_evidence: null },
+  };
+  const secondParsed = parse(secondContext, observedAcknowledgement);
+  assert.deepEqual(JSON.parse(JSON.stringify(secondParsed.obligations.map(value => value.type))), ['food_decision']);
+  assert.deepEqual(JSON.parse(JSON.stringify(secondParsed.semantic_context.food_context.available_foods)), ['pollo', 'tortillas', 'aguacate', 'jitomate']);
+  const second = resolve(secondParsed);
+  const secondResolution = second.resolved_obligations[0];
+  assert.equal(secondResolution.recommendation_source, 'meal_recommendation_engine_v1_3');
+  assert.equal(secondResolution.recommendation_status, 'recommendation');
+  assert.equal(secondResolution.recommendation_failure_code, null);
+  assert.match(second.permitted_claims.join(' '), /taco de pollo con aguacate/u);
+
+  const thirdMessage = 'Ya comí pollo. ¿Qué puedo comer ahora?';
+  const third = resolve(parse(contextFor(thirdMessage, [
+    { role: 'customer', text: firstMessage }, { role: 'assistant', text: first.permitted_claims.join(' ') },
+    { role: 'customer', text: secondMessage }, { role: 'assistant', text: second.permitted_claims.join(' ') },
+  ]), { obligations: [{ type: 'food_decision', evidence: '¿Qué puedo comer ahora?' }], semantic_context: { recommendation_request_evidence: '¿Qué puedo comer ahora?' } }));
+  const thirdResolution = third.resolved_obligations[0];
+  assert.deepEqual(JSON.parse(JSON.stringify(thirdResolution.food_context.recently_consumed)), ['pollo']);
+  assert.deepEqual(JSON.parse(JSON.stringify(thirdResolution.food_context.available_foods)), ['tortillas', 'aguacate', 'jitomate']);
+  assert.equal(thirdResolution.recommendation_source, 'meal_recommendation_engine_v1_3');
+  assert.notEqual(thirdResolution.recommendation_status, 'integration_failure');
+  assert.equal(thirdResolution.recommendation_failure_code, null);
+
+  const medicationMessage = '¿Debería bajar mi dosis de Mounjaro si estoy comiendo poco?';
+  const medication = resolve(parse(contextFor(medicationMessage), { obligations: [{ type: 'medical_boundary', evidence: medicationMessage }], semantic_context: { recommendation_request_evidence: null } }));
+  assert.deepEqual(JSON.parse(JSON.stringify(medication.obligations.map(value => value.type))), ['medical_boundary']);
+  assert.match(medication.permitted_claims.join(' '), /Consulta al profesional/u);
+});
+
+test('contextual inventory reconciliation remains fail-closed outside authoritative available-food continuations', () => {
+  const node = name => workflow.nodes.find(value => value.name === name);
+  const parserCode = node('Parse Direct RAG Obligations').parameters.jsCode;
+  const parse = (current_message, obligations, history = []) => vm.runInNewContext(`(function(){${parserCode}})()`, {
+    $: () => ({ item: { json: { current_message, history, commercial_state: { purchase_context: false }, offer_version: 'glp1-whatsapp-free-test-v3' } } }),
+    $input: { first: () => ({ json: { output: JSON.stringify({ obligations, semantic_context: { recommendation_request_evidence: null } }) } }) },
+  })[0].json;
+  assert.deepEqual(JSON.parse(JSON.stringify(parse('Gracias', [{ type: 'acknowledgement', evidence: 'Gracias' }]).obligations.map(value => value.type))), ['acknowledgement']);
+  for (const message of [
+    'Me gustan las tortillas.',
+    'Si viene mi hermana, tengo tortillas.',
+    'Mi hermana tiene tortillas.',
+    'No tengo tortillas.',
+  ]) {
+    const result = parse(message, [{ type: 'acknowledgement', evidence: message }], [{ role: 'customer', text: 'Tengo pollo.' }]);
+    assert.deepEqual(JSON.parse(JSON.stringify(result.obligations.map(value => value.type))), ['acknowledgement'], message);
+  }
+  const medication = parse('¿Debería bajar mi dosis de Mounjaro si estoy comiendo poco?', [{ type: 'medical_boundary', evidence: '¿Debería bajar mi dosis de Mounjaro si estoy comiendo poco?' }], [{ role: 'customer', text: 'Tengo pollo.' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(medication.obligations.map(value => value.type))), ['medical_boundary']);
 });
 
 test('exact generated Direct RAG semantic Code nodes compile their runtime bundles', () => {
