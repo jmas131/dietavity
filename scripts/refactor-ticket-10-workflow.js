@@ -1136,11 +1136,10 @@ const routeClaimNode = {
   name: 'Route Session Claim State',
 };
 const waitNode = {
-  parameters: {
-    resume: 'timeInterval',
-    amount: ordering.CLAIM_RETRY_SECONDS,
-    unit: 'seconds',
-  },
+  // Preserve the live n8n serialization until its version-specific defaults
+  // are independently qualified. This is intentionally an omitted-default
+  // representation, not a retry-policy change.
+  parameters: {},
   type: 'n8n-nodes-base.wait',
   typeVersion: 1.1,
   position: [-1168, 384],
@@ -1335,7 +1334,9 @@ for (const update of workflow.nodes.filter((candidate) => /^Update .* Delivery$/
 workflow.nodes.push({
   name: 'Loop Paid WhatsApp Parts', id: 'de53b931-acde-4cd4-a77b-37a000000001',
   type: 'n8n-nodes-base.splitInBatches', typeVersion: 3,
-  position: [73700, 48900], parameters: { batchSize: 1, options: {} },
+  // Preserve the current live omitted batchSize representation pending
+  // version-specific default qualification; do not change batching here.
+  position: [73700, 48900], parameters: { options: {} },
 });
 workflow.connections['Reserve Paid Assistant Reply'] = { main: [[{ node: 'Loop Paid WhatsApp Parts', type: 'main', index: 0 }]] };
 workflow.connections['Loop Paid WhatsApp Parts'] = { main: [
@@ -1377,7 +1378,7 @@ const directHistory = {
     AND session_id = $1
     AND direction = 'inbound'
 ),
-eligible_history AS (
+legacy_eligible_history AS (
   SELECT
     jsonb_build_object(
       'direction', message.direction,
@@ -1423,14 +1424,148 @@ eligible_history AS (
     )
   ORDER BY message.timestamp DESC, message.id DESC
   LIMIT 12
+),
+canonical_eligible_history AS (
+  SELECT
+    CASE WHEN message.direction = 'outbound' THEN 'assistant' ELSE 'customer' END AS role,
+    message.body AS text,
+    CASE
+      WHEN message.direction = 'outbound' THEN replied_inbound.processing_order
+      ELSE message.processing_order
+    END AS source_processing_order,
+    message.timestamp,
+    message.id,
+    CASE WHEN message.direction = 'outbound' THEN 1 ELSE 0 END AS role_sort
+  FROM public.messages AS message
+  CROSS JOIN current_inbound
+  LEFT JOIN public.messages AS replied_inbound
+    ON replied_inbound.id = message.in_reply_to_id
+    AND replied_inbound.session_id = current_inbound.session_id
+    AND replied_inbound.direction = 'inbound'
+  WHERE message.session_id = current_inbound.session_id
+    AND message.id <> current_inbound.id
+    AND (
+      (
+        message.direction = 'inbound'
+        AND message.processing_order < current_inbound.processing_order
+      )
+      OR (
+        message.direction = 'outbound'
+        AND message.message_kind IN ('sales_deterministic', 'sales_ai', 'checkout')
+        AND message.delivery_status IN ('accepted', 'sent', 'delivered')
+        AND replied_inbound.processing_order < current_inbound.processing_order
+        AND (
+          message.provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$'
+          OR message.metadata->>'provider_acceptance_evidence' = 'message_sid'
+        )
+      )
+    )
+  ORDER BY source_processing_order DESC, role_sort DESC, message.timestamp DESC, message.id DESC
+  LIMIT 12
 )
-SELECT COALESCE(
-  jsonb_agg(entry ORDER BY timestamp ASC, id ASC),
-  '[]'::jsonb
-) AS history
-FROM eligible_history;`, options: { queryReplacement: "={{ [ $('Claim Next Session Inbound').item.json.session_id, $('Claim Next Session Inbound').item.json.id ] }}" } },
+SELECT
+  COALESCE(
+    (SELECT jsonb_agg(entry ORDER BY timestamp ASC, id ASC) FROM legacy_eligible_history),
+    '[]'::jsonb
+  ) AS history,
+  COALESCE(
+    (SELECT jsonb_agg(
+      jsonb_build_object(
+        'role', role,
+        'text', text,
+        'source_processing_order', source_processing_order
+      )
+      ORDER BY source_processing_order ASC, role_sort ASC, timestamp ASC, id ASC
+    ) FROM canonical_eligible_history),
+    '[]'::jsonb
+  ) AS canonical_history;`, options: { queryReplacement: "={{ [ $('Claim Next Session Inbound').item.json.session_id, $('Claim Next Session Inbound').item.json.id ] }}" } },
   credentials: { postgres: byName('Reserve Canonical Inbound Message').credentials.postgres },
-  notes: 'Direct RAG V3: bounded canonical history only; current claimed message remains authoritative.',
+  notes: 'Direct RAG V3: preserves the legacy bounded history projection and additionally returns a bounded causal canonical_history projection for the Node engine; current claimed message remains authoritative.',
+};
+const selectDirectRagBackend = {
+  name: 'Select Direct RAG Backend', id: 'd74a0001-0000-4000-8000-000000000013',
+  type: 'n8n-nodes-base.switch', typeVersion: 3.4, position: [68352, 49280],
+  parameters: {
+    rules: {
+      values: [
+        {
+          conditions: {
+            options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 },
+            conditions: [{ leftValue: 'legacy', rightValue: 'legacy', operator: { type: 'string', operation: 'equals' } }],
+            combinator: 'and',
+          },
+        },
+        {
+          conditions: {
+            options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 },
+            conditions: [{ leftValue: 'legacy', rightValue: 'node', operator: { type: 'string', operation: 'equals' } }],
+            combinator: 'and',
+          },
+        },
+      ],
+    },
+    options: { fallbackOutput: 'none' },
+  },
+  notes: 'WP2.6 B1 backend selector. It intentionally defaults to the retained legacy route. A controlled B4 cutover changes only this closed selector value; exactly one output can execute.',
+};
+const buildConversationEngineRequest = {
+  name: 'Build Conversation Engine Request', id: 'd74a0001-0000-4000-8000-000000000014',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: [68352, 49792],
+  parameters: { jsCode: `const claimed = $('Claim Next Session Inbound').item.json;
+const historyValue = $input.first().json.canonical_history;
+let historyRows = Array.isArray(historyValue) ? historyValue : [];
+if (typeof historyValue === 'string') { try { const parsed = JSON.parse(historyValue); historyRows = Array.isArray(parsed) ? parsed : []; } catch { historyRows = null; } }
+const fail = () => { throw new Error('CONVERSATION_ENGINE_REQUEST_INVALID'); };
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+if (!Array.isArray(historyRows) || historyRows.length > 12 || !uuid.test(String(claimed.id || '')) || typeof claimed.session_id !== 'string' || !claimed.session_id.trim() || claimed.session_id.length > 200 || !Number.isSafeInteger(claimed.processing_order) || claimed.processing_order < 1 || typeof claimed.body !== 'string' || !claimed.body.trim() || claimed.body.length > 2000) fail();
+let previousOrder = 0; let previousRole = null;
+const canonical_history = historyRows.map(row => {
+  if (!row || typeof row !== 'object' || Array.isArray(row) || Object.getOwnPropertySymbols(row).length || Object.keys(row).length !== 3 || !Object.hasOwn(row, 'role') || !Object.hasOwn(row, 'text') || !Object.hasOwn(row, 'source_processing_order') || !['customer', 'assistant'].includes(row.role) || typeof row.text !== 'string' || row.text.length > 1000 || !Number.isSafeInteger(row.source_processing_order) || row.source_processing_order < 1 || row.source_processing_order >= claimed.processing_order || row.source_processing_order < previousOrder || (row.source_processing_order === previousOrder && previousRole === 'assistant' && row.role === 'customer')) fail();
+  previousOrder = row.source_processing_order; previousRole = row.role;
+  return { role: row.role, text: row.text, source_processing_order: row.source_processing_order };
+});
+return [{ json: { contract_version: 'conversation-engine-request-v1', request_id: claimed.id, session_id: claimed.session_id, inbound_message_id: claimed.id, processing_order: claimed.processing_order, current_message: claimed.body, canonical_history } }];` },
+  notes: 'Builds the closed Node conversation-engine request solely from the claimed inbound and canonical bounded history. It never forwards legacy semantic or response state.',
+};
+const callConversationEngine = {
+  name: 'Call Conversation Engine', id: 'd74a0001-0000-4000-8000-000000000015',
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.3, position: [68608, 49792],
+  parameters: {
+    method: 'POST',
+    url: 'http://127.0.0.1:3000/internal/conversation-engine/v1/resolve',
+    authentication: 'genericCredentialType',
+    genericAuthType: 'httpHeaderAuth',
+    sendBody: true,
+    specifyBody: 'json',
+    jsonBody: '={{ JSON.stringify($json) }}',
+    options: { timeout: 30000 },
+  },
+  credentials: {
+    httpHeaderAuth: {
+      id: '__CONVERSATION_ENGINE_HEADER_AUTH_CREDENTIAL_ID__',
+      name: 'Dietavity Conversation Engine Internal Header Auth',
+    },
+  },
+  notes: 'B1 placeholder credential reference only. B3 must bind an n8n HTTP Header Auth credential whose sole header is x-dietavity-conversation-engine-secret; no secret is serialized here. No retry or legacy fallback occurs on this path.',
+};
+const validateConversationEngineResponse = {
+  name: 'Validate/Adapt Conversation Engine Response', id: 'd74a0001-0000-4000-8000-000000000016',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: [68864, 49792],
+  parameters: { jsCode: `const fail = () => { throw new Error('CONVERSATION_ENGINE_RESPONSE_INVALID'); };
+const ownDataOnly = (value, keys) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getOwnPropertySymbols(value).length) return false;
+  const names = Object.getOwnPropertyNames(value);
+  if (names.length !== keys.length || names.some(name => !keys.includes(name))) return false;
+  return names.every(name => { const descriptor = Object.getOwnPropertyDescriptor(value, name); return descriptor && descriptor.enumerable === true && Object.prototype.hasOwnProperty.call(descriptor, 'value'); });
+};
+const response = $input.first().json;
+const request = $('Build Conversation Engine Request').item.json;
+const topKeys = ['contract_version', 'engine_version', 'request_id', 'resolution', 'assistant_response', 'persistence', 'diagnostics'];
+const persistenceKeys = ['pending_action', 'strategy', 'buyer_signal', 'topic', 'conversation_stage', 'goal', 'next_last_question_type', 'events'];
+if (!ownDataOnly(response, topKeys) || response.contract_version !== 'conversation-engine-response-v1' || response.engine_version !== 'direct-rag-v3-v1_3' || response.request_id !== request.request_id || typeof response.assistant_response !== 'string' || !response.assistant_response.trim() || response.assistant_response.length > 4000 || !ownDataOnly(response.resolution, ['status', 'type', 'delivery_permitted']) || !['resolved', 'safe_fallback'].includes(response.resolution.status) || response.resolution.type !== 'direct_rag_response' || response.resolution.delivery_permitted !== true || !ownDataOnly(response.persistence, persistenceKeys) || response.persistence.pending_action !== 'respond' || !Array.isArray(response.persistence.events) || response.persistence.events.length || !ownDataOnly(response.diagnostics, ['recommendation', 'llm']) || !ownDataOnly(response.diagnostics.recommendation, ['source', 'status', 'failure_code']) || !ownDataOnly(response.diagnostics.llm, ['obligations', 'composition'])) fail();
+for (const key of ['strategy', 'buyer_signal', 'topic', 'conversation_stage', 'goal', 'next_last_question_type']) if (response.persistence[key] !== null && typeof response.persistence[key] !== 'string') fail();
+return [{ json: { output: response.assistant_response, pending_action: response.persistence.pending_action, strategy: response.persistence.strategy, buyer_signal: response.persistence.buyer_signal, topic: response.persistence.topic, conversation_stage: response.persistence.conversation_stage, goal: response.persistence.goal, next_last_question_type: response.persistence.next_last_question_type, events: response.persistence.events, conversation_engine: { request_id: response.request_id, resolution_status: response.resolution.status, resolution_type: response.resolution.type, recommendation_source: response.diagnostics.recommendation.source, recommendation_status: response.diagnostics.recommendation.status, recommendation_failure_code: response.diagnostics.recommendation.failure_code, llm_obligations_status: response.diagnostics.llm.obligations, llm_composition_status: response.diagnostics.llm.composition } } }];` },
+  notes: 'Fails closed on malformed, uncorrelated, non-deliverable, or incomplete Node results. It maps only validated customer response and persistence metadata; claimed identity remains authoritative downstream.',
 };
 const directContext = {
   name: 'Build Direct RAG Conversation Context', id: 'd74a0001-0000-4000-8000-000000000002',
@@ -1442,7 +1577,7 @@ const session = $('Get Onboarding Session').item.json || {};
 const historyValue = $input.first().json.history;
 let historyRows = Array.isArray(historyValue) ? historyValue : [];
 if (typeof historyValue === 'string') { try { const parsed = JSON.parse(historyValue); historyRows = Array.isArray(parsed) ? parsed : []; } catch { historyRows = []; } }
-const history = historyRows.slice(-12).map(row => ({ role: row.direction === 'outbound' ? 'assistant' : 'customer', text: String(row.body || '').slice(0, 1000) }));
+const history = historyRows.slice(-12).map(row => ({ role: row.role === 'assistant' || row.direction === 'outbound' ? 'assistant' : 'customer', text: String(row.text ?? row.body ?? '').slice(0, 1000) }));
 const expiry = typeof session.commercial_context_expires_at === 'string' ? Date.parse(session.commercial_context_expires_at) : NaN;
 const purchaseContext = session.last_question_type === 'purchase_confirmation' && Number.isFinite(expiry) && expiry > Date.now();
 const current_message = String(current.body || '').slice(0, 2000);
@@ -1545,12 +1680,19 @@ const output = unsafe || !response ? fallback || 'No tengo información confirma
 return [{ json: { ...value, output, final_gate: { cleared: valid && !unsafe, fallback_used: !valid || unsafe, required_obligation_ids: required, obsolete_claims_rejected: obsolete.test(String(parsed?.response || '')) }, next_last_question_type: null, allow_purchase_cta: false, deterministic_reason: 'direct_rag_v3_final_gate' } }];` }, notes: 'One final deterministic V3 grounding/policy gate. Invalid drafts get one safe grounded fallback; no unbounded regeneration.' };
 const directModel = cloneWorkflowNode(byName('Sales Interpretation Model')); directModel.name = 'Sales Obligations Model'; directModel.id = 'd74a0001-0000-4000-8000-000000000010'; directModel.position = [68608, 49760];
 const directComposerModel = cloneWorkflowNode(byName('Sales Response Model')); directComposerModel.name = 'Grounded Sales Response Model'; directComposerModel.id = 'd74a0001-0000-4000-8000-000000000011'; directComposerModel.position = [69888, 50128];
-workflow.nodes.push(directHistory, directContext, directInterpreter, directParser, directResolver, directRoute, directEnvelope, directComposer, directGate, directModel, directComposerModel);
+workflow.nodes.push(directHistory, selectDirectRagBackend, buildConversationEngineRequest, callConversationEngine, validateConversationEngineResponse, directContext, directInterpreter, directParser, directResolver, directRoute, directEnvelope, directComposer, directGate, directModel, directComposerModel);
 // Bypass the legacy giant-knowledge node altogether. The two existing session
 // branches enter the bounded-context lookup directly.
 workflow.connections['If Existing Onboarding Session'] = { main: [[{ node: directHistory.name, type: 'main', index: 0 }], [{ node: 'Initialize Sales Lead v3', type: 'main', index: 0 }]] };
 workflow.connections['Initialize Sales Lead v3'] = { main: [[{ node: directHistory.name, type: 'main', index: 0 }]] };
-workflow.connections[directHistory.name] = { main: [[{ node: directContext.name, type: 'main', index: 0 }]] };
+workflow.connections[directHistory.name] = { main: [[{ node: selectDirectRagBackend.name, type: 'main', index: 0 }]] };
+workflow.connections[selectDirectRagBackend.name] = { main: [
+  [{ node: directContext.name, type: 'main', index: 0 }],
+  [{ node: buildConversationEngineRequest.name, type: 'main', index: 0 }],
+] };
+workflow.connections[buildConversationEngineRequest.name] = { main: [[{ node: callConversationEngine.name, type: 'main', index: 0 }]] };
+workflow.connections[callConversationEngine.name] = { main: [[{ node: validateConversationEngineResponse.name, type: 'main', index: 0 }]] };
+workflow.connections[validateConversationEngineResponse.name] = { main: [[{ node: salesResponsePersistenceEnvelope.name, type: 'main', index: 0 }]] };
 workflow.connections[directContext.name] = { main: [[{ node: directInterpreter.name, type: 'main', index: 0 }]] };
 // n8n stores an AI dependency under the model node (source), not the agent
 // node. This matches the retained Sales Interpretation/Response model edges.

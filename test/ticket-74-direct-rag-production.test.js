@@ -168,9 +168,15 @@ test('bounded practical guidance is food-focused and keeps medication boundary s
   assert.match(mixed, /profesional/); assert.doesNotMatch(mixed, /baja tu dosis/i);
 });
 test('generated workflow enters direct RAG, preserves action routes, and has a grounded final gate', () => {
-  const names = new Set(workflow.nodes.map(node => node.name)); const outputs = name => (workflow.connections[name]?.main || []).flat().map(edge => edge.node);
+  const names = new Set(workflow.nodes.map(node => node.name)); const outputs = (name, branch = null) => branch === null ? (workflow.connections[name]?.main || []).flat().map(edge => edge.node) : (workflow.connections[name]?.main?.[branch] || []).map(edge => edge.node);
   assert.deepEqual(outputs('If Existing Onboarding Session')[0], 'Get Direct RAG Conversation History');
   assert.ok(!outputs('If Existing Onboarding Session').includes('Build Canonical Dietavity Knowledge'));
+  assert.deepEqual(outputs('Get Direct RAG Conversation History'), ['Select Direct RAG Backend']);
+  assert.deepEqual(outputs('Select Direct RAG Backend', 0), ['Build Direct RAG Conversation Context']);
+  assert.deepEqual(outputs('Select Direct RAG Backend', 1), ['Build Conversation Engine Request']);
+  assert.deepEqual(outputs('Build Conversation Engine Request'), ['Call Conversation Engine']);
+  assert.deepEqual(outputs('Call Conversation Engine'), ['Validate/Adapt Conversation Engine Response']);
+  assert.deepEqual(outputs('Validate/Adapt Conversation Engine Response'), ['Build Sales Response Persistence Envelope']);
   assert.deepEqual(outputs('Interpret Sales Obligations'), ['Parse Direct RAG Obligations']);
   assert.deepEqual(workflow.connections['Sales Obligations Model'].ai_languageModel, [[{ node: 'Interpret Sales Obligations', type: 'ai_languageModel', index: 0 }]]);
   assert.equal(workflow.connections['Interpret Sales Obligations'].ai_languageModel, undefined);
@@ -212,9 +218,13 @@ test('direct history query excludes later queued turns and replies to them', () 
   assert.match(query, /replied_inbound\.id = message\.in_reply_to_id/);
   assert.match(query, /replied_inbound\.processing_order < current_inbound\.processing_order/);
   assert.match(query, /message\.id <> current_inbound\.id/);
-  assert.match(query, /ORDER BY message\.timestamp DESC, message\.id DESC\s+LIMIT 12/);
-  assert.match(query, /COALESCE\(\s*jsonb_agg\(entry ORDER BY timestamp ASC, id ASC\),\s*'\[\]'::jsonb\s*\) AS history/);
-  assert.match(query, /FROM eligible_history/);
+  assert.match(query, /ORDER BY source_processing_order DESC, role_sort DESC, message\.timestamp DESC, message\.id DESC\s+LIMIT 12/);
+  assert.match(query, /'role', role/);
+  assert.match(query, /'text', text/);
+  assert.match(query, /'source_processing_order', source_processing_order/);
+  assert.match(query, /ORDER BY source_processing_order ASC, role_sort ASC, timestamp ASC, id ASC/);
+  assert.match(query, /FROM legacy_eligible_history/);
+  assert.match(query, /FROM canonical_eligible_history/);
 });
 test('dedicated no-side-effect harness runs controlled V2 fixtures', () => {
   const cases = [['¿En dónde están ubicados?', 'location'], ['¿Cuánto cuesta?', 'price'], ['¿Cómo arman el plan?', 'how_it_works'], ['¿Dan el medicamento GLP-1?', 'glp1_scope'], ['Tengo poco apetito, ¿qué puedo comer?', 'practical_guidance'], ['Recuérdame mañana.', 'reminder_request'], ['No gracias.', 'graceful_close']];

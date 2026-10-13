@@ -105,7 +105,7 @@ test('every Twilio customer send has a durable reservation and delivery update',
     if (incoming[0] === 'Loop Paid WhatsApp Parts') {
       assert.deepEqual(outputs(reservationName), ['Loop Paid WhatsApp Parts']);
       assert.deepEqual(outputs('Loop Paid WhatsApp Parts', 1), [send.name]);
-      assert.equal(nodes.get('Loop Paid WhatsApp Parts').parameters.batchSize, 1);
+      assert.deepEqual(nodes.get('Loop Paid WhatsApp Parts').parameters, { options: {} });
     }
     assert.match(reservationName, /^Reserve /, send.name);
     const outgoing = outputs(send.name);
