@@ -1491,14 +1491,14 @@ const selectDirectRagBackend = {
         {
           conditions: {
             options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 },
-            conditions: [{ leftValue: 'legacy', rightValue: 'legacy', operator: { type: 'string', operation: 'equals' } }],
+            conditions: [{ leftValue: 'node', rightValue: 'legacy', operator: { type: 'string', operation: 'equals' } }],
             combinator: 'and',
           },
         },
         {
           conditions: {
             options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 },
-            conditions: [{ leftValue: 'legacy', rightValue: 'node', operator: { type: 'string', operation: 'equals' } }],
+            conditions: [{ leftValue: 'node', rightValue: 'node', operator: { type: 'string', operation: 'equals' } }],
             combinator: 'and',
           },
         },
@@ -1506,7 +1506,7 @@ const selectDirectRagBackend = {
     },
     options: { fallbackOutput: 'none' },
   },
-  notes: 'WP2.6 B1 backend selector. It intentionally defaults to the retained legacy route. A controlled B4 cutover changes only this closed selector value; exactly one output can execute.',
+  notes: 'WP2.6 Node-cutover backend selector. It selects the Node Conversation Engine route while retaining the complete legacy branch on output 0 for manual rollback; exactly one output can execute.',
 };
 const buildConversationEngineRequest = {
   name: 'Build Conversation Engine Request', id: 'd74a0001-0000-4000-8000-000000000014',
@@ -1517,14 +1517,15 @@ let historyRows = Array.isArray(historyValue) ? historyValue : [];
 if (typeof historyValue === 'string') { try { const parsed = JSON.parse(historyValue); historyRows = Array.isArray(parsed) ? parsed : []; } catch { historyRows = null; } }
 const fail = () => { throw new Error('CONVERSATION_ENGINE_REQUEST_INVALID'); };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-if (!Array.isArray(historyRows) || historyRows.length > 12 || !uuid.test(String(claimed.id || '')) || typeof claimed.session_id !== 'string' || !claimed.session_id.trim() || claimed.session_id.length > 200 || !Number.isSafeInteger(claimed.processing_order) || claimed.processing_order < 1 || typeof claimed.body !== 'string' || !claimed.body.trim() || claimed.body.length > 2000) fail();
+const processing_order = typeof claimed.processing_order === 'string' && /^[1-9]\\d*$/.test(claimed.processing_order) ? Number(claimed.processing_order) : claimed.processing_order;
+if (!Array.isArray(historyRows) || historyRows.length > 12 || !uuid.test(String(claimed.id || '')) || typeof claimed.session_id !== 'string' || !claimed.session_id.trim() || claimed.session_id.length > 200 || !Number.isSafeInteger(processing_order) || processing_order < 1 || typeof claimed.body !== 'string' || !claimed.body.trim() || claimed.body.length > 2000) fail();
 let previousOrder = 0; let previousRole = null;
 const canonical_history = historyRows.map(row => {
-  if (!row || typeof row !== 'object' || Array.isArray(row) || Object.getOwnPropertySymbols(row).length || Object.keys(row).length !== 3 || !Object.hasOwn(row, 'role') || !Object.hasOwn(row, 'text') || !Object.hasOwn(row, 'source_processing_order') || !['customer', 'assistant'].includes(row.role) || typeof row.text !== 'string' || row.text.length > 1000 || !Number.isSafeInteger(row.source_processing_order) || row.source_processing_order < 1 || row.source_processing_order >= claimed.processing_order || row.source_processing_order < previousOrder || (row.source_processing_order === previousOrder && previousRole === 'assistant' && row.role === 'customer')) fail();
+  if (!row || typeof row !== 'object' || Array.isArray(row) || Object.getOwnPropertySymbols(row).length || Object.keys(row).length !== 3 || !Object.hasOwn(row, 'role') || !Object.hasOwn(row, 'text') || !Object.hasOwn(row, 'source_processing_order') || !['customer', 'assistant'].includes(row.role) || typeof row.text !== 'string' || row.text.length > 1000 || !Number.isSafeInteger(row.source_processing_order) || row.source_processing_order < 1 || row.source_processing_order >= processing_order || row.source_processing_order < previousOrder || (row.source_processing_order === previousOrder && previousRole === 'assistant' && row.role === 'customer')) fail();
   previousOrder = row.source_processing_order; previousRole = row.role;
   return { role: row.role, text: row.text, source_processing_order: row.source_processing_order };
 });
-return [{ json: { contract_version: 'conversation-engine-request-v1', request_id: claimed.id, session_id: claimed.session_id, inbound_message_id: claimed.id, processing_order: claimed.processing_order, current_message: claimed.body, canonical_history } }];` },
+return [{ json: { contract_version: 'conversation-engine-request-v1', request_id: claimed.id, session_id: claimed.session_id, inbound_message_id: claimed.id, processing_order, current_message: claimed.body, canonical_history } }];` },
   notes: 'Builds the closed Node conversation-engine request solely from the claimed inbound and canonical bounded history. It never forwards legacy semantic or response state.',
 };
 const callConversationEngine = {

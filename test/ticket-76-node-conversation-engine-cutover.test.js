@@ -28,15 +28,15 @@ function runCode(name, input, lookup) {
   })[0].json;
 }
 
-test('B1 selector preserves legacy as its only default backend', () => {
+test('Node cutover selector chooses Node while preserving legacy as output 0', () => {
   const selector = node('Select Direct RAG Backend');
   assert.equal(selector.type, 'n8n-nodes-base.switch');
   assert.equal(selector.typeVersion, 3.4);
   const values = selector.parameters.rules.values;
   assert.equal(values.length, 2);
-  assert.equal(values[0].conditions.conditions[0].leftValue, 'legacy');
+  assert.equal(values[0].conditions.conditions[0].leftValue, 'node');
   assert.equal(values[0].conditions.conditions[0].rightValue, 'legacy');
-  assert.equal(values[1].conditions.conditions[0].leftValue, 'legacy');
+  assert.equal(values[1].conditions.conditions[0].leftValue, 'node');
   assert.equal(values[1].conditions.conditions[0].rightValue, 'node');
   assert.deepEqual(outputs(selector.name, 0), ['Build Direct RAG Conversation Context']);
   assert.deepEqual(outputs(selector.name, 1), ['Build Conversation Engine Request']);
@@ -59,6 +59,18 @@ test('B1 builds an ordered closed Node request from claimed canonical inputs onl
     processing_order: 3, current_message: '¿Qué me recomiendas?', canonical_history: history,
   });
   assert.deepEqual(JSON.parse(JSON.stringify(validateRequest(built))), JSON.parse(JSON.stringify(built)));
+  const stringOrder = runCode('Build Conversation Engine Request', { canonical_history: history }, () => ({
+    ...claimed,
+    processing_order: '474',
+  }));
+  assert.equal(stringOrder.processing_order, 474);
+  assert.deepEqual(JSON.parse(JSON.stringify(validateRequest(stringOrder))), JSON.parse(JSON.stringify(stringOrder)));
+  for (const invalidOrder of ['', ' 474', '0474', '474.0', '4e2', '0', '-1', '9007199254740992', 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => runCode('Build Conversation Engine Request', { canonical_history: history }, () => ({
+      ...claimed,
+      processing_order: invalidOrder,
+    })), /CONVERSATION_ENGINE_REQUEST_INVALID/, String(invalidOrder));
+  }
   assert.throws(() => runCode('Build Conversation Engine Request', {
     canonical_history: [{ role: 'assistant', text: 'Primero', source_processing_order: 1 }, { role: 'customer', text: 'Después', source_processing_order: 1 }],
   }, () => claimed), /CONVERSATION_ENGINE_REQUEST_INVALID/);
