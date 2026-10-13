@@ -116,7 +116,7 @@ test('B1 HTTP node has one credential placeholder, a bounded timeout, and no ser
   const http = node('Call Conversation Engine');
   assert.equal(http.type, 'n8n-nodes-base.httpRequest');
   assert.equal(http.parameters.method, 'POST');
-  assert.equal(http.parameters.url, 'http://127.0.0.1:3000/internal/conversation-engine/v1/resolve');
+  assert.equal(http.parameters.url, 'http://172.18.0.1:12751/internal/conversation-engine/v1/resolve');
   assert.equal(http.parameters.options.timeout, 30000);
   assert.equal(http.parameters.genericAuthType, 'httpHeaderAuth');
   assert.deepEqual(Object.keys(http.credentials), ['httpHeaderAuth']);

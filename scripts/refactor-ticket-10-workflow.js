@@ -1532,7 +1532,7 @@ const callConversationEngine = {
   type: 'n8n-nodes-base.httpRequest', typeVersion: 4.3, position: [68608, 49792],
   parameters: {
     method: 'POST',
-    url: 'http://127.0.0.1:3000/internal/conversation-engine/v1/resolve',
+    url: 'http://172.18.0.1:12751/internal/conversation-engine/v1/resolve',
     authentication: 'genericCredentialType',
     genericAuthType: 'httpHeaderAuth',
     sendBody: true,
