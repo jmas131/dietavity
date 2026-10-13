@@ -858,3 +858,46 @@ The direct V2 is a focused exception: it replaces a known-quality constraint in 
 This revision preserves the architecture and strategy from the August 29 summary and incorporates the later implementation reports, operator outputs, production confirmations, and decisions in [Dietavity project - 11 (We need money!)](chatgpt-conversation://6a832411-7198-83e8-b12c-7ced277f2438) and [Dietavity project - 13 (We need money!)](chatgpt-conversation://6ab9c3ca-d554-83e8-b49e-3f70fac0b5e4). Later corrections and observed outcomes take precedence over earlier proposals. Proposed work is not treated as deployed functionality.
 
 Update the operational status when the direct V2 workflow is implemented, controlled-tested, activated, rolled back, or superseded; also update Ticket 39 activation, report deactivation, and subsequent production checks when confirmed. Do not overwrite historical incident evidence or equate repository test success with a production rollout.
+
+## 31. WP2.6 Final Production Cutover — October 13, 2026
+
+**Status: production-qualified and active.** This record supersedes earlier WP2.6 planning, paused-cutover, and legacy-selected status statements in this summary.
+
+```text
+Twilio WhatsApp
+→ n8n inbound persistence / ordering / claim
+→ Node Conversation Engine
+→ n8n persistence / outbound reservation / Twilio delivery
+→ WhatsApp
+```
+
+n8n remains responsible for orchestration and durable delivery semantics. Node owns conversational intelligence: semantic extraction, authority, ephemeral food state, obligation interpretation/reconciliation, V1.3 recommendation selection, safety boundaries, composition, and the final delivery decision.
+
+### Cutover and boundary
+
+The Node-selected Ticket 10 workflow was imported and activated manually through the n8n UI. `Select Direct RAG Backend` selects Node. The legacy Direct RAG intelligence branch remains present but unselected as a temporary manual rollback option; it is not a launch prerequisite to delete it.
+
+The first real Node-selected execution exposed one handoff mismatch: the real n8n/Postgres claim path supplied `processing_order` as a numeric string such as `"474"`, while the request builder had required a JavaScript integer. The boundary now accepts only canonical positive decimal strings, normalizes them to `Number`, validates the normalized positive safe integer, and emits the numeric value. Empty, whitespace-padded, leading-zero, exponent, fractional, unsafe, zero, negative, and other noncanonical representations fail closed. No database, schema, or upstream claim change was required.
+
+### Production qualification
+
+The real WhatsApp production path passed this sequence through WhatsApp → n8n → Node Conversation Engine → n8n persistence/delivery → WhatsApp:
+
+1. `Tengo pollo. ¿Qué me recomiendas?` returned a useful chicken recommendation.
+2. `También tengo tortillas, aguacate y jitomate.` preserved conversational food continuity.
+3. `Ya comí pollo. ¿Qué puedo comer ahora?` no longer treated chicken as currently available.
+4. `Tengo poca hambre.` returned bounded low-appetite nutrition guidance without medical overreach.
+5. A medication dose-change question refused dose-change guidance and referred the person to the prescribing professional.
+
+One duplicate response occurred because the previously failed inbound turn was processed after the handoff fix. Treat it as a historical incident, not an active defect, unless it recurs.
+
+### Current decision and priority
+
+WP2.6 is complete enough for commercial launch. Explicitly defer deletion of the legacy intelligence branch, additional Conversation Engine refinements, low-appetite optimization, investigation of the one-time duplicate, infrastructure cleanup, additional observability/hardening, and broad backend work unless real production evidence shows a concrete blocker or materially commercial defect.
+
+Immediate priority is revenue validation:
+
+1. Verify the website purchase funnel once end to end.
+2. Review and finalize the commercial landing page.
+3. Restart Meta traffic.
+4. Diagnose the first commercial bottleneck from observed behavior: impressions without clicks indicate creative; clicks without Checkout indicate landing-page or offer issues; Checkout without purchase indicates trust, price, or payment friction; purchases shift focus to traffic and economics optimization.
