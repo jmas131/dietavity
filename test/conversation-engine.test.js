@@ -88,3 +88,46 @@ test('same inbound identity may be retried with a different correlation request 
   assert.equal(first.assistant_response, second.assistant_response);
   assert.equal(first.resolution.delivery_permitted, true);
 });
+
+test('Ticket 77 production incident: activation meal report is acknowledged without treating it as an unsupported Dietavity claim', async () => {
+  const activation = 'Dietavity es un asistente de alimentación por WhatsApp para personas que usan GLP-1. Puedes contarme qué has comido, cuánto apetito tienes o qué alimentos tienes disponibles, y te ayudo a decidir qué comer. Puedes probarlo gratis. ¿Qué necesitas resolver con tu alimentación ahora?';
+  const message = 'Desayuno ensalada de nopales con tres huevos cocidos';
+  const engine = createConversationEngine({ llmClient: fixtureLlm([
+    { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } },
+  ]) });
+
+  const result = await engine.resolve(request({
+    requestId: id(51), inboundId: id(52), processingOrder: 2, currentMessage: message,
+    history: [historyEntry('assistant', activation, 1)],
+  }));
+
+  assert.equal(result.assistant_response, 'Gracias por contarme tu desayuno.');
+  assert.doesNotMatch(result.assistant_response, /No tengo información confirmada/u);
+  assert.equal(result.diagnostics.recommendation.source, null);
+  assert.equal(result.resolution.status, 'resolved');
+});
+
+test('Ticket 77 recognizes bounded natural declarative meal reports and leaves unsafe variants fail-closed', async () => {
+  const reports = [
+    ['Desayuné huevos con nopales.', 'Gracias por contarme tu desayuno.'],
+    ['Comí pollo con arroz.', 'Gracias por contarme lo que comiste.'],
+    ['Hoy desayuné tres huevos.', 'Gracias por contarme tu desayuno.'],
+    ['Acabo de comer ensalada.', 'Gracias por contarme lo que comiste.'],
+    ['En la mañana comí huevos y tortillas.', 'Gracias por contarme lo que comiste.'],
+  ];
+  for (const [index, [message, expected]] of reports.entries()) {
+    const engine = createConversationEngine({ llmClient: fixtureLlm([
+      { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } },
+    ]) });
+    const result = await engine.resolve(request({ requestId: id(60 + index), inboundId: id(70 + index), currentMessage: message }));
+    assert.equal(result.assistant_response, expected, message);
+  }
+
+  for (const message of ['¿Desayuné huevos con nopales?', 'No desayuné huevos.', 'Tal vez comí ensalada.', 'Según Ana comí ensalada.', 'Desayuno ensalada de nopales.']) {
+    const engine = createConversationEngine({ llmClient: fixtureLlm([
+      { obligations: [{ type: 'unsupported', evidence: message }], semantic_context: { recommendation_request_evidence: null } },
+    ]) });
+    const result = await engine.resolve(request({ requestId: id(80 + message.length), inboundId: id(100 + message.length), currentMessage: message }));
+    assert.equal(result.assistant_response, 'No tengo información confirmada para afirmar que Dietavity ofrezca eso.', message);
+  }
+});
