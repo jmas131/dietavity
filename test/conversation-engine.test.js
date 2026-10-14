@@ -101,7 +101,7 @@ test('Ticket 77 production incident: activation meal report is acknowledged with
     history: [historyEntry('assistant', activation, 1)],
   }));
 
-  assert.equal(result.assistant_response, 'Gracias por contarme tu desayuno.');
+  assert.equal(result.assistant_response, '¡Perfecto! 😊 Ya sé qué desayunaste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.');
   assert.doesNotMatch(result.assistant_response, /No tengo información confirmada/u);
   assert.equal(result.diagnostics.recommendation.source, null);
   assert.equal(result.resolution.status, 'resolved');
@@ -109,11 +109,11 @@ test('Ticket 77 production incident: activation meal report is acknowledged with
 
 test('Ticket 77 recognizes bounded natural declarative meal reports and leaves unsafe variants fail-closed', async () => {
   const reports = [
-    ['Desayuné huevos con nopales.', 'Gracias por contarme tu desayuno.'],
-    ['Comí pollo con arroz.', 'Gracias por contarme lo que comiste.'],
-    ['Hoy desayuné tres huevos.', 'Gracias por contarme tu desayuno.'],
-    ['Acabo de comer ensalada.', 'Gracias por contarme lo que comiste.'],
-    ['En la mañana comí huevos y tortillas.', 'Gracias por contarme lo que comiste.'],
+    ['Desayuné huevos con nopales.', '¡Perfecto! 😊 Ya sé qué desayunaste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.'],
+    ['Comí pollo con arroz.', '¡Perfecto! 😊 Ya sé qué comiste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.'],
+    ['Hoy desayuné tres huevos.', '¡Perfecto! 😊 Ya sé qué desayunaste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.'],
+    ['Acabo de comer ensalada.', '¡Perfecto! 😊 Ya sé qué comiste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.'],
+    ['En la mañana comí huevos y tortillas.', '¡Perfecto! 😊 Ya sé qué comiste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.'],
   ];
   for (const [index, [message, expected]] of reports.entries()) {
     const engine = createConversationEngine({ llmClient: fixtureLlm([
@@ -129,5 +129,107 @@ test('Ticket 77 recognizes bounded natural declarative meal reports and leaves u
     ]) });
     const result = await engine.resolve(request({ requestId: id(80 + message.length), inboundId: id(100 + message.length), currentMessage: message }));
     assert.equal(result.assistant_response, 'No tengo información confirmada para afirmar que Dietavity ofrezca eso.', message);
+  }
+});
+
+test('Ticket 77B recognizes bounded explicit meal labels without activation context', async () => {
+  const breakfast = '¡Perfecto! 😊 Ya sé qué desayunaste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.';
+  const meal = '¡Perfecto! 😊 Ya sé qué comiste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.';
+  const reports = [
+    ['Desayuno: huevos con nopales', breakfast],
+    ['Comida: pollo con arroz', meal],
+    ['Cena: ensalada con atún', meal],
+    ['Mi desayuno: huevos con nopales', breakfast],
+    ['Mi comida: pollo con arroz', meal],
+    ['Mi cena: ensalada con atún', meal],
+    ['Mi desayuno fue huevos con nopales', breakfast],
+    ['Mi comida fue pollo con arroz', meal],
+    ['Mi cena fue ensalada con atún', meal],
+    ['Desayuno huevos con nopales', breakfast],
+    ['Desayuno huevo y tortilla', breakfast],
+    ['Cena ensalada con atún', meal],
+    ['Cena sopa, pollo y arroz', meal],
+  ];
+  for (const [index, [message, expected]] of reports.entries()) {
+    const engine = createConversationEngine({ llmClient: fixtureLlm([
+      { obligations: [{ type: 'unsupported', evidence: message }], semantic_context: { recommendation_request_evidence: null } },
+    ]) });
+    const result = await engine.resolve(request({ requestId: id(200 + index), inboundId: id(300 + index), currentMessage: message }));
+    assert.equal(result.assistant_response, expected, message);
+    assert.equal(result.diagnostics.recommendation.source, null, message);
+  }
+});
+
+test('Ticket 77B keeps ambiguous, planned, and general meal labels fail-closed', async () => {
+  const messages = [
+    '¿Qué me recomiendas para el desayuno?',
+    '¿Qué puedo comer de desayuno?',
+    'No desayuné.',
+    'No cené.',
+    'Mañana de comida quiero pollo.',
+    'Para la cena tengo pollo.',
+    'Quiero huevos para el desayuno.',
+    'El desayuno es importante.',
+    'Ideas para la cena.',
+    '¿Cena?',
+    'Desayuno a las 8.',
+    'Mi desayuno será huevos con nopales.',
+    'La comida de mañana será pollo con arroz.',
+    'Comida pollo con arroz.',
+    'Desayuno huevos revueltos.',
+    'Cena será ensalada con atún.',
+  ];
+  for (const [index, message] of messages.entries()) {
+    const engine = createConversationEngine({ llmClient: fixtureLlm([
+      { obligations: [{ type: 'unsupported', evidence: message }], semantic_context: { recommendation_request_evidence: null } },
+    ]) });
+    const result = await engine.resolve(request({ requestId: id(400 + index), inboundId: id(500 + index), currentMessage: message }));
+    assert.equal(result.assistant_response, 'No tengo información confirmada para afirmar que Dietavity ofrezca eso.', message);
+  }
+});
+
+test('Ticket 77A reconstructs bounded meal-report context from canonical history for a later food decision without inventing inventory', async () => {
+  const activation = 'Dietavity es un asistente de alimentación por WhatsApp para personas que usan GLP-1. Puedes contarme qué has comido, cuánto apetito tienes o qué alimentos tienes disponibles, y te ayudo a decidir qué comer. Puedes probarlo gratis.';
+  const breakfast = 'Desayuno ensalada de nopales con tres huevos cocidos';
+  const acknowledgement = '¡Perfecto! 😊 Ya sé qué desayunaste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.';
+  const followup = 'Tengo poca hambre, ¿qué puedo comer?';
+  const diagnostics = [];
+  const engine = createConversationEngine({
+    logger: value => diagnostics.push(value),
+    llmClient: fixtureLlm([{ obligations: [{ type: 'food_decision', evidence: '¿qué puedo comer?' }], semantic_context: { recommendation_request_evidence: '¿qué puedo comer?' } }]),
+  });
+  const result = await engine.resolve(request({
+    requestId: id(91), inboundId: id(92), processingOrder: 3, currentMessage: followup,
+    history: [historyEntry('assistant', activation, 1), historyEntry('customer', breakfast, 2), historyEntry('assistant', acknowledgement, 2)],
+  }));
+
+  assert.equal(result.assistant_response, 'Tomando en cuenta que ya desayunaste y tienes poca hambre, para recomendarte algo concreto, ¿Qué alimentos tienes disponibles ahora?');
+  assert.equal(result.diagnostics.recommendation.status, 'needs_clarification');
+  assert.deepEqual(diagnostics[0].food.available_food_ids, []);
+  assert.deepEqual(diagnostics[0].food.recently_consumed_ids, []);
+  assert.doesNotMatch(result.assistant_response, /nopales|ensalada|huevos/u);
+});
+
+test('Ticket 77B reconstructs colon and possessive meal reports from canonical history without inventing foods', async () => {
+  const acknowledgement = '¡Perfecto! 😊 Ya sé qué comiste. Cuando quieras decidir qué comer después, dime cuánto apetito tienes o qué alimentos tienes disponibles y te ayudo a elegir.';
+  const reports = [
+    ['Desayuno: ensalada de nopales con tres huevos cocidos', 'Tomando en cuenta que ya desayunaste y tienes poca hambre, para recomendarte algo concreto, ¿Qué alimentos tienes disponibles ahora?'],
+    ['Mi cena fue ensalada de nopales con tres huevos cocidos', 'Tomando en cuenta que ya comiste y tienes poca hambre, para recomendarte algo concreto, ¿Qué alimentos tienes disponibles ahora?'],
+  ];
+  for (const [index, [mealReport, expected]] of reports.entries()) {
+    const diagnostics = [];
+    const engine = createConversationEngine({
+      logger: value => diagnostics.push(value),
+      llmClient: fixtureLlm([{ obligations: [{ type: 'food_decision', evidence: '¿qué puedo comer?' }], semantic_context: { recommendation_request_evidence: '¿qué puedo comer?' } }]),
+    });
+    const result = await engine.resolve(request({
+      requestId: id(600 + index), inboundId: id(700 + index), processingOrder: 3, currentMessage: 'Tengo poca hambre, ¿qué puedo comer?',
+      history: [historyEntry('customer', mealReport, 1), historyEntry('assistant', acknowledgement, 1)],
+    }));
+    assert.equal(result.assistant_response, expected, mealReport);
+    assert.equal(result.diagnostics.recommendation.status, 'needs_clarification', mealReport);
+    assert.deepEqual(diagnostics[0].food.available_food_ids, [], mealReport);
+    assert.deepEqual(diagnostics[0].food.recently_consumed_ids, [], mealReport);
+    assert.doesNotMatch(result.assistant_response, /nopales|ensalada|huevos/u, mealReport);
   }
 });
