@@ -40,6 +40,8 @@ test('internal endpoint maps LLM timeout and unexpected errors to non-deliverabl
   const unavailable = await post({ async resolve() { throw new ConversationLlmError('llm_timeout'); } });
   assert.equal(unavailable.status, 503); assert.equal(unavailable.value.resolution.delivery_permitted, false);
   assert.equal(unavailable.value.assistant_response, null); assert.doesNotMatch(JSON.stringify(unavailable.value), /llm_timeout|stack|exception/iu);
+  assert.deepEqual(unavailable.value.diagnostics.llm, { obligations: 'unavailable', composition: 'unavailable' });
+  assert.doesNotMatch(JSON.stringify(unavailable.value), /upstream_status|upstream_category|http_429|timeout/iu);
   const unexpected = await post({ async resolve() { throw new Error('sensitive internal failure'); } });
   assert.equal(unexpected.status, 500); assert.equal(unexpected.value.resolution.delivery_permitted, false);
   assert.doesNotMatch(JSON.stringify(unexpected.value), /sensitive|internal failure/iu);

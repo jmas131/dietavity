@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createConversationEngine } = require('../lib/conversation-engine/service');
 const { ConversationRequestError } = require('../lib/conversation-engine/contracts');
+const { ConversationLlmError } = require('../lib/conversation-engine/llm-client');
 
 const id = value => `00000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 const request = ({ requestId = id(1), inboundId = id(2), processingOrder = 1, currentMessage, history = [] }) => ({
@@ -87,6 +88,40 @@ test('same inbound identity may be retried with a different correlation request 
   assert.equal(second.request_id, id(46));
   assert.equal(first.assistant_response, second.assistant_response);
   assert.equal(first.resolution.delivery_permitted, true);
+});
+
+test('Conversation Engine logs one bounded obligations-stage LLM failure without customer data', async () => {
+  const events = [];
+  const ticks = [0, 10, 35];
+  const engine = createConversationEngine({
+    clock: () => ticks.shift(),
+    logger: value => events.push(value),
+    llmClient: { async interpret() { throw new ConversationLlmError('llm_timeout'); }, async compose() { throw new Error('not reached'); } },
+  });
+  const currentMessage = 'contenido privado que no debe registrarse';
+  await assert.rejects(engine.resolve(request({ requestId: id(47), currentMessage })), error => error instanceof ConversationLlmError && error.code === 'llm_timeout');
+  assert.deepEqual(events, [{
+    event: 'conversation_engine_llm_failure', request_id: id(47), engine_version: 'direct-rag-v3-v1_3', llm_stage: 'obligations', llm_error_code: 'llm_timeout', upstream_status: null, upstream_category: 'timeout', llm_latency_ms: 25, total_latency_ms: 35,
+  }]);
+  assert.doesNotMatch(JSON.stringify(events), /contenido privado|whatsapp|inbound_message_id/u);
+});
+
+test('Conversation Engine logs one bounded composition-stage LLM failure with sanitized upstream status', async () => {
+  const events = [];
+  const ticks = [0, 10, 15, 20, 50, 60, 90];
+  const message = 'Gracias';
+  const engine = createConversationEngine({
+    clock: () => ticks.shift(),
+    logger: value => events.push(value),
+    llmClient: {
+      async interpret() { return { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } }; },
+      async compose() { throw new ConversationLlmError('llm_transport_failure', { upstream_status: 503, upstream_category: 'http_5xx' }); },
+    },
+  });
+  await assert.rejects(engine.resolve(request({ requestId: id(48), currentMessage: message })), error => error instanceof ConversationLlmError && error.code === 'llm_transport_failure');
+  assert.deepEqual(events, [{
+    event: 'conversation_engine_llm_failure', request_id: id(48), engine_version: 'direct-rag-v3-v1_3', llm_stage: 'composition', llm_error_code: 'llm_transport_failure', upstream_status: 503, upstream_category: 'http_5xx', llm_latency_ms: 30, total_latency_ms: 90,
+  }]);
 });
 
 test('Ticket 77 production incident: activation meal report is acknowledged without treating it as an unsupported Dietavity claim', async () => {
