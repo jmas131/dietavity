@@ -268,3 +268,62 @@ test('Ticket 77B reconstructs colon and possessive meal reports from canonical h
     assert.doesNotMatch(result.assistant_response, /nopales|ensalada|huevos/u, mealReport);
   }
 });
+
+test('Ticket 79 treats a closed ingredient-only activation reply as available foods and gives a grounded recommendation', async () => {
+  const activation = 'Dietavity es un asistente de alimentación por WhatsApp para personas que usan GLP-1. Puedes contarme qué has comido, cuánto apetito tienes o qué alimentos tienes disponibles, y te ayudo a decidir qué comer.';
+  const message = 'Carne molida y verdura';
+  const diagnostics = [];
+  const engine = createConversationEngine({
+    logger: value => diagnostics.push(value),
+    llmClient: fixtureLlm([{ obligations: [{ type: 'unsupported', evidence: message }], semantic_context: { recommendation_request_evidence: null } }]),
+  });
+
+  const result = await engine.resolve(request({
+    requestId: id(800), inboundId: id(801), processingOrder: 2, currentMessage: message,
+    history: [historyEntry('assistant', activation, 1)],
+  }));
+
+  assert.equal(result.assistant_response, 'Puedes preparar carne molida con verdura.');
+  assert.equal(result.persistence.topic, 'food_decision');
+  assert.equal(result.diagnostics.recommendation.source, 'contextual_inventory_reply');
+  assert.equal(result.diagnostics.recommendation.status, 'recommendation');
+  assert.doesNotMatch(result.assistant_response, /No tengo información confirmada|¿Qué alimentos tienes disponibles ahora\?/u);
+  assert.deepEqual(diagnostics[0].food.available_food_ids, ['carne', 'verduras']);
+
+  const followupEngine = createConversationEngine({ llmClient: fixtureLlm([
+    { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } },
+  ]) });
+  const followup = await followupEngine.resolve(request({
+    requestId: id(802), inboundId: id(803), processingOrder: 2, currentMessage: message,
+    history: [historyEntry('assistant', '¿Que alimentos tienes disponibles ahora?', 1)],
+  }));
+  assert.equal(followup.assistant_response, 'Puedes preparar carne molida con verdura.');
+});
+
+test('Ticket 79 keeps ingredient-only completion bounded to the active inventory context', async () => {
+  const inventoryQuestion = '¿Qué alimentos tienes disponibles ahora?';
+  const rejected = [
+    'No carne molida y verdura',
+    '¿Carne molida y verdura?',
+    'Tal vez carne molida y verdura',
+    'Mañana carne molida y verdura',
+    'Carne extraña y verdura',
+  ];
+  for (const [index, message] of rejected.entries()) {
+    const engine = createConversationEngine({ llmClient: fixtureLlm([
+      { obligations: [{ type: 'unsupported', evidence: message }], semantic_context: { recommendation_request_evidence: null } },
+    ]) });
+    const result = await engine.resolve(request({
+      requestId: id(810 + index), inboundId: id(820 + index), processingOrder: 2, currentMessage: message,
+      history: [historyEntry('assistant', inventoryQuestion, 1)],
+    }));
+    assert.equal(result.assistant_response, 'No tengo información confirmada para afirmar que Dietavity ofrezca eso.', message);
+  }
+
+  const standalone = 'Carne molida y verdura';
+  const engine = createConversationEngine({ llmClient: fixtureLlm([
+    { obligations: [{ type: 'unsupported', evidence: standalone }], semantic_context: { recommendation_request_evidence: null } },
+  ]) });
+  const result = await engine.resolve(request({ currentMessage: standalone }));
+  assert.equal(result.assistant_response, 'No tengo información confirmada para afirmar que Dietavity ofrezca eso.');
+});
