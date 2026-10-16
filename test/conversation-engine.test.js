@@ -307,6 +307,24 @@ test('Ticket 80 activation asks one inventory question and treats its immediate 
   ]) });
   const activationResult = await activationEngine.resolve(request({ currentMessage: '¡Hola! Quiero saber más.' }));
   assert.equal(activationResult.assistant_response, activation);
+  const priorHistory = [
+    historyEntry('customer', 'Desayuné huevos con nopales.', 1),
+    historyEntry('assistant', '¡Perfecto! 😊 Ya sé qué desayunaste.', 1),
+  ];
+  const historicalActivationEngine = createConversationEngine({ llmClient: fixtureLlm([
+    { obligations: [{ type: 'general_information', evidence: '¡Hola! Quiero saber más.' }], semantic_context: { recommendation_request_evidence: null } },
+  ]) });
+  const historicalActivation = await historicalActivationEngine.resolve(request({
+    requestId: id(828), inboundId: id(829), processingOrder: 2, currentMessage: '¡Hola! Quiero saber más.', history: priorHistory,
+  }));
+  assert.equal(historicalActivation.assistant_response, activation);
+  const ordinaryInformationEngine = createConversationEngine({ llmClient: fixtureLlm([
+    { obligations: [{ type: 'general_information', evidence: 'Hola, me das información?' }], semantic_context: { recommendation_request_evidence: null } },
+  ]) });
+  const ordinaryInformation = await ordinaryInformationEngine.resolve(request({
+    requestId: id(826), inboundId: id(827), processingOrder: 2, currentMessage: 'Hola, me das información?', history: priorHistory,
+  }));
+  assert.equal(ordinaryInformation.assistant_response, 'Dietavity es un asistente de alimentación por WhatsApp para personas que usan GLP-1. Puedes contarme qué has comido, cuánto apetito tienes o qué alimentos tienes disponibles, y te ayudo a decidir qué comer. Puedes probarlo gratis.');
   const mealReport = 'Desayuné huevos con nopales.';
   const inventoryQuestion = 'Tomando en cuenta que ya desayunaste, para recomendarte algo concreto, ¿Qué alimentos tienes disponibles ahora?';
   const ingredientMessage = 'Carne molida y verduras';
@@ -322,6 +340,16 @@ test('Ticket 80 activation asks one inventory question and treats its immediate 
   assert.equal(ingredientResult.assistant_response, 'Puedes preparar carne molida con verduras.');
   assert.equal(ingredientResult.diagnostics.recommendation.source, 'contextual_inventory_reply');
   assert.doesNotMatch(ingredientResult.assistant_response, /ya desayunaste|¿Qué alimentos tienes disponibles ahora\?/u);
+
+  const historicalFollowupEngine = createConversationEngine({ llmClient: fixtureLlm([
+    { obligations: [{ type: 'unsupported', evidence: ingredientMessage }], semantic_context: { recommendation_request_evidence: null } },
+  ]) });
+  const historicalFollowup = await historicalFollowupEngine.resolve(request({
+    requestId: id(832), inboundId: id(833), processingOrder: 3, currentMessage: ingredientMessage,
+    history: [...priorHistory, historyEntry('customer', '¡Hola! Quiero saber más.', 2), historyEntry('assistant', activation, 2)],
+  }));
+  assert.equal(historicalFollowup.assistant_response, 'Puedes preparar carne molida con verduras.');
+  assert.doesNotMatch(historicalFollowup.assistant_response, /ya desayunaste|¿Qué alimentos tienes disponibles ahora\?/u);
 
   for (const [index, message] of ['Nada', 'No tengo nada'].entries()) {
     const engine = createConversationEngine({ llmClient: fixtureLlm([
