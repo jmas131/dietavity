@@ -37,14 +37,52 @@ test('Conversation Engine LLM client rejects invalid upstream statuses without r
   assert.doesNotMatch(JSON.stringify(transport), /sensitive|secret|config|headers/u);
 });
 
-test('candidate generation is an isolated JSON call using the same bounded transport contract', async () => {
+test('candidate generation is an isolated strict structured-output call using the same bounded transport contract', async () => {
   const calls = [];
   const client = createOpenAiConversationLlmClient({ apiKey: 'test-key', http: { async post(_url, body) {
     calls.push(body);
     return { data: { choices: [{ message: { content: '{"candidates":[]}' } }] } };
   } } });
-  assert.deepEqual(await client.generateRecommendationCandidates({ contract_version: 'recommendation-candidate-v1' }), { candidates: [] });
+  const constrained = {
+    contract_version: 'recommendation-candidate-v1',
+    availability: { scope: 'constrained', references: [{ id: 'food-1' }, { id: 'group-1' }] },
+  };
+  assert.deepEqual(await client.generateRecommendationCandidates(constrained), { candidates: [] });
   assert.equal(calls.length, 1);
   assert.match(calls[0].messages[0].content, /zero to two practical, simple meal candidates appropriate for users in Mexico/u);
-  assert.equal(calls[0].messages[1].content, '{"contract_version":"recommendation-candidate-v1"}');
+  assert.equal(calls[0].messages[1].content, JSON.stringify(constrained));
+  const schema = calls[0].response_format;
+  assert.equal(schema.type, 'json_schema');
+  assert.equal(schema.json_schema.strict, true);
+  assert.equal(schema.json_schema.schema.additionalProperties, false);
+  assert.equal(schema.json_schema.schema.properties.candidates.maxItems, 2);
+  const candidate = schema.json_schema.schema.properties.candidates.items;
+  assert.deepEqual(candidate.required, ['required_refs', 'pantry_ids', 'actions', 'portion']);
+  assert.equal(candidate.additionalProperties, false);
+  assert.deepEqual(candidate.properties.required_refs.items.enum, ['food-1', 'group-1']);
+  assert.deepEqual(candidate.properties.pantry_ids.items.enum, ['water', 'salt', 'cooking_oil']);
+  assert.deepEqual(candidate.properties.portion.enum, ['small', 'normal']);
+  const action = candidate.properties.actions.items;
+  assert.equal(action.additionalProperties, false);
+  assert.deepEqual(action.properties.kind.enum, ['cook', 'saute', 'mix', 'heat', 'serve', 'combine']);
+  assert.deepEqual(action.properties.refs.items.enum, ['food-1', 'group-1', 'water', 'salt', 'cooking_oil']);
+});
+
+test('only candidate generation receives its strict schema, including broad candidate structure', async () => {
+  const calls = [];
+  const client = createOpenAiConversationLlmClient({ apiKey: 'test-key', http: { async post(_url, body) {
+    calls.push(body);
+    return { data: { choices: [{ message: { content: '{"candidates":[]}' } }] } };
+  } } });
+  await client.interpret({ contract_version: 'conversation-engine-request-v1' });
+  await client.compose({ contract_version: 'composition-envelope-v1' });
+  await client.generateRecommendationCandidates({ contract_version: 'recommendation-candidate-v1', availability: { scope: 'broad', references: [] } });
+  assert.equal(calls[0].response_format, undefined);
+  assert.equal(calls[1].response_format, undefined);
+  const candidate = calls[2].response_format.json_schema.schema.properties.candidates.items;
+  assert.deepEqual(candidate.required, ['selected_foods', 'pantry_ids', 'actions', 'portion']);
+  assert.equal(candidate.additionalProperties, false);
+  assert.deepEqual(candidate.properties.selected_foods.items.required, ['id', 'label']);
+  assert.equal(candidate.properties.selected_foods.items.additionalProperties, false);
+  assert.deepEqual(candidate.properties.selected_foods.items.properties.id.enum, ['selected-1', 'selected-2', 'selected-3', 'selected-4']);
 });
