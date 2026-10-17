@@ -114,7 +114,7 @@ test('pantry and actions use only closed policy vocabularies and references', ()
   const cases = [
     [constrained(['food-1'], { pantry_ids: ['onion'] }), 'pantry_invalid'],
     [constrained(['food-1'], { pantry_ids: ['water', 'salt', 'cooking_oil', 'garlic'] }), 'pantry_invalid'],
-    [constrained(['food-1'], { actions: [{ kind: 'cook', refs: ['food-1'], extra: true }] }), 'action_shape_invalid'],
+    [constrained(['food-1'], { actions: [{ kind: 'cook', refs: ['food-1'], extra: true }] }), 'action_unexpected_property'],
     [constrained(['food-1'], { actions: [{ kind: 'bake', refs: ['food-1'] }] }), 'action_kind_invalid'],
     [constrained(['food-1'], { actions: [{ kind: 'cook', refs: [] }] }), 'action_refs_shape_invalid'],
     [constrained(['food-1'], { actions: [{ kind: 'cook', refs: ['food-9'] }] }), 'action_ref_not_allowed'],
@@ -128,6 +128,30 @@ test('pantry and actions use only closed policy vocabularies and references', ()
   }
   const valid = select(constrained(['food-1'], { pantry_ids: ['cooking_oil'], actions: [{ kind: 'saute', refs: ['food-1', 'cooking_oil'] }] }), trusted);
   assert.equal(valid.claim, 'Te recomiendo preparar huevos. Saltea huevos y un poco de aceite.');
+});
+
+test('action structural diagnostics preserve closed-object rejection while accepting parsed JSON', () => {
+  const trusted = context({ foods: [{ surface: 'salmón', concept: null }, { surface: 'espárragos', concept: null }] });
+  const action = (value = {}) => ({ kind: 'saute', refs: ['food-1', 'food-2'], ...value });
+  const accessor = action(); Object.defineProperty(accessor, 'kind', { enumerable: true, get() { return 'saute'; } });
+  const nonEnumerable = action(); Object.defineProperty(nonEnumerable, 'kind', { enumerable: false, value: 'saute' });
+  const symbol = action(); symbol[Symbol('untrusted')] = true;
+  const inherited = Object.create({ inherited: true }); inherited.kind = 'saute'; inherited.refs = ['food-1', 'food-2'];
+  const cases = [
+    [action({ extra: true }), 'action_unexpected_property'],
+    [accessor, 'action_accessor_property'],
+    [nonEnumerable, 'action_non_enumerable_property'],
+    [symbol, 'action_symbol_property'],
+    [inherited, 'action_not_plain_object'],
+  ];
+  for (const [invalidAction, reason] of cases) {
+    const result = select(constrained(['food-1', 'food-2'], { actions: [invalidAction] }), trusted);
+    assert.equal(result.claim, null);
+    assert.equal(result.batch.candidates[0].reason, reason);
+  }
+  const parsed = JSON.parse('{"candidates":[{"required_refs":["food-1","food-2"],"pantry_ids":[],"actions":[{"kind":"saute","refs":["food-1","food-2"]}],"portion":"normal"}]}');
+  const selected = policy.selectRecommendation(parsed, trusted);
+  assert.equal(selected.claim, 'Te recomiendo preparar salmón y espárragos. Saltea salmón y espárragos.');
 });
 
 test('trusted eligibility and supplied restrictions are respected without inventing current restriction support', () => {
