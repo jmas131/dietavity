@@ -120,3 +120,24 @@ test('81F broad label injection, calorie content, and medical wording cannot byp
     assert.doesNotMatch(response.assistant_response, /queso|ozempic|calor/iu);
   }
 });
+
+test('81G emits bounded candidate outcomes without candidate or customer content', async () => {
+  const cases = [
+    ['selected', () => candidateFor('Salmón y espárragos', { availability: { scope: 'constrained', references: [{ id: 'food-1', surface: 'salmón' }, { id: 'food-2', surface: 'espárragos' }] }, appetite: 'unknown' }), { outcome: 'selected', candidate_count: 1, rejection_reasons: [] }],
+    ['llm error', () => { throw new ConversationLlmError('llm_malformed_output'); }, { outcome: 'llm_error', candidate_count: 0, rejection_reasons: [] }],
+    ['batch invalid', () => ({ not_candidates: [] }), { outcome: 'batch_invalid', candidate_count: 0, rejection_reasons: ['batch_invalid'] }],
+    ['no valid candidate', () => ({ candidates: [{ required_refs: ['food-99'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-99'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['required_ref_untrusted'] }],
+    ['generated prose is not retained', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-1'] }], portion: 'normal', customer_prose: 'baja tu dosis con salmón' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['candidate_shape_invalid'] }],
+  ];
+  for (const [label, candidate, expected] of cases) {
+    const mock = fixture(candidate);
+    const diagnostics = [];
+    await createConversationEngine({ llmClient: mock.client, logger: value => diagnostics.push(value) }).resolve(request('Salmón y espárragos'));
+    assert.deepEqual(diagnostics[0].candidate_generation, expected, label);
+    assert.doesNotMatch(JSON.stringify(diagnostics[0]), /salmón|espárragos|baja tu dosis|customer_prose|candidateFor/iu, label);
+  }
+  const mock = fixture(() => { throw new Error('must not be called'); });
+  const diagnostics = [];
+  await createConversationEngine({ llmClient: mock.client, logger: value => diagnostics.push(value) }).resolve(request('Nada'));
+  assert.deepEqual(diagnostics[0].candidate_generation, { outcome: 'not_attempted', candidate_count: 0, rejection_reasons: [] });
+});
