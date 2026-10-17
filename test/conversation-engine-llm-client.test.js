@@ -37,6 +37,24 @@ test('Conversation Engine LLM client rejects invalid upstream statuses without r
   assert.doesNotMatch(JSON.stringify(transport), /sensitive|secret|config|headers/u);
 });
 
+test('candidate generation preserves bounded upstream classifications without logging response material', async () => {
+  for (const [error, expected] of [
+    [{ response: { status: 400 }, message: 'candidate response body' }, { code: 'llm_transport_failure', upstream_status: 400, upstream_category: 'http_4xx' }],
+    [{ response: { status: 503 }, message: 'candidate response body' }, { code: 'llm_transport_failure', upstream_status: 503, upstream_category: 'http_5xx' }],
+    [Object.assign(new Error('candidate timeout'), { code: 'ECONNABORTED' }), { code: 'llm_timeout', upstream_status: null, upstream_category: 'timeout' }],
+  ]) {
+    const client = createOpenAiConversationLlmClient({ apiKey: 'test-key', http: { async post() { throw error; } } });
+    await assert.rejects(
+      () => client.generateRecommendationCandidates({ availability: { scope: 'constrained', references: [{ id: 'food-1' }] } }),
+      actual => actual instanceof ConversationLlmError
+        && actual.code === expected.code
+        && actual.upstream_status === expected.upstream_status
+        && actual.upstream_category === expected.upstream_category
+        && !/response body|candidate timeout/iu.test(JSON.stringify(actual)),
+    );
+  }
+});
+
 test('candidate generation is an isolated strict structured-output call using the same bounded transport contract', async () => {
   const calls = [];
   const diagnostics = [];
