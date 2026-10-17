@@ -128,6 +128,10 @@ test('81G emits bounded candidate outcomes without candidate or customer content
     ['batch invalid', () => ({ not_candidates: [] }), { outcome: 'batch_invalid', candidate_count: 0, rejection_reasons: ['batch_invalid'] }],
     ['no valid candidate', () => ({ candidates: [{ required_refs: ['food-99'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-99'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['required_ref_untrusted'] }],
     ['generated prose is not retained', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-1'] }], portion: 'normal', customer_prose: 'baja tu dosis con salmón' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['candidate_shape_invalid'] }],
+    ['action shape', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-1'], extra: true }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_shape_invalid'] }],
+    ['action kind', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'bake', refs: ['food-1'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_kind_invalid'] }],
+    ['action refs shape', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: [] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_refs_shape_invalid'] }],
+    ['action ref not allowed', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-99'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_ref_not_allowed'] }],
   ];
   for (const [label, candidate, expected] of cases) {
     const mock = fixture(candidate);

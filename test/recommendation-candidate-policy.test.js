@@ -112,14 +112,20 @@ test('broad labels are bounded plain food labels and cannot smuggle instructions
 test('pantry and actions use only closed policy vocabularies and references', () => {
   const trusted = context({ foods: [{ surface: 'huevos', concept: 'egg' }] });
   const cases = [
-    constrained(['food-1'], { pantry_ids: ['onion'] }),
-    constrained(['food-1'], { pantry_ids: ['water', 'salt', 'cooking_oil', 'garlic'] }),
-    constrained(['food-1'], { actions: [{ kind: 'bake', refs: ['food-1'] }] }),
-    constrained(['food-1'], { actions: [{ kind: 'cook', refs: ['food-9'] }] }),
-    constrained(['food-1'], { actions: Array.from({ length: 4 }, () => ({ kind: 'cook', refs: ['food-1'] })) }),
-    constrained(['food-1'], { pantry_ids: ['cooking_oil'], actions: [{ kind: 'mix', refs: ['food-1', 'cooking_oil'] }] }),
+    [constrained(['food-1'], { pantry_ids: ['onion'] }), 'pantry_invalid'],
+    [constrained(['food-1'], { pantry_ids: ['water', 'salt', 'cooking_oil', 'garlic'] }), 'pantry_invalid'],
+    [constrained(['food-1'], { actions: [{ kind: 'cook', refs: ['food-1'], extra: true }] }), 'action_shape_invalid'],
+    [constrained(['food-1'], { actions: [{ kind: 'bake', refs: ['food-1'] }] }), 'action_kind_invalid'],
+    [constrained(['food-1'], { actions: [{ kind: 'cook', refs: [] }] }), 'action_refs_shape_invalid'],
+    [constrained(['food-1'], { actions: [{ kind: 'cook', refs: ['food-9'] }] }), 'action_ref_not_allowed'],
+    [constrained(['food-1'], { actions: Array.from({ length: 4 }, () => ({ kind: 'cook', refs: ['food-1'] })) }), 'actions_invalid'],
+    [constrained(['food-1'], { pantry_ids: ['cooking_oil'], actions: [{ kind: 'mix', refs: ['food-1', 'cooking_oil'] }] }), 'pantry_action_invalid'],
   ];
-  for (const candidate of cases) assert.equal(select(candidate, trusted).claim, null);
+  for (const [candidate, reason] of cases) {
+    const result = select(candidate, trusted);
+    assert.equal(result.claim, null);
+    assert.equal(result.batch.candidates[0].reason, reason);
+  }
   const valid = select(constrained(['food-1'], { pantry_ids: ['cooking_oil'], actions: [{ kind: 'saute', refs: ['food-1', 'cooking_oil'] }] }), trusted);
   assert.equal(valid.claim, 'Te recomiendo preparar huevos. Saltea huevos y un poco de aceite.');
 });
