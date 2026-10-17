@@ -445,6 +445,14 @@ test('Ticket 81B derives bounded partial-availability context without creating a
     underspecified_groups: [], currently_unavailable_foods: [{ surface: 'aguacate', concept: 'avocado' }],
   });
   assert.equal(parsedAvailability('Tengo carne molida y algunas verduras, no sé cuáles usar').scope, 'unknown');
+
+  const lexicalMentions = surfaces => ({ structured_food_mentions: surfaces.map(surface => ({ surface, relation: 'mentioned', polarity: 'affirmed', temporal_scope: 'unknown' })) });
+  const scannerRecognizedUnknownList = __testOnly.deriveFoodAvailability('Salmón y espárragos', inventoryQuestion, lexicalMentions(['Salmón', 'espárragos']), null, false);
+  assert.deepEqual(scannerRecognizedUnknownList, {
+    scope: 'constrained', authority: { kind: 'active_inventory_reply', evidence: 'Salmón y espárragos' },
+    confirmed_foods: [{ surface: 'salmón', concept: 'salmón' }, { surface: 'espárragos', concept: 'espárragos' }], underspecified_groups: [], currently_unavailable_foods: [],
+  });
+  assert.equal(__testOnly.deriveFoodAvailability('Carne extraña y verdura', inventoryQuestion, lexicalMentions(['Carne', 'verdura']), null, false).scope, 'unknown');
 });
 
 test('Ticket 81B promotes only authoritative constrained or broad inventory replies to food decisions', async () => {
