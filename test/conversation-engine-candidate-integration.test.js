@@ -123,15 +123,20 @@ test('81F broad label injection, calorie content, and medical wording cannot byp
 
 test('81G emits bounded candidate outcomes without candidate or customer content', async () => {
   const cases = [
-    ['selected', () => candidateFor('Salmón y espárragos', { availability: { scope: 'constrained', references: [{ id: 'food-1', surface: 'salmón' }, { id: 'food-2', surface: 'espárragos' }] }, appetite: 'unknown' }), { outcome: 'selected', candidate_count: 1, rejection_reasons: [] }],
-    ['llm error', () => { throw new ConversationLlmError('llm_malformed_output'); }, { outcome: 'llm_error', candidate_count: 0, rejection_reasons: [] }],
-    ['batch invalid', () => ({ not_candidates: [] }), { outcome: 'batch_invalid', candidate_count: 0, rejection_reasons: ['batch_invalid'] }],
-    ['no valid candidate', () => ({ candidates: [{ required_refs: ['food-99'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-99'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['required_ref_untrusted'] }],
-    ['generated prose is not retained', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-1'] }], portion: 'normal', customer_prose: 'baja tu dosis con salmón' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['candidate_shape_invalid'] }],
-    ['action shape', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-1'], extra: true }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_unexpected_property'] }],
-    ['action kind', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'bake', refs: ['food-1'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_kind_invalid'] }],
-    ['action refs shape', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: [] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_refs_shape_invalid'] }],
-    ['action ref not allowed', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-99'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_ref_not_allowed'] }],
+    ['selected', () => candidateFor('Salmón y espárragos', { availability: { scope: 'constrained', references: [{ id: 'food-1', surface: 'salmón' }, { id: 'food-2', surface: 'espárragos' }] }, appetite: 'unknown' }), { outcome: 'selected', candidate_count: 1, rejection_reasons: [], action_prototype: null }],
+    ['llm error', () => { throw new ConversationLlmError('llm_malformed_output'); }, { outcome: 'llm_error', candidate_count: 0, rejection_reasons: [], action_prototype: null }],
+    ['batch invalid', () => ({ not_candidates: [] }), { outcome: 'batch_invalid', candidate_count: 0, rejection_reasons: ['batch_invalid'], action_prototype: null }],
+    ['no valid candidate', () => ({ candidates: [{ required_refs: ['food-99'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-99'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['required_ref_untrusted'], action_prototype: null }],
+    ['generated prose is not retained', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-1'] }], portion: 'normal', customer_prose: 'baja tu dosis con salmón' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['candidate_shape_invalid'], action_prototype: null }],
+    ['action shape', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-1'], extra: true }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_unexpected_property'], action_prototype: null }],
+    ['action kind', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'bake', refs: ['food-1'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_kind_invalid'], action_prototype: null }],
+    ['action refs shape', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: [] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_refs_shape_invalid'], action_prototype: null }],
+    ['action ref not allowed', () => ({ candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [{ kind: 'cook', refs: ['food-99'] }], portion: 'normal' }] }), { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_ref_not_allowed'], action_prototype: null }],
+    ['null action prototype', () => {
+      const action = { kind: 'cook', refs: ['food-1'] };
+      Object.setPrototypeOf(action, null);
+      return { candidates: [{ required_refs: ['food-1'], pantry_ids: [], actions: [action], portion: 'normal' }] };
+    }, { outcome: 'no_valid_candidates', candidate_count: 1, rejection_reasons: ['action_not_plain_object'], action_prototype: 'null_prototype' }],
   ];
   for (const [label, candidate, expected] of cases) {
     const mock = fixture(candidate);
@@ -144,6 +149,6 @@ test('81G emits bounded candidate outcomes without candidate or customer content
   const mock = fixture(() => { throw new Error('must not be called'); });
   const diagnostics = [];
   await createConversationEngine({ llmClient: mock.client, logger: value => diagnostics.push(value) }).resolve(request('Nada'));
-  assert.deepEqual(diagnostics[0].candidate_generation, { outcome: 'not_attempted', candidate_count: 0, rejection_reasons: [] });
+  assert.deepEqual(diagnostics[0].candidate_generation, { outcome: 'not_attempted', candidate_count: 0, rejection_reasons: [], action_prototype: null });
   assert.equal(diagnostics[0].candidate_policy_version, '81J');
 });

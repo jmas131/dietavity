@@ -154,6 +154,25 @@ test('action structural diagnostics preserve closed-object rejection while accep
   assert.equal(selected.claim, 'Te recomiendo preparar salmón y espárragos. Saltea salmón y espárragos.');
 });
 
+test('action prototype categories retain the closed-object decision without exposing candidate data', () => {
+  const trusted = context({ foods: [{ surface: 'salmón', concept: null }] });
+  const candidate = constrained(['food-1']);
+  candidate.actions = [{ kind: 'cook', refs: ['food-1'] }];
+  Object.setPrototypeOf(candidate.actions[0], null);
+  const nullPrototype = select(candidate, trusted).batch.candidates[0];
+  assert.equal(nullPrototype.valid, false);
+  assert.equal(nullPrototype.reason, 'action_not_plain_object');
+  assert.equal(nullPrototype.action_prototype, 'null_prototype');
+
+  const foreignPrototype = constrained(['food-1']);
+  foreignPrototype.actions = [{ kind: 'cook', refs: ['food-1'] }];
+  Object.setPrototypeOf(foreignPrototype.actions[0], { untrusted: true });
+  const otherPrototype = select(foreignPrototype, trusted).batch.candidates[0];
+  assert.equal(otherPrototype.valid, false);
+  assert.equal(otherPrototype.reason, 'action_not_plain_object');
+  assert.equal(otherPrototype.action_prototype, 'other_prototype');
+});
+
 test('trusted eligibility and supplied restrictions are respected without inventing current restriction support', () => {
   const blocked = context({ foods: [{ surface: 'huevos', concept: 'egg' }], eligible: false });
   assert.equal(select(constrained(['food-1']), blocked).claim, null);
