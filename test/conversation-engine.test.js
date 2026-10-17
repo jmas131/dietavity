@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createConversationEngine } = require('../lib/conversation-engine/service');
+const { createConversationEngine, __testOnly } = require('../lib/conversation-engine/service');
 const { ConversationRequestError } = require('../lib/conversation-engine/contracts');
 const { ConversationLlmError } = require('../lib/conversation-engine/llm-client');
 
@@ -19,6 +19,12 @@ function fixtureLlm(outputs) {
     async interpret() { return outputs[call++]; },
     async compose(envelope) { return { response: envelope.permitted_claims.join(' '), covered_obligation_ids: envelope.resolved_obligations.map(item => item.obligation.id), used_claims: envelope.permitted_claims }; },
   };
+}
+
+function parsedAvailability(currentMessage, history = []) {
+  return __testOnly.parsedContext({ current_message: currentMessage, canonical_history: history, processing_order: history.length + 1 }, {
+    obligations: [{ type: 'unsupported', evidence: currentMessage }], semantic_context: { recommendation_request_evidence: null },
+  }).semanticContext.food_availability;
 }
 
 test('Node conversation engine executes the five-turn Direct RAG contract with real semantic and V1.3 modules', async () => {
@@ -283,9 +289,9 @@ test('Ticket 79 treats a closed ingredient-only activation reply as available fo
     history: [historyEntry('assistant', activation, 1)],
   }));
 
-  assert.equal(result.assistant_response, 'Puedes preparar carne molida con verdura.');
+  assert.equal(result.assistant_response, 'Haz un salteado de carne molida con las verduras que tengas. Cocina primero la carne y luego agrega las verduras hasta que queden suaves.');
   assert.equal(result.persistence.topic, 'food_decision');
-  assert.equal(result.diagnostics.recommendation.source, 'contextual_inventory_reply');
+  assert.equal(result.diagnostics.recommendation.source, 'recommendation_v2');
   assert.equal(result.diagnostics.recommendation.status, 'recommendation');
   assert.doesNotMatch(result.assistant_response, /No tengo información confirmada|¿Qué alimentos tienes disponibles ahora\?/u);
   assert.deepEqual(diagnostics[0].food.available_food_ids, ['carne', 'verduras']);
@@ -297,7 +303,7 @@ test('Ticket 79 treats a closed ingredient-only activation reply as available fo
     requestId: id(802), inboundId: id(803), processingOrder: 2, currentMessage: message,
     history: [historyEntry('assistant', '¿Que alimentos tienes disponibles ahora?', 1)],
   }));
-  assert.equal(followup.assistant_response, 'Puedes preparar carne molida con verdura.');
+  assert.equal(followup.assistant_response, 'Haz un salteado de carne molida con las verduras que tengas. Cocina primero la carne y luego agrega las verduras hasta que queden suaves.');
 });
 
 test('Ticket 80 activation asks one inventory question and treats its immediate replies as inventory', async () => {
@@ -337,8 +343,8 @@ test('Ticket 80 activation asks one inventory question and treats its immediate 
   }));
   assert.equal((activation.match(/¿/gu) || []).length, 1);
   assert.equal((activation.match(/\?/gu) || []).length, 1);
-  assert.equal(ingredientResult.assistant_response, 'Puedes preparar carne molida con verduras.');
-  assert.equal(ingredientResult.diagnostics.recommendation.source, 'contextual_inventory_reply');
+  assert.equal(ingredientResult.assistant_response, 'Haz un salteado de carne molida con las verduras que tengas. Cocina primero la carne y luego agrega las verduras hasta que queden suaves.');
+  assert.equal(ingredientResult.diagnostics.recommendation.source, 'recommendation_v2');
   assert.doesNotMatch(ingredientResult.assistant_response, /ya desayunaste|¿Qué alimentos tienes disponibles ahora\?/u);
 
   const historicalFollowupEngine = createConversationEngine({ llmClient: fixtureLlm([
@@ -348,7 +354,7 @@ test('Ticket 80 activation asks one inventory question and treats its immediate 
     requestId: id(832), inboundId: id(833), processingOrder: 3, currentMessage: ingredientMessage,
     history: [...priorHistory, historyEntry('customer', '¡Hola! Quiero saber más.', 2), historyEntry('assistant', activation, 2)],
   }));
-  assert.equal(historicalFollowup.assistant_response, 'Puedes preparar carne molida con verduras.');
+  assert.equal(historicalFollowup.assistant_response, 'Haz un salteado de carne molida con las verduras que tengas. Cocina primero la carne y luego agrega las verduras hasta que queden suaves.');
   assert.doesNotMatch(historicalFollowup.assistant_response, /ya desayunaste|¿Qué alimentos tienes disponibles ahora\?/u);
 
   for (const [index, message] of ['Nada', 'No tengo nada'].entries()) {
@@ -392,4 +398,115 @@ test('Ticket 79 keeps ingredient-only completion bounded to the active inventory
   ]) });
   const result = await engine.resolve(request({ currentMessage: standalone }));
   assert.equal(result.assistant_response, 'No tengo información confirmada para afirmar que Dietavity ofrezca eso.');
+});
+
+test('Ticket 81B derives bounded partial-availability context without creating a pantry', async () => {
+  const inventoryQuestion = [historyEntry('assistant', '¿Qué alimentos tienes disponibles ahora?', 1)];
+  const constrained = parsedAvailability('Carne molida y verduras', inventoryQuestion);
+  assert.deepEqual(constrained, {
+    scope: 'constrained', authority: { kind: 'active_inventory_reply', evidence: 'Carne molida y verduras' },
+    confirmed_foods: [{ surface: 'carne molida', concept: 'ground_meat', specificity: 'generic' }],
+    underspecified_groups: [{ surface: 'verduras', concept: 'vegetables' }], currently_unavailable_foods: [],
+  });
+
+  for (const message of ['Todos', 'De todo', 'Tengo de todo']) {
+    const broad = parsedAvailability(message, inventoryQuestion);
+    assert.deepEqual(broad, {
+      scope: 'broad', authority: { kind: 'active_inventory_reply', evidence: message },
+      confirmed_foods: [], underspecified_groups: [], currently_unavailable_foods: [],
+    }, message);
+  }
+
+  for (const message of ['Nada', 'No tengo nada']) assert.deepEqual(parsedAvailability(message, inventoryQuestion), {
+    scope: 'none', authority: { kind: 'active_inventory_reply', evidence: message },
+    confirmed_foods: [], underspecified_groups: [], currently_unavailable_foods: [],
+  }, message);
+
+  assert.deepEqual(parsedAvailability('Huevos', inventoryQuestion), {
+    scope: 'constrained', authority: { kind: 'active_inventory_reply', evidence: 'Huevos' },
+    confirmed_foods: [{ surface: 'huevos', concept: 'egg' }], underspecified_groups: [], currently_unavailable_foods: [],
+  });
+  assert.deepEqual(parsedAvailability('Verduras', inventoryQuestion), {
+    scope: 'constrained', authority: { kind: 'active_inventory_reply', evidence: 'Verduras' },
+    confirmed_foods: [], underspecified_groups: [{ surface: 'verduras', concept: 'vegetables' }], currently_unavailable_foods: [],
+  });
+
+  for (const [message, history] of [['Lo que sea', inventoryQuestion], ['Todos', []], ['Comí carne molida y verduras', inventoryQuestion]]) {
+    assert.equal(parsedAvailability(message, history).scope, 'unknown', message);
+  }
+  const consumed = __testOnly.parsedContext({ current_message: 'Comí carne molida y verduras', canonical_history: [], processing_order: 1 }, {
+    obligations: [{ type: 'unsupported', evidence: 'Comí carne molida y verduras' }], semantic_context: { recommendation_request_evidence: null },
+  });
+  assert.deepEqual(consumed.mealReport, { meal: 'meal', evidence: 'Comí carne molida y verduras' });
+
+  assert.deepEqual(parsedAvailability('Tengo pollo y tortillas, pero no aguacate'), {
+    scope: 'constrained', authority: { kind: 'explicit_current_availability', evidence: 'Tengo pollo y tortillas, pero no aguacate' },
+    confirmed_foods: [{ surface: 'pollo', concept: 'chicken' }, { surface: 'tortillas', concept: 'corn_tortilla' }],
+    underspecified_groups: [], currently_unavailable_foods: [{ surface: 'aguacate', concept: 'avocado' }],
+  });
+  assert.equal(parsedAvailability('Tengo carne molida y algunas verduras, no sé cuáles usar').scope, 'unknown');
+});
+
+test('Ticket 81B promotes only authoritative constrained or broad inventory replies to food decisions', async () => {
+  const inventoryQuestion = historyEntry('assistant', '¿Qué alimentos tienes disponibles ahora?', 1);
+  for (const [index, message] of ['Todos', 'De todo', 'Tengo de todo', 'Huevos', 'Verduras'].entries()) {
+    const engine = createConversationEngine({ llmClient: fixtureLlm([
+      { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } },
+    ]) });
+    const result = await engine.resolve(request({ requestId: id(900 + index), inboundId: id(920 + index), processingOrder: 2, currentMessage: message, history: [inventoryQuestion] }));
+    assert.equal(result.persistence.topic, 'food_decision', message);
+    assert.doesNotMatch(result.assistant_response, /^¡Con gusto! 😊$/u, message);
+    if (['Todos', 'De todo', 'Tengo de todo'].includes(message)) {
+      assert.deepEqual(parsedAvailability(message, [inventoryQuestion]), {
+        scope: 'broad', authority: { kind: 'active_inventory_reply', evidence: message },
+        confirmed_foods: [], underspecified_groups: [], currently_unavailable_foods: [],
+      }, message);
+      assert.deepEqual(result.diagnostics.recommendation, { source: 'recommendation_v2', status: 'recommendation', failure_code: null }, message);
+      assert.match(result.assistant_response, /^Prepara tacos de pollo con aguacate\./u, message);
+    }
+  }
+  const standalone = createConversationEngine({ llmClient: fixtureLlm([
+    { obligations: [{ type: 'acknowledgement', evidence: 'Todos' }], semantic_context: { recommendation_request_evidence: null } },
+  ]) });
+  const result = await standalone.resolve(request({ requestId: id(940), inboundId: id(941), currentMessage: 'Todos' }));
+  assert.equal(result.persistence.topic, 'acknowledgement');
+});
+
+test('Ticket 81C renders one grounded deterministic recommendation from bounded availability', async () => {
+  const question = historyEntry('assistant', '¿Qué alimentos tienes disponibles ahora?', 2);
+  const cases = [
+    ['Carne molida y verduras', [], 'Haz un salteado de carne molida con las verduras que tengas. Cocina primero la carne y luego agrega las verduras hasta que queden suaves.'],
+    ['Pollo, tortillas, aguacate y jitomate', [], 'Haz tacos de pollo con aguacate y jitomate. Cocina el pollo, sírvelo en las tortillas y agrega lo fresco al final.'],
+    ['Huevos y nopales', [], 'Prepara huevos revueltos con nopales. Cocina los nopales y agrega los huevos al final para que queden suaves.'],
+    ['Atún, jitomate y tortillas', [], 'Haz tacos de atún con jitomate. Calienta las tortillas y sirve el atún encima.'],
+    ['Huevos', [], 'Prepara huevos revueltos. Si tienes una verdura o tortillas, agrégalas al servir.'],
+    ['Arroz y verduras', [], 'Haz arroz salteado con las verduras que tengas. Cocina el arroz y mézclalo con las verduras; si tienes una proteína, puedes agregarla.'],
+    ['Tengo poca hambre, pollo, aguacate y tortillas', [], 'Haz tacos de pollo con aguacate. Cocina el pollo, sírvelo en las tortillas y agrega lo fresco al final. Empieza con una porción pequeña y come despacio.'],
+    ['Pollo, tortillas y jitomate', [historyEntry('customer', 'Comí huevos.', 1)], 'Haz tacos de pollo y jitomate. Cocina el pollo, sírvelo en las tortillas y agrega lo fresco al final.'],
+    ['Pollo, frijoles y tortillas', [historyEntry('customer', 'Comí pollo.', 1)], 'Haz tacos de frijoles. Calienta los frijoles y sírvelos en las tortillas.'],
+    ['Brócoli, calabacita y zanahoria', [], 'Saltea brócoli, calabacita y zanahoria con un poco de agua o aceite. Si tienes huevo, pollo o frijoles, puedes agregarlos para hacerlo más completo.'],
+    ['Tengo pollo y tortillas, pero no aguacate', [], 'Haz tacos de pollo. Cocina el pollo, sírvelo en las tortillas y agrega lo fresco al final.'],
+    ['Todos', [], 'Prepara tacos de pollo con aguacate. Cocina el pollo, sírvelo en tortillas y agrega aguacate al final.'],
+    ['De todo', [], 'Prepara tacos de pollo con aguacate. Cocina el pollo, sírvelo en tortillas y agrega aguacate al final.'],
+    ['Tengo de todo', [], 'Prepara tacos de pollo con aguacate. Cocina el pollo, sírvelo en tortillas y agrega aguacate al final.'],
+  ];
+  for (const [index, [message, prior, expected]] of cases.entries()) {
+    const engine = createConversationEngine({ llmClient: fixtureLlm([
+      { obligations: [{ type: 'acknowledgement', evidence: message }], semantic_context: { recommendation_request_evidence: null } },
+    ]) });
+    const result = await engine.resolve(request({ requestId: id(1000 + index), inboundId: id(1100 + index), processingOrder: 3, currentMessage: message, history: [...prior, question] }));
+    assert.equal(result.assistant_response, expected, message);
+    assert.deepEqual(result.diagnostics.recommendation, { source: 'recommendation_v2', status: 'recommendation', failure_code: null }, message);
+  }
+
+  for (const [index, message] of ['Nada', 'No tengo nada'].entries()) {
+    const engine = createConversationEngine({ llmClient: fixtureLlm([{ obligations: [{ type: 'unsupported', evidence: message }], semantic_context: { recommendation_request_evidence: null } }]) });
+    const result = await engine.resolve(request({ requestId: id(1200 + index), inboundId: id(1300 + index), processingOrder: 3, currentMessage: message, history: [question] }));
+    assert.equal(result.diagnostics.recommendation.status, 'no_available_foods', message);
+  }
+  const medication = '¿Debería bajar mi dosis de Mounjaro si tengo poca hambre?';
+  const medicalEngine = createConversationEngine({ llmClient: fixtureLlm([{ obligations: [{ type: 'medical_boundary', evidence: medication }], semantic_context: { recommendation_request_evidence: null } }]) });
+  const medical = await medicalEngine.resolve(request({ requestId: id(1400), inboundId: id(1401), currentMessage: medication }));
+  assert.match(medical.assistant_response, /Consulta al profesional/u);
+  assert.equal(medical.diagnostics.recommendation.source, null);
 });

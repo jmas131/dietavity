@@ -36,3 +36,15 @@ test('Conversation Engine LLM client rejects invalid upstream statuses without r
   assert.deepEqual({ code: transport.code, upstream_status: transport.upstream_status, upstream_category: transport.upstream_category }, { code: 'llm_transport_failure', upstream_status: null, upstream_category: 'network' });
   assert.doesNotMatch(JSON.stringify(transport), /sensitive|secret|config|headers/u);
 });
+
+test('candidate generation is an isolated JSON call using the same bounded transport contract', async () => {
+  const calls = [];
+  const client = createOpenAiConversationLlmClient({ apiKey: 'test-key', http: { async post(_url, body) {
+    calls.push(body);
+    return { data: { choices: [{ message: { content: '{"candidates":[]}' } }] } };
+  } } });
+  assert.deepEqual(await client.generateRecommendationCandidates({ contract_version: 'recommendation-candidate-v1' }), { candidates: [] });
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].messages[0].content, /zero to two practical, simple meal candidates appropriate for users in Mexico/u);
+  assert.equal(calls[0].messages[1].content, '{"contract_version":"recommendation-candidate-v1"}');
+});
