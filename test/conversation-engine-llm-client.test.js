@@ -79,12 +79,15 @@ test('candidate generation is an isolated strict structured-output call using th
   assert.deepEqual(candidate.required, ['required_refs', 'pantry_ids', 'actions', 'portion']);
   assert.equal(candidate.additionalProperties, false);
   assert.deepEqual(candidate.properties.required_refs.items.enum, ['food-1', 'group-1']);
+  assert.equal(Object.hasOwn(candidate.properties.required_refs, 'uniqueItems'), false);
   assert.deepEqual(candidate.properties.pantry_ids.items.enum, ['water', 'salt', 'cooking_oil']);
+  assert.equal(Object.hasOwn(candidate.properties.pantry_ids, 'uniqueItems'), false);
   assert.deepEqual(candidate.properties.portion.enum, ['small', 'normal']);
   const action = candidate.properties.actions.items;
   assert.equal(action.additionalProperties, false);
   assert.deepEqual(action.properties.kind.enum, ['cook', 'saute', 'mix', 'heat', 'serve', 'combine']);
   assert.deepEqual(action.properties.refs.items.enum, ['food-1', 'group-1', 'water', 'salt', 'cooking_oil']);
+  assert.equal(Object.hasOwn(action.properties.refs, 'uniqueItems'), false);
   assert.deepEqual(diagnostics, [
     { event: 'recommendation_candidate_raw_output', message_content: '{"candidates":[{"required_refs":["food-1"],"pantry_ids":[],"actions":[{"kind":"cook","refs":["food-1"]}],"portion":"normal"}]}' },
     {
@@ -124,5 +127,7 @@ test('only candidate generation receives its strict schema, including broad cand
   assert.deepEqual(candidate.properties.selected_foods.items.required, ['id', 'label']);
   assert.equal(candidate.properties.selected_foods.items.additionalProperties, false);
   assert.deepEqual(candidate.properties.selected_foods.items.properties.id.enum, ['selected-1', 'selected-2', 'selected-3', 'selected-4']);
+  assert.equal(Object.hasOwn(candidate.properties.selected_foods.items.properties.label, 'minLength'), false);
+  assert.equal(Object.hasOwn(candidate.properties.selected_foods.items.properties.label, 'maxLength'), false);
   assert.equal(diagnostics.length, 2);
 });
