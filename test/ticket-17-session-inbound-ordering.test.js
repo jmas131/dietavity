@@ -17,6 +17,9 @@ const errorWorkflow = JSON.parse(fs.readFileSync(path.join(
 const migration = fs.readFileSync(path.join(
   root, 'database', 'migrations', '20260818_ticket_17_session_inbound_ordering.sql'
 ), 'utf8');
+const supersessionMigration = fs.readFileSync(path.join(
+  root, 'database', 'migrations', '20261018_ticket_82e_turn_supersession.sql'
+), 'utf8');
 const schema = fs.readFileSync(path.join(root, 'database', 'schema.sql'), 'utf8');
 const generator = fs.readFileSync(path.join(root, 'scripts', 'refactor-ticket-10-workflow.js'), 'utf8');
 const nodes = new Map(workflow.nodes.map((node) => [node.name, node]));
@@ -100,11 +103,30 @@ class ReferenceQueue {
     }
   }
 
+  supersedeIfMovedOn(head, now) {
+    const members = this.membersFor(head);
+    const next = [...this.bySid.values()]
+      .filter((row) => row.session === head.session && !row.completed && !members.includes(row))
+      .sort((a, b) => a.order - b.order)[0];
+    if (!next || head.outboundStatus
+      || members.some((row) => row.owner && row.leaseUntil > now)) return false;
+    for (const row of members) {
+      row.completed = true;
+      row.outcome = 'superseded';
+      row.owner = null;
+      row.leaseUntil = 0;
+      row.anchorId = head.id;
+      row.supersededBy = next.id;
+    }
+    return true;
+  }
+
   claim(session, owner, now = Date.now()) {
     const head = [...this.bySid.values()]
       .filter((row) => row.session === session && !row.completed)
       .sort((a, b) => a.order - b.order)[0];
     if (!head) return { state: 'empty' };
+    if (this.supersedeIfMovedOn(head, now)) return this.claim(session, owner, now);
     if (head.owner && head.leaseUntil > now && head.owner !== owner) {
       return { state: 'busy', row: head };
     }
@@ -241,26 +263,59 @@ test('a completed prior turn is a hard boundary before a new rapid B/C group', (
   assert.deepEqual(second.members.map(row => row.sid), ['B', 'C']);
 });
 
-test('an old unfinished burst stays recoverable but never absorbs a substantially later turn', () => {
+test('an old pre-outbound burst is superseded when a later independent turn exists', () => {
   const queue = new ReferenceQueue();
   queue.reserve('session-a', 'A', 'Jitomate', 0);
   queue.reserve('session-a', 'B', 'Frijoles', 1000);
   const later = queue.reserve('session-a', 'C', '¡Hola! Quiero saber más.', 60000);
 
-  const oldTurn = queue.claim('session-a', 'recovery-worker', 63000);
-  assert.equal(oldTurn.state, 'acquired');
-  assert.equal(oldTurn.combinedBody, 'Jitomate\nFrijoles');
-  assert.deepEqual(oldTurn.members.map(row => row.sid), ['A', 'B']);
-  assert.equal(later.owner, null);
-  assert.equal(later.completed, false);
-
-  assert.equal(queue.reserveOutbound(oldTurn, 'recovery-worker', 'recovered'), true);
-  oldTurn.anchor.outboundStatus = 'accepted';
-  queue.complete(oldTurn, 'recovery-worker');
-  const laterTurn = queue.claim('session-a', 'next-worker', 63001);
+  const laterTurn = queue.claim('session-a', 'next-worker', 63000);
   assert.equal(laterTurn.state, 'acquired');
   assert.equal(laterTurn.combinedBody, '¡Hola! Quiero saber más.');
   assert.deepEqual(laterTurn.members.map(row => row.sid), ['C']);
+  assert.equal(later.owner, 'next-worker');
+  for (const row of [queue.bySid.get('A'), queue.bySid.get('B')]) {
+    assert.equal(row.completed, true);
+    assert.equal(row.outcome, 'superseded');
+    assert.equal(row.supersededBy, later.id);
+  }
+  assert.equal(queue.claim('session-a', 'later-worker', 63001).state, 'busy');
+});
+
+test('an old unfinished burst without a newer temporal turn remains recoverable', () => {
+  const queue = new ReferenceQueue();
+  queue.reserve('session-a', 'A', 'Jitomate', 0);
+  queue.reserve('session-a', 'B', 'Frijoles', 1000);
+  const recovery = queue.claim('session-a', 'recovery-worker', 4000);
+  assert.equal(recovery.state, 'acquired');
+  assert.equal(recovery.combinedBody, 'Jitomate\nFrijoles');
+  assert.ok(recovery.members.every((row) => !row.completed));
+});
+
+test('multiple stale temporal groups are all superseded before the newest turn is claimed', () => {
+  const queue = new ReferenceQueue();
+  queue.reserve('session-a', 'A', 'old-a', 0);
+  queue.reserve('session-a', 'B', 'old-b', 10000);
+  queue.reserve('session-a', 'C', 'current', 20000);
+  const claim = queue.claim('session-a', 'worker', 23000);
+  assert.equal(claim.state, 'acquired');
+  assert.equal(claim.combinedBody, 'current');
+  assert.equal(queue.bySid.get('A').outcome, 'superseded');
+  assert.equal(queue.bySid.get('B').outcome, 'superseded');
+  assert.equal(queue.bySid.get('C').outcome, null);
+});
+
+test('a reserved old burst is not superseded and remains on reconciliation', () => {
+  const queue = new ReferenceQueue();
+  queue.reserve('session-a', 'A', 'old', 0);
+  const old = queue.claim('session-a', 'worker', 3000);
+  assert.equal(queue.reserveOutbound(old, 'worker', 'sales'), true);
+  queue.release(old, 'worker');
+  queue.reserve('session-a', 'B', 'new', 60000);
+  const result = queue.claim('session-a', 'next-worker', 63000);
+  assert.equal(result.state, 'reconciliation');
+  assert.equal(queue.bySid.get('A').completed, false);
+  assert.equal(queue.bySid.get('A').outcome, null);
 });
 
 test('pre-reservation failure releases and retries the whole coalesced group', () => {
@@ -325,6 +380,13 @@ test('quiet-gated claim exposes a single explicit three-second turn boundary', (
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /burst_boundary/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /LAG\(timestamp\) OVER \(ORDER BY processing_order, id\)/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /timestamp > prior_received_at \+ INTERVAL '3 seconds'/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /processing_outcome = 'superseded'/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /turn_superseded_by_anchor_id/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /newer_independent_turn/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /initial_group_summary/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /superseded_groups/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /outbound\.in_reply_to_id = superseded_groups\.anchor_id/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /message\.id NOT IN \(SELECT id FROM superseded\)/);
   assert.match(ordering.COMPLETE_INBOUND_SQL, /COALESCE\(message\.metadata->>'turn_anchor_id', message\.id::text\) = anchor\.id::text/);
 });
 
@@ -401,6 +463,14 @@ test('workflow waits on busy claims and database-computed quiet boundaries after
       `${node.name} must consume the claimed canonical inbound, not this execution's raw trigger`,
     );
   }
+});
+
+test('canonical history omits terminal superseded customer turns', () => {
+  const historySql = nodes.get('Get Direct RAG Conversation History').parameters.query;
+  assert.match(historySql, /message\.processing_outcome IS DISTINCT FROM 'superseded'/);
+  assert.match(historySql, /replied_inbound\.processing_outcome IS DISTINCT FROM 'superseded'/);
+  assert.match(historySql, /anchor\.processing_outcome IS DISTINCT FROM 'superseded'/);
+  assert.match(historySql, /member\.processing_outcome IS DISTINCT FROM 'superseded'/);
 });
 
 test('only the current lease owner may reserve any inbound customer response', () => {
@@ -481,6 +551,9 @@ test('migration, schema snapshot, generator, and generated artifact stay synchro
   ]) assert.match(migration, new RegExp(column));
   assert.match(migration, /messages_session_processing_queue_idx/);
   assert.match(migration, /historical_completed/);
+  assert.match(supersessionMigration, /'superseded'/);
+  assert.match(schema, /'superseded'::text/);
+  assert.match(generator, /processing_outcome IS DISTINCT FROM 'superseded'/);
   assert.match(schema, /messages_inbound_processing_order_seq/);
   assert.match(schema, /messages_session_processing_queue_idx/);
   assert.match(generator, /require\('\.\.\/lib\/session-ordering'\)/);

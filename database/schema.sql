@@ -868,7 +868,7 @@ CREATE TABLE public.messages (
     CONSTRAINT messages_message_kind_check CHECK (((message_kind IS NULL) OR (message_kind = ANY (ARRAY['user'::text, 'sales_ai'::text, 'sales_deterministic'::text, 'checkout'::text, 'paid_ai'::text, 'paid_deterministic'::text, 'fallback'::text, 'customer_error'::text, 'setup_link'::text, 'welcome'::text, 'reminder_confirmation'::text, 'reminder_scheduled'::text, 'media_clarification'::text, 'legacy_cancellation'::text, 'portal_recovery'::text, 'identity_verification'::text])))),
     CONSTRAINT messages_metadata_object_check CHECK ((jsonb_typeof(metadata) = 'object'::text)),
     CONSTRAINT messages_processing_lease_check CHECK ((((processing_owner IS NULL) AND (processing_lease_until IS NULL)) OR ((processing_owner IS NOT NULL) AND (processing_lease_until IS NOT NULL)))),
-    CONSTRAINT messages_processing_outcome_check CHECK (((processing_outcome IS NULL) OR (processing_outcome = ANY (ARRAY['historical_completed'::text, 'completed'::text, 'reconciliation'::text])))),
+    CONSTRAINT messages_processing_outcome_check CHECK (((processing_outcome IS NULL) OR (processing_outcome = ANY (ARRAY['historical_completed'::text, 'completed'::text, 'reconciliation'::text, 'superseded'::text])))),
     CONSTRAINT messages_processing_shape_check CHECK (((processing_order IS NULL) OR ((direction = 'inbound'::text) AND (session_id IS NOT NULL) AND (provider = 'twilio'::text) AND (provider_message_sid IS NOT NULL)))),
     CONSTRAINT messages_provider_check CHECK (((provider IS NULL) OR (provider = 'twilio'::text)))
 );

@@ -1425,6 +1425,7 @@ legacy_eligible_history AS (
       (
         message.direction = 'inbound'
         AND message.processing_order < current_inbound.processing_order
+        AND message.processing_outcome IS DISTINCT FROM 'superseded'
       )
       OR (
         message.direction = 'outbound'
@@ -1437,6 +1438,7 @@ legacy_eligible_history AS (
             AND replied_inbound.session_id = current_inbound.session_id
             AND replied_inbound.direction = 'inbound'
             AND replied_inbound.processing_order < current_inbound.processing_order
+            AND replied_inbound.processing_outcome IS DISTINCT FROM 'superseded'
             AND (
               message.provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$'
               OR message.metadata->>'provider_acceptance_evidence' = 'message_sid'
@@ -1469,8 +1471,10 @@ canonical_customer_turns AS (
     AND anchor.processing_order < current_inbound.processing_order
     AND anchor.id <> current_inbound.id
     AND COALESCE(anchor.metadata->>'turn_anchor_id', anchor.id::text) = anchor.id::text
+    AND anchor.processing_outcome IS DISTINCT FROM 'superseded'
     AND member.direction = 'inbound'
     AND member.processing_order < current_inbound.processing_order
+    AND member.processing_outcome IS DISTINCT FROM 'superseded'
   GROUP BY anchor.id, anchor.processing_order
 ),
 canonical_eligible_history AS (
