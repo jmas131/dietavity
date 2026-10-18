@@ -351,8 +351,12 @@ test('workflow waits on busy claims and database-computed quiet boundaries after
   assert.deepEqual(outputs('Route Session Claim State', 2), ['Wait For Turn Quiet Period']);
   assert.deepEqual(outputs('Wait For Turn Quiet Period'), ['Claim Next Session Inbound']);
   assert.deepEqual(nodes.get('Wait For Turn Quiet Period').parameters, {
-    resume: 'specificTime', dateTime: '={{ $json.quiet_until }}',
+    resume: 'specificTime', dateTime: '={{ $json.quiet_until.toISOString() }}',
   });
+  const quietUntil = new Date('2026-10-18T12:34:56.789Z');
+  const waitDateTime = quietUntil.toISOString();
+  assert.match(waitDateTime, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.equal(new Date(waitDateTime).toISOString(), waitDateTime);
   assert.deepEqual(nodes.get('Wait Before Session Claim Retry').parameters, {});
   assert.equal(nodes.get('Incoming Message').type, 'n8n-nodes-base.twilioTrigger');
   for (const node of workflow.nodes) {

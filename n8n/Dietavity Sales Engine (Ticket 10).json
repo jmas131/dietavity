@@ -4529,7 +4529,7 @@
     {
       "parameters": {
         "resume": "specificTime",
-        "dateTime": "={{ $json.quiet_until }}"
+        "dateTime": "={{ $json.quiet_until.toISOString() }}"
       },
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,

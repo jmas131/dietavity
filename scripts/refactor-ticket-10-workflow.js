@@ -1160,7 +1160,10 @@ const waitNode = {
   notes: 'Only contended same-session work waits. The Twilio Trigger webhook was already acknowledged on receipt.',
 };
 const quietWaitNode = {
-  parameters: { resume: 'specificTime', dateTime: '={{ $json.quiet_until }}' },
+  // pg-promise materializes PostgreSQL timestamptz values as JavaScript Dates.
+  // Wait v1.1 parses a date-time string, so serialize the DB-computed absolute
+  // quiet boundary as a timezone-explicit ISO instant at this workflow seam.
+  parameters: { resume: 'specificTime', dateTime: '={{ $json.quiet_until.toISOString() }}' },
   type: 'n8n-nodes-base.wait',
   typeVersion: 1.1,
   position: [-1168, 528],
