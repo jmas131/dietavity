@@ -79,8 +79,14 @@ class ReferenceQueue {
     const completedBoundary = [...this.bySid.values()]
       .filter((row) => row.session === head.session && row.completed && row.order > head.order)
       .sort((a, b) => a.order - b.order)[0];
-    return ordered.filter((row) => row.order >= head.order
-      && (!completedBoundary || row.order < completedBoundary.order));
+    const members = [];
+    for (const row of ordered) {
+      if (row.order < head.order || (completedBoundary && row.order >= completedBoundary.order)) continue;
+      const prior = members.at(-1);
+      if (prior && row.receivedAt > prior.receivedAt + ordering.TURN_QUIET_SECONDS * 1000) break;
+      members.push(row);
+    }
+    return members;
   }
 
   finishGroup(anchor, outcome) {
@@ -235,6 +241,28 @@ test('a completed prior turn is a hard boundary before a new rapid B/C group', (
   assert.deepEqual(second.members.map(row => row.sid), ['B', 'C']);
 });
 
+test('an old unfinished burst stays recoverable but never absorbs a substantially later turn', () => {
+  const queue = new ReferenceQueue();
+  queue.reserve('session-a', 'A', 'Jitomate', 0);
+  queue.reserve('session-a', 'B', 'Frijoles', 1000);
+  const later = queue.reserve('session-a', 'C', '¡Hola! Quiero saber más.', 60000);
+
+  const oldTurn = queue.claim('session-a', 'recovery-worker', 63000);
+  assert.equal(oldTurn.state, 'acquired');
+  assert.equal(oldTurn.combinedBody, 'Jitomate\nFrijoles');
+  assert.deepEqual(oldTurn.members.map(row => row.sid), ['A', 'B']);
+  assert.equal(later.owner, null);
+  assert.equal(later.completed, false);
+
+  assert.equal(queue.reserveOutbound(oldTurn, 'recovery-worker', 'recovered'), true);
+  oldTurn.anchor.outboundStatus = 'accepted';
+  queue.complete(oldTurn, 'recovery-worker');
+  const laterTurn = queue.claim('session-a', 'next-worker', 63001);
+  assert.equal(laterTurn.state, 'acquired');
+  assert.equal(laterTurn.combinedBody, '¡Hola! Quiero saber más.');
+  assert.deepEqual(laterTurn.members.map(row => row.sid), ['C']);
+});
+
 test('pre-reservation failure releases and retries the whole coalesced group', () => {
   const queue = new ReferenceQueue();
   for (const sid of ['A', 'B', 'C']) queue.reserve('session-a', sid, sid, 0);
@@ -293,6 +321,10 @@ test('quiet-gated claim exposes a single explicit three-second turn boundary', (
   assert.doesNotMatch(ordering.CLAIM_NEXT_INBOUND_SQL, /\b(?:MIN|MAX)\s*\(\s*(?:members\.)?id\s*\)/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /turn_anchor_id/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /completed_boundary/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /members_with_gap/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /burst_boundary/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /LAG\(timestamp\) OVER \(ORDER BY processing_order, id\)/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /timestamp > prior_received_at \+ INTERVAL '3 seconds'/);
   assert.match(ordering.COMPLETE_INBOUND_SQL, /COALESCE\(message\.metadata->>'turn_anchor_id', message\.id::text\) = anchor\.id::text/);
 });
 

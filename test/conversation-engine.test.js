@@ -330,7 +330,8 @@ test('Ticket 80 activation asks one inventory question and treats its immediate 
   const ordinaryInformation = await ordinaryInformationEngine.resolve(request({
     requestId: id(826), inboundId: id(827), processingOrder: 2, currentMessage: 'Hola, me das información?', history: priorHistory,
   }));
-  assert.equal(ordinaryInformation.assistant_response, 'Dietavity es un asistente de alimentación por WhatsApp para personas que usan GLP-1. Puedes contarme qué has comido, cuánto apetito tienes o qué alimentos tienes disponibles, y te ayudo a decidir qué comer. Puedes probarlo gratis.');
+  assert.equal(ordinaryInformation.assistant_response, 'Dietavity es un asistente de alimentación por WhatsApp para personas que usan GLP-1. Te ayuda a decidir qué comer de acuerdo con tu apetito y lo que tienes a la mano. Puedes probarlo gratis.');
+  assert.doesNotMatch(ordinaryInformation.assistant_response, /Puedes contarme qué has comido, cuánto apetito tienes o qué alimentos tienes disponibles/u);
   const mealReport = 'Desayuné huevos con nopales.';
   const inventoryQuestion = 'Tomando en cuenta que ya desayunaste, para recomendarte algo concreto, ¿Qué alimentos tienes disponibles ahora?';
   const ingredientMessage = 'Carne molida y verduras';
