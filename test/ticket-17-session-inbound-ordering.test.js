@@ -241,39 +241,50 @@ test('distinct SIDs survive and duplicate delivery still deduplicates independen
   assert.match(reserveSql, /nextval\('public\.messages_inbound_processing_order_seq'\)/);
 });
 
-test('A/B/C defer until quiet, then atomically claim one anchored combined turn', () => {
+test('human-paced fragments reset the sliding quiet deadline and claim one anchored turn', () => {
   const queue = new ReferenceQueue();
-  queue.reserve('session-a', 'A', 'A', 1000);
-  queue.reserve('session-a', 'B', 'B', 1800);
-  queue.reserve('session-a', 'C', 'C', 2500);
-  const deferred = queue.claim('session-a', 'worker', 4000);
+  queue.reserve('session-a', 'A', 'Papa', 1000);
+  queue.reserve('session-a', 'B', 'Zanahoria', 5000);
+  queue.reserve('session-a', 'C', 'Ejotes', 9000);
+  queue.reserve('session-a', 'D', 'Pepino', 14000);
+  queue.reserve('session-a', 'E', 'Carne de res', 18000);
+  const deferred = queue.claim('session-a', 'worker', 27000);
   assert.equal(deferred.state, 'deferred');
-  assert.equal(deferred.quietUntil, 5500);
-  const claim = queue.claim('session-a', 'worker', 5500);
+  assert.equal(deferred.quietUntil, 28000);
+  const claim = queue.claim('session-a', 'worker', 28000);
   assert.equal(claim.state, 'acquired');
   assert.equal(claim.anchor.sid, 'A');
-  assert.equal(claim.combinedBody, 'A\nB\nC');
-  assert.deepEqual(claim.members.map(row => row.sid), ['A', 'B', 'C']);
+  assert.equal(claim.combinedBody, 'Papa\nZanahoria\nEjotes\nPepino\nCarne de res');
+  assert.deepEqual(claim.members.map(row => row.sid), ['A', 'B', 'C', 'D', 'E']);
   assert.ok(claim.members.every(row => row.owner === 'worker' && row.anchorId === claim.anchor.id));
-  assert.equal(queue.claim('session-a', 'other', 5501).state, 'busy');
+  assert.equal(queue.claim('session-a', 'other', 28001).state, 'busy');
 });
 
 test('a completed prior turn is a hard boundary before a new rapid B/C group', () => {
   const queue = new ReferenceQueue();
   queue.reserve('session-a', 'A', 'A', 0);
-  const first = queue.claim('session-a', 'worker-a', 3000);
+  const first = queue.claim('session-a', 'worker-a', 10000);
   assert.equal(first.state, 'acquired');
   assert.equal(queue.reserveOutbound(first, 'worker-a', 'sales'), true);
   first.anchor.outboundStatus = 'accepted';
   queue.complete(first, 'worker-a');
-  queue.reserve('session-a', 'B', 'B', 10000);
-  queue.reserve('session-a', 'C', 'C', 11000);
-  assert.equal(queue.claim('session-a', 'worker-b', 13000).state, 'deferred');
-  const second = queue.claim('session-a', 'worker-b', 14000);
+  queue.reserve('session-a', 'B', 'B', 20000);
+  queue.reserve('session-a', 'C', 'C', 24000);
+  assert.equal(queue.claim('session-a', 'worker-b', 33000).state, 'deferred');
+  const second = queue.claim('session-a', 'worker-b', 34000);
   assert.equal(second.state, 'acquired');
   assert.equal(second.anchor.sid, 'B');
   assert.equal(second.combinedBody, 'B\nC');
   assert.deepEqual(second.members.map(row => row.sid), ['B', 'C']);
+});
+
+test('a normal single message waits for the ten-second quiet deadline', () => {
+  const queue = new ReferenceQueue();
+  queue.reserve('session-a', 'A', 'Tengo pollo, tortillas y aguacate', 1000);
+  const deferred = queue.claim('session-a', 'worker', 10999);
+  assert.equal(deferred.state, 'deferred');
+  assert.equal(deferred.quietUntil, 11000);
+  assert.equal(queue.claim('session-a', 'worker', 11000).state, 'acquired');
 });
 
 test('an old pre-outbound burst is superseded when a later independent turn exists', () => {
@@ -282,7 +293,7 @@ test('an old pre-outbound burst is superseded when a later independent turn exis
   queue.reserve('session-a', 'B', 'Frijoles', 1000);
   const later = queue.reserve('session-a', 'C', '¡Hola! Quiero saber más.', 60000);
 
-  const laterTurn = queue.claim('session-a', 'next-worker', 63000);
+  const laterTurn = queue.claim('session-a', 'next-worker', 70000);
   assert.equal(laterTurn.state, 'acquired');
   assert.equal(laterTurn.combinedBody, '¡Hola! Quiero saber más.');
   assert.deepEqual(laterTurn.members.map(row => row.sid), ['C']);
@@ -292,14 +303,14 @@ test('an old pre-outbound burst is superseded when a later independent turn exis
     assert.equal(row.outcome, 'superseded');
     assert.equal(row.supersededBy, later.id);
   }
-  assert.equal(queue.claim('session-a', 'later-worker', 63001).state, 'busy');
+  assert.equal(queue.claim('session-a', 'later-worker', 70001).state, 'busy');
 });
 
 test('an old unfinished burst without a newer temporal turn remains recoverable', () => {
   const queue = new ReferenceQueue();
   queue.reserve('session-a', 'A', 'Jitomate', 0);
   queue.reserve('session-a', 'B', 'Frijoles', 1000);
-  const recovery = queue.claim('session-a', 'recovery-worker', 4000);
+  const recovery = queue.claim('session-a', 'recovery-worker', 11000);
   assert.equal(recovery.state, 'acquired');
   assert.equal(recovery.combinedBody, 'Jitomate\nFrijoles');
   assert.ok(recovery.members.every((row) => !row.completed));
@@ -308,9 +319,9 @@ test('an old unfinished burst without a newer temporal turn remains recoverable'
 test('multiple stale temporal groups are all superseded before the newest turn is claimed', () => {
   const queue = new ReferenceQueue();
   queue.reserve('session-a', 'A', 'old-a', 0);
-  queue.reserve('session-a', 'B', 'old-b', 10000);
-  queue.reserve('session-a', 'C', 'current', 20000);
-  const claim = queue.claim('session-a', 'worker', 23000);
+  queue.reserve('session-a', 'B', 'old-b', 11000);
+  queue.reserve('session-a', 'C', 'current', 22000);
+  const claim = queue.claim('session-a', 'worker', 32000);
   assert.equal(claim.state, 'acquired');
   assert.equal(claim.combinedBody, 'current');
   assert.equal(queue.bySid.get('A').outcome, 'superseded');
@@ -321,11 +332,11 @@ test('multiple stale temporal groups are all superseded before the newest turn i
 test('a reserved old burst is not superseded and remains on reconciliation', () => {
   const queue = new ReferenceQueue();
   queue.reserve('session-a', 'A', 'old', 0);
-  const old = queue.claim('session-a', 'worker', 3000);
+  const old = queue.claim('session-a', 'worker', 10000);
   assert.equal(queue.reserveOutbound(old, 'worker', 'sales'), true);
   queue.release(old, 'worker');
   queue.reserve('session-a', 'B', 'new', 60000);
-  const result = queue.claim('session-a', 'next-worker', 63000);
+  const result = queue.claim('session-a', 'next-worker', 70000);
   assert.equal(result.state, 'reconciliation');
   assert.equal(queue.bySid.get('A').completed, false);
   assert.equal(queue.bySid.get('A').outcome, null);
@@ -334,11 +345,11 @@ test('a reserved old burst is not superseded and remains on reconciliation', () 
 test('pre-reservation failure releases and retries the whole coalesced group', () => {
   const queue = new ReferenceQueue();
   for (const sid of ['A', 'B', 'C']) queue.reserve('session-a', sid, sid, 0);
-  const initial = queue.claim('session-a', 'failed-ce', 3000);
+  const initial = queue.claim('session-a', 'failed-ce', 10000);
   assert.equal(initial.state, 'acquired');
   queue.release(initial, 'failed-ce');
   assert.ok(initial.members.every(row => row.owner === null && !row.completed));
-  const retry = queue.claim('session-a', 'retry-worker', 3001);
+  const retry = queue.claim('session-a', 'retry-worker', 10001);
   assert.equal(retry.state, 'acquired');
   assert.equal(retry.anchor.sid, 'A');
   assert.equal(retry.combinedBody, 'A\nB\nC');
@@ -348,7 +359,7 @@ test('pre-reservation failure releases and retries the whole coalesced group', (
 test('accepted anchor reply completes or reconciles every absorbed member', () => {
   const queue = new ReferenceQueue();
   for (const sid of ['A', 'B', 'C']) queue.reserve('session-a', sid, sid, 0);
-  const turn = queue.claim('session-a', 'worker', 3000);
+  const turn = queue.claim('session-a', 'worker', 10000);
   assert.equal(queue.reserveOutbound(turn, 'worker', 'sales'), true);
   turn.anchor.outboundStatus = 'accepted';
   queue.complete(turn, 'worker');
@@ -357,11 +368,11 @@ test('accepted anchor reply completes or reconciles every absorbed member', () =
 
   const recovery = new ReferenceQueue();
   for (const sid of ['A', 'B', 'C']) recovery.reserve('session-a', sid, sid, 0);
-  const claimed = recovery.claim('session-a', 'dead-worker', 3000);
+  const claimed = recovery.claim('session-a', 'dead-worker', 10000);
   assert.equal(recovery.reserveOutbound(claimed, 'dead-worker', 'sales'), true);
   claimed.anchor.outboundStatus = 'accepted';
   for (const row of claimed.members) row.leaseUntil = 1;
-  assert.equal(recovery.claim('session-a', 'recovery-worker', 3001).state, 'empty');
+  assert.equal(recovery.claim('session-a', 'recovery-worker', 10001).state, 'empty');
   assert.ok(claimed.members.every(row => row.completed && row.outcome === 'reconciliation'));
   assert.equal(recovery.outboundKeys.size, 1);
 });
@@ -372,18 +383,18 @@ test('coalesced turns never combine members from different sessions', () => {
   queue.reserve('session-a', 'A2', 'A2', 0);
   queue.reserve('session-b', 'B1', 'B1', 0);
   queue.reserve('session-b', 'B2', 'B2', 0);
-  const a = queue.claim('session-a', 'worker-a', 3000);
-  const b = queue.claim('session-b', 'worker-b', 3000);
+  const a = queue.claim('session-a', 'worker-a', 10000);
+  const b = queue.claim('session-b', 'worker-b', 10000);
   assert.equal(a.combinedBody, 'A1\nA2');
   assert.equal(b.combinedBody, 'B1\nB2');
   assert.ok(a.members.every(row => row.session === 'session-a'));
   assert.ok(b.members.every(row => row.session === 'session-b'));
 });
 
-test('quiet-gated claim exposes a single explicit three-second turn boundary', () => {
-  assert.equal(ordering.TURN_QUIET_SECONDS, 3);
+test('quiet-gated claim exposes a single explicit ten-second turn boundary', () => {
+  assert.equal(ordering.TURN_QUIET_SECONDS, 10);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /'deferred'::text AS claim_state/);
-  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /newest_received_at > NOW\(\) - INTERVAL '3 seconds'/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /newest_received_at > NOW\(\) - INTERVAL '10 seconds'/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /STRING_AGG\(COALESCE\(body, ''\), E'\\n'/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /\(ARRAY_AGG\(id ORDER BY processing_order, id\)\)\[1\] AS anchor_id/);
   assert.doesNotMatch(ordering.CLAIM_NEXT_INBOUND_SQL, /\b(?:MIN|MAX)\s*\(\s*(?:members\.)?id\s*\)/);
@@ -392,7 +403,7 @@ test('quiet-gated claim exposes a single explicit three-second turn boundary', (
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /members_with_gap/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /burst_boundary/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /LAG\(timestamp\) OVER \(ORDER BY processing_order, id\)/);
-  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /timestamp > prior_received_at \+ INTERVAL '3 seconds'/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /timestamp > prior_received_at \+ INTERVAL '10 seconds'/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /processing_outcome = 'superseded'/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /turn_superseded_by_anchor_id/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /newer_independent_turn/);
@@ -435,7 +446,7 @@ test('different sessions do not share a lock or execution tail', async () => {
 test('lease recovery preserves ambiguous work until acceptance is reconciled', () => {
   const queue = new ReferenceQueue();
   const a = queue.reserve('session-a', 'A', 'first');
-  assert.equal(queue.claim('session-a', 'dead-worker', 3000).state, 'acquired');
+  assert.equal(queue.claim('session-a', 'dead-worker', 10000).state, 'acquired');
   assert.equal(queue.claim('session-a', 'recovery', a.leaseUntil + 1).row.sid, 'A');
 
   queue.reserveOutbound(a, 'recovery', 'sales');
