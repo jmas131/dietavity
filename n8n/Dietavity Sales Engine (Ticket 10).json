@@ -4529,7 +4529,7 @@
     {
       "parameters": {
         "resume": "specificTime",
-        "dateTime": "={{ $json.quiet_until.toISOString() }}"
+        "dateTime": "={{ $json.quiet_until }}"
       },
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
@@ -6995,14 +6995,14 @@
         ],
         [
           {
-            "node": "Wait Before Session Claim Retry",
+            "node": "Wait For Turn Quiet Period",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Wait For Turn Quiet Period",
+            "node": "Wait Before Session Claim Retry",
             "type": "main",
             "index": 0
           }

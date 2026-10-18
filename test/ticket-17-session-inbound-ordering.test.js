@@ -346,17 +346,19 @@ test('workflow waits on busy claims and database-computed quiet boundaries after
   assert.deepEqual(outputs('Canonicalize Inbound WhatsApp'), ['Reserve Canonical Inbound Message']);
   assert.deepEqual(outputs('Reserve Canonical Inbound Message'), ['Claim Next Session Inbound']);
   assert.deepEqual(outputs('Route Session Claim State', 0), ['Get User from Supabase']);
-  assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait Before Session Claim Retry']);
-  assert.deepEqual(outputs('Wait Before Session Claim Retry'), ['Claim Next Session Inbound']);
-  assert.deepEqual(outputs('Route Session Claim State', 2), ['Wait For Turn Quiet Period']);
+  assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
   assert.deepEqual(outputs('Wait For Turn Quiet Period'), ['Claim Next Session Inbound']);
+  assert.deepEqual(outputs('Route Session Claim State', 2), ['Wait Before Session Claim Retry']);
+  assert.deepEqual(outputs('Wait Before Session Claim Retry'), ['Claim Next Session Inbound']);
   assert.deepEqual(nodes.get('Wait For Turn Quiet Period').parameters, {
-    resume: 'specificTime', dateTime: '={{ $json.quiet_until.toISOString() }}',
+    resume: 'specificTime', dateTime: '={{ $json.quiet_until }}',
   });
-  const quietUntil = new Date('2026-10-18T12:34:56.789Z');
-  const waitDateTime = quietUntil.toISOString();
-  assert.match(waitDateTime, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-  assert.equal(new Date(waitDateTime).toISOString(), waitDateTime);
+  // Captured from the isolated n8n 2.43.5 deferred claim execution. The
+  // Postgres node supplies a string, not a Date, so calling toISOString()
+  // would resolve the Wait expression to undefined.
+  const quietUntil = '2026-10-18T16:55:57.340Z';
+  assert.match(quietUntil, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.equal(new Date(quietUntil).toISOString(), quietUntil);
   assert.deepEqual(nodes.get('Wait Before Session Claim Retry').parameters, {});
   assert.equal(nodes.get('Incoming Message').type, 'n8n-nodes-base.twilioTrigger');
   for (const node of workflow.nodes) {

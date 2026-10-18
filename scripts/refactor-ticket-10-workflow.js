@@ -1160,10 +1160,9 @@ const waitNode = {
   notes: 'Only contended same-session work waits. The Twilio Trigger webhook was already acknowledged on receipt.',
 };
 const quietWaitNode = {
-  // pg-promise materializes PostgreSQL timestamptz values as JavaScript Dates.
-  // Wait v1.1 parses a date-time string, so serialize the DB-computed absolute
-  // quiet boundary as a timezone-explicit ISO instant at this workflow seam.
-  parameters: { resume: 'specificTime', dateTime: '={{ $json.quiet_until.toISOString() }}' },
+  // Postgres v2.6 exposes the deferred timestamptz in item JSON as an
+  // already timezone-explicit ISO-8601 string. Wait v1.1 parses that string.
+  parameters: { resume: 'specificTime', dateTime: '={{ $json.quiet_until }}' },
   type: 'n8n-nodes-base.wait',
   typeVersion: 1.1,
   position: [-1168, 528],
@@ -1201,8 +1200,8 @@ workflow.connections['Claim Next Session Inbound'] = {
 workflow.connections['Route Session Claim State'] = {
   main: [
     [{ node: 'Get User from Supabase', type: 'main', index: 0 }],
-    [{ node: 'Wait Before Session Claim Retry', type: 'main', index: 0 }],
     [{ node: 'Wait For Turn Quiet Period', type: 'main', index: 0 }],
+    [{ node: 'Wait Before Session Claim Retry', type: 'main', index: 0 }],
   ],
 };
 workflow.connections['Wait Before Session Claim Retry'] = {
