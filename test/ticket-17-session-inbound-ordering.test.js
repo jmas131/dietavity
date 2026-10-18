@@ -52,14 +52,16 @@ class ReferenceQueue {
     this.outboundKeys = new Set();
   }
 
-  reserve(session, sid, body) {
+  reserve(session, sid, body, receivedAt = 0) {
     if (this.bySid.has(sid)) return null;
     const row = {
       id: `in-${sid}`,
       session,
       sid,
       body,
+      receivedAt,
       order: this.nextOrder++,
+      anchorId: null,
       owner: null,
       leaseUntil: 0,
       completed: false,
@@ -68,6 +70,28 @@ class ReferenceQueue {
     };
     this.bySid.set(sid, row);
     return row;
+  }
+
+  membersFor(head) {
+    const ordered = [...this.bySid.values()]
+      .filter((row) => row.session === head.session && !row.completed)
+      .sort((a, b) => a.order - b.order);
+    const completedBoundary = [...this.bySid.values()]
+      .filter((row) => row.session === head.session && row.completed && row.order > head.order)
+      .sort((a, b) => a.order - b.order)[0];
+    return ordered.filter((row) => row.order >= head.order
+      && (!completedBoundary || row.order < completedBoundary.order));
+  }
+
+  finishGroup(anchor, outcome) {
+    for (const row of [...this.bySid.values()]) {
+      if (!row.completed && (row.anchorId || row.id) === anchor.id) {
+        row.completed = true;
+        row.outcome = outcome;
+        row.owner = null;
+        row.leaseUntil = 0;
+      }
+    }
   }
 
   claim(session, owner, now = Date.now()) {
@@ -80,31 +104,56 @@ class ReferenceQueue {
     }
     if (head.owner && head.leaseUntil <= now
       && ['accepted', 'scheduled', 'sent', 'delivered'].includes(head.outboundStatus)) {
-      head.completed = true;
-      head.outcome = 'reconciliation';
-      head.owner = null;
+      this.finishGroup(head, 'reconciliation');
       return this.claim(session, owner, now);
     }
     if (head.outboundStatus) return { state: 'reconciliation', row: head };
-    head.owner = owner;
-    head.leaseUntil = now + ordering.SESSION_LEASE_MINUTES * 60_000;
-    return { state: 'acquired', row: head };
+    const members = this.membersFor(head);
+    const newestReceivedAt = Math.max(...members.map(row => row.receivedAt));
+    if (newestReceivedAt > now - ordering.TURN_QUIET_SECONDS * 1000) {
+      return { state: 'deferred', row: head, quietUntil: newestReceivedAt + ordering.TURN_QUIET_SECONDS * 1000 };
+    }
+    if (members.some(row => row.owner && row.leaseUntil > now && row.owner !== owner)) {
+      return { state: 'busy', row: head };
+    }
+    for (const row of members) {
+      row.owner = owner;
+      row.leaseUntil = now + ordering.SESSION_LEASE_MINUTES * 60_000;
+      row.anchorId = head.id;
+    }
+    return { state: 'acquired', row: head, anchor: head, members,
+      combinedBody: members.map(row => row.body).join('\n') };
   }
 
-  reserveOutbound(row, owner, suffix) {
-    if (row.owner !== owner || row.completed) return false;
-    const key = `reply:${row.sid}:${suffix}`;
+  reserveOutbound(turn, owner, suffix) {
+    const anchor = turn.anchor || turn.row || turn;
+    const members = turn.members || this.membersFor(anchor);
+    if (members.some(row => row.owner !== owner || row.completed)) return false;
+    const key = `reply:${anchor.sid}:${suffix}`;
     if (this.outboundKeys.has(key)) return false;
     this.outboundKeys.add(key);
-    row.outboundStatus = 'pending';
+    anchor.outboundStatus = 'pending';
     return true;
   }
 
-  complete(row, owner) {
-    assert.equal(row.owner, owner);
-    row.completed = true;
-    row.outcome = 'completed';
-    row.owner = null;
+  release(turn, owner) {
+    for (const row of turn.members) {
+      assert.equal(row.owner, owner);
+      row.owner = null;
+      row.leaseUntil = 0;
+    }
+  }
+
+  complete(turn, owner) {
+    const anchor = turn.anchor || turn.row || turn;
+    assert.equal(anchor.outboundStatus, 'accepted');
+    for (const row of turn.members || this.membersFor(anchor)) {
+      assert.equal(row.owner, owner);
+      row.completed = true;
+      row.outcome = 'completed';
+      row.owner = null;
+      row.leaseUntil = 0;
+    }
   }
 }
 
@@ -151,18 +200,88 @@ test('distinct SIDs survive and duplicate delivery still deduplicates independen
   assert.match(reserveSql, /nextval\('public\.messages_inbound_processing_order_seq'\)/);
 });
 
-test('three-message bursts are one quiet-gated turn with one outbound anchor', () => {
+test('A/B/C defer until quiet, then atomically claim one anchored combined turn', () => {
   const queue = new ReferenceQueue();
-  for (const sid of ['A', 'B', 'C']) queue.reserve('session-a', sid, sid);
-  const rows = [...queue.bySid.values()].sort((a, b) => a.order - b.order);
-  const combined = rows.map(row => row.body).join('\n');
-  assert.equal(combined, 'A\nB\nC');
-  const claim = queue.claim('session-a', 'worker');
+  queue.reserve('session-a', 'A', 'A', 1000);
+  queue.reserve('session-a', 'B', 'B', 1800);
+  queue.reserve('session-a', 'C', 'C', 2500);
+  const deferred = queue.claim('session-a', 'worker', 4000);
+  assert.equal(deferred.state, 'deferred');
+  assert.equal(deferred.quietUntil, 5500);
+  const claim = queue.claim('session-a', 'worker', 5500);
   assert.equal(claim.state, 'acquired');
-  assert.equal(queue.reserveOutbound(claim.row, 'worker', 'sales'), true);
-  for (const row of rows) { row.owner = 'worker'; queue.complete(row, 'worker'); }
-  assert.equal(queue.claim('session-a', 'last').state, 'empty');
-  assert.equal(queue.outboundKeys.size, 1);
+  assert.equal(claim.anchor.sid, 'A');
+  assert.equal(claim.combinedBody, 'A\nB\nC');
+  assert.deepEqual(claim.members.map(row => row.sid), ['A', 'B', 'C']);
+  assert.ok(claim.members.every(row => row.owner === 'worker' && row.anchorId === claim.anchor.id));
+  assert.equal(queue.claim('session-a', 'other', 5501).state, 'busy');
+});
+
+test('a completed prior turn is a hard boundary before a new rapid B/C group', () => {
+  const queue = new ReferenceQueue();
+  queue.reserve('session-a', 'A', 'A', 0);
+  const first = queue.claim('session-a', 'worker-a', 3000);
+  assert.equal(first.state, 'acquired');
+  assert.equal(queue.reserveOutbound(first, 'worker-a', 'sales'), true);
+  first.anchor.outboundStatus = 'accepted';
+  queue.complete(first, 'worker-a');
+  queue.reserve('session-a', 'B', 'B', 10000);
+  queue.reserve('session-a', 'C', 'C', 11000);
+  assert.equal(queue.claim('session-a', 'worker-b', 13000).state, 'deferred');
+  const second = queue.claim('session-a', 'worker-b', 14000);
+  assert.equal(second.state, 'acquired');
+  assert.equal(second.anchor.sid, 'B');
+  assert.equal(second.combinedBody, 'B\nC');
+  assert.deepEqual(second.members.map(row => row.sid), ['B', 'C']);
+});
+
+test('pre-reservation failure releases and retries the whole coalesced group', () => {
+  const queue = new ReferenceQueue();
+  for (const sid of ['A', 'B', 'C']) queue.reserve('session-a', sid, sid, 0);
+  const initial = queue.claim('session-a', 'failed-ce', 3000);
+  assert.equal(initial.state, 'acquired');
+  queue.release(initial, 'failed-ce');
+  assert.ok(initial.members.every(row => row.owner === null && !row.completed));
+  const retry = queue.claim('session-a', 'retry-worker', 3001);
+  assert.equal(retry.state, 'acquired');
+  assert.equal(retry.anchor.sid, 'A');
+  assert.equal(retry.combinedBody, 'A\nB\nC');
+  assert.deepEqual(retry.members.map(row => row.sid), ['A', 'B', 'C']);
+});
+
+test('accepted anchor reply completes or reconciles every absorbed member', () => {
+  const queue = new ReferenceQueue();
+  for (const sid of ['A', 'B', 'C']) queue.reserve('session-a', sid, sid, 0);
+  const turn = queue.claim('session-a', 'worker', 3000);
+  assert.equal(queue.reserveOutbound(turn, 'worker', 'sales'), true);
+  turn.anchor.outboundStatus = 'accepted';
+  queue.complete(turn, 'worker');
+  assert.ok(turn.members.every(row => row.completed && row.outcome === 'completed'));
+  assert.equal(queue.claim('session-a', 'next', 6000).state, 'empty');
+
+  const recovery = new ReferenceQueue();
+  for (const sid of ['A', 'B', 'C']) recovery.reserve('session-a', sid, sid, 0);
+  const claimed = recovery.claim('session-a', 'dead-worker', 3000);
+  assert.equal(recovery.reserveOutbound(claimed, 'dead-worker', 'sales'), true);
+  claimed.anchor.outboundStatus = 'accepted';
+  for (const row of claimed.members) row.leaseUntil = 1;
+  assert.equal(recovery.claim('session-a', 'recovery-worker', 3001).state, 'empty');
+  assert.ok(claimed.members.every(row => row.completed && row.outcome === 'reconciliation'));
+  assert.equal(recovery.outboundKeys.size, 1);
+});
+
+test('coalesced turns never combine members from different sessions', () => {
+  const queue = new ReferenceQueue();
+  queue.reserve('session-a', 'A1', 'A1', 0);
+  queue.reserve('session-a', 'A2', 'A2', 0);
+  queue.reserve('session-b', 'B1', 'B1', 0);
+  queue.reserve('session-b', 'B2', 'B2', 0);
+  const a = queue.claim('session-a', 'worker-a', 3000);
+  const b = queue.claim('session-b', 'worker-b', 3000);
+  assert.equal(a.combinedBody, 'A1\nA2');
+  assert.equal(b.combinedBody, 'B1\nB2');
+  assert.ok(a.members.every(row => row.session === 'session-a'));
+  assert.ok(b.members.every(row => row.session === 'session-b'));
 });
 
 test('quiet-gated claim exposes a single explicit three-second turn boundary', () => {
@@ -197,7 +316,7 @@ test('different sessions do not share a lock or execution tail', async () => {
 test('lease recovery preserves ambiguous work until acceptance is reconciled', () => {
   const queue = new ReferenceQueue();
   const a = queue.reserve('session-a', 'A', 'first');
-  assert.equal(queue.claim('session-a', 'dead-worker', 100).state, 'acquired');
+  assert.equal(queue.claim('session-a', 'dead-worker', 3000).state, 'acquired');
   assert.equal(queue.claim('session-a', 'recovery', a.leaseUntil + 1).row.sid, 'A');
 
   queue.reserveOutbound(a, 'recovery', 'sales');
@@ -207,7 +326,7 @@ test('lease recovery preserves ambiguous work until acceptance is reconciled', (
   assert.equal(unresolved.state, 'reconciliation');
   assert.equal(a.completed, false);
   a.outboundStatus = 'accepted';
-  const recovered = queue.claim('session-a', 'next-worker', 102);
+  const recovered = queue.claim('session-a', 'next-worker', 5000);
   assert.equal(a.outcome, 'reconciliation');
   assert.equal(recovered.row.sid, 'B');
 
