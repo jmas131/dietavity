@@ -48,6 +48,19 @@ function reachable(start, target) {
   return false;
 }
 
+function claimedUpdateOuterAliases(sql) {
+  const claimed = sql.match(/\), claimed AS \(\n([\s\S]*?)\n\), claimed_anchor AS \(/)?.[1];
+  assert.ok(claimed, 'claim SQL must contain its claimed UPDATE CTE');
+  const from = claimed.match(/\n  FROM ([\s\S]*?)\n  WHERE /)?.[1];
+  const where = claimed.match(/\n  WHERE ([\s\S]*?)\n    AND NOT EXISTS /)?.[1];
+  assert.ok(from && where, 'claimed UPDATE must retain explicit FROM and outer WHERE clauses');
+  const declared = new Set(['message']);
+  for (const match of from.matchAll(/(?:^|\s(?:CROSS JOIN|JOIN))\s*([a-z_][a-z_0-9]*)/gi)) {
+    declared.add(match[1]);
+  }
+  return { declared, referenced: [...where.matchAll(/\b([a-z_][a-z_0-9]*)\./gi)].map((match) => match[1]) };
+}
+
 class ReferenceQueue {
   constructor() {
     this.nextOrder = 1;
@@ -388,6 +401,16 @@ test('quiet-gated claim exposes a single explicit three-second turn boundary', (
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /outbound\.in_reply_to_id = superseded_groups\.anchor_id/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /message\.id NOT IN \(SELECT id FROM superseded\)/);
   assert.match(ordering.COMPLETE_INBOUND_SQL, /COALESCE\(message\.metadata->>'turn_anchor_id', message\.id::text\) = anchor\.id::text/);
+});
+
+test('claimed UPDATE outer WHERE references only aliases available in its FROM clause', () => {
+  const { declared, referenced } = claimedUpdateOuterAliases(ordering.CLAIM_NEXT_INBOUND_SQL);
+  assert.ok(declared.has('turn_members'));
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /WHERE message\.id = turn_members\.id/);
+  for (const alias of referenced) {
+    assert.ok(declared.has(alias), `claimed UPDATE outer WHERE references unavailable alias: ${alias}`);
+  }
+  assert.equal(nodes.get('Claim Next Session Inbound').parameters.query, ordering.CLAIM_NEXT_INBOUND_SQL);
 });
 
 test('different sessions do not share a lock or execution tail', async () => {
