@@ -32,10 +32,9 @@ app.use(express.urlencoded({
 // This route is loopback-only with a dedicated shared secret. n8n retains
 // canonical message ordering, reservation, and delivery; the Node app owns
 // only the side-effect-free conversational intelligence transaction.
-const conversationEngineLogger = event => console.info(JSON.stringify(event));
 const conversationEngine = createConversationEngine({
-  llmClient: createOpenAiConversationLlmClient({ candidateDiagnosticLogger: conversationEngineLogger }),
-  logger: conversationEngineLogger,
+  llmClient: createOpenAiConversationLlmClient(),
+  logger: event => console.info(JSON.stringify(event)),
 });
 app.post('/internal/conversation-engine/v1/resolve', createConversationEngineHandler({ engine: conversationEngine }));
 

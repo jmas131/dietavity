@@ -57,11 +57,10 @@ test('candidate generation preserves bounded upstream classifications without lo
 
 test('candidate generation is an isolated strict structured-output call using the same bounded transport contract', async () => {
   const calls = [];
-  const diagnostics = [];
   const client = createOpenAiConversationLlmClient({ apiKey: 'test-key', http: { async post(_url, body) {
     calls.push(body);
     return { data: { choices: [{ message: { content: '{"candidates":[{"required_refs":["food-1"],"pantry_ids":[],"actions":[{"kind":"cook","refs":["food-1"]}],"portion":"normal"}]}' } }] } };
-  } }, candidateDiagnosticLogger: event => diagnostics.push(event) });
+  } } });
   const constrained = {
     contract_version: 'recommendation-candidate-v1',
     availability: { scope: 'constrained', references: [{ id: 'food-1' }, { id: 'group-1' }] },
@@ -88,34 +87,14 @@ test('candidate generation is an isolated strict structured-output call using th
   assert.deepEqual(action.properties.kind.enum, ['cook', 'saute', 'mix', 'heat', 'serve', 'combine']);
   assert.deepEqual(action.properties.refs.items.enum, ['food-1', 'group-1', 'water', 'salt', 'cooking_oil']);
   assert.equal(Object.hasOwn(action.properties.refs, 'uniqueItems'), false);
-  assert.deepEqual(diagnostics, [
-    { event: 'recommendation_candidate_raw_output', message_content: '{"candidates":[{"required_refs":["food-1"],"pantry_ids":[],"actions":[{"kind":"cook","refs":["food-1"]}],"portion":"normal"}]}' },
-    {
-      event: 'recommendation_candidate_parsed_actions',
-      actions: [{
-        candidate_index: 0,
-        action_index: 0,
-        is_object: true,
-        prototype_is_object_prototype: true,
-        prototype_is_null: false,
-        own_enumerable_keys: ['kind', 'refs'],
-        symbol_count: 0,
-        property_descriptors: [
-          { key: 'kind', kind: 'data', enumerable: true, configurable: true, writable: true, has_getter: false, has_setter: false },
-          { key: 'refs', kind: 'data', enumerable: true, configurable: true, writable: true, has_getter: false, has_setter: false },
-        ],
-      }],
-    },
-  ]);
 });
 
 test('only candidate generation receives its strict schema, including broad candidate structure', async () => {
   const calls = [];
-  const diagnostics = [];
   const client = createOpenAiConversationLlmClient({ apiKey: 'test-key', http: { async post(_url, body) {
     calls.push(body);
     return { data: { choices: [{ message: { content: '{"candidates":[]}' } }] } };
-  } }, candidateDiagnosticLogger: event => diagnostics.push(event) });
+  } } });
   await client.interpret({ contract_version: 'conversation-engine-request-v1' });
   await client.compose({ contract_version: 'composition-envelope-v1' });
   await client.generateRecommendationCandidates({ contract_version: 'recommendation-candidate-v1', availability: { scope: 'broad', references: [] } });
@@ -129,5 +108,4 @@ test('only candidate generation receives its strict schema, including broad cand
   assert.deepEqual(candidate.properties.selected_foods.items.properties.id.enum, ['selected-1', 'selected-2', 'selected-3', 'selected-4']);
   assert.equal(Object.hasOwn(candidate.properties.selected_foods.items.properties.label, 'minLength'), false);
   assert.equal(Object.hasOwn(candidate.properties.selected_foods.items.properties.label, 'maxLength'), false);
-  assert.equal(diagnostics.length, 2);
 });
