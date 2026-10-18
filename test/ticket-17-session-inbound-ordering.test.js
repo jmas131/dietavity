@@ -289,6 +289,8 @@ test('quiet-gated claim exposes a single explicit three-second turn boundary', (
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /'deferred'::text AS claim_state/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /newest_received_at > NOW\(\) - INTERVAL '3 seconds'/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /STRING_AGG\(COALESCE\(body, ''\), E'\\n'/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /\(ARRAY_AGG\(id ORDER BY processing_order, id\)\)\[1\] AS anchor_id/);
+  assert.doesNotMatch(ordering.CLAIM_NEXT_INBOUND_SQL, /\b(?:MIN|MAX)\s*\(\s*(?:members\.)?id\s*\)/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /turn_anchor_id/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /completed_boundary/);
   assert.match(ordering.COMPLETE_INBOUND_SQL, /COALESCE\(message\.metadata->>'turn_anchor_id', message\.id::text\) = anchor\.id::text/);
