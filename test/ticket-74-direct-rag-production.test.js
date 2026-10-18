@@ -218,7 +218,7 @@ test('direct history query excludes later queued turns and replies to them', () 
   assert.match(query, /replied_inbound\.id = message\.in_reply_to_id/);
   assert.match(query, /replied_inbound\.processing_order < current_inbound\.processing_order/);
   assert.match(query, /message\.id <> current_inbound\.id/);
-  assert.match(query, /ORDER BY source_processing_order DESC, role_sort DESC, message\.timestamp DESC, message\.id DESC\s+LIMIT 12/);
+  assert.match(query, /ORDER BY source_processing_order DESC, role_sort DESC, timestamp DESC, id DESC\s+LIMIT 12/);
   assert.match(query, /'role', role/);
   assert.match(query, /'text', text/);
   assert.match(query, /'source_processing_order', source_processing_order/);

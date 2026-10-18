@@ -114,7 +114,7 @@ test('multipart metadata is content-free and sufficient for observability', () =
 test('accepted parts are not resent and inbound completes only after every part resolves', () => {
   assert.match(ordering.RESERVE_MULTIPART_OUTBOUND_SQL,
     /ON CONFLICT \(idempotency_key\)[\s\S]*DO NOTHING/);
-  assert.ok(ordering.COMPLETE_INBOUND_SQL.includes(require('../lib/logical-reply').fullyAcceptedSql('message.id')));
+  assert.ok(ordering.COMPLETE_INBOUND_SQL.includes(require('../lib/logical-reply').fullyAcceptedSql('anchor.id')));
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /'reconciliation'::text AS claim_state/);
   const assertion = nodes.get('Assert Paid Assistant Reply Accepted').parameters.jsCode;
   assert.match(assertion, /\$input\.all\(\)/);

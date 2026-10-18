@@ -56,9 +56,9 @@ test('legacy singleton and durable Ticket 36 acceptance evidence remain supporte
 });
 
 test('every current transport completion path embeds the exact canonical predicate', () => {
-  assert.ok(ordering.COMPLETE_INBOUND_SQL.includes(logical.fullyAcceptedSql('message.id')));
+  assert.ok(ordering.COMPLETE_INBOUND_SQL.includes(logical.fullyAcceptedSql('anchor.id')));
   assert.ok(ordering.CLAIM_NEXT_INBOUND_SQL.includes(logical.fullyAcceptedSql('message.id')));
-  assert.ok(ERROR_HANDLER_SQL.includes(logical.fullyAcceptedSql('inbound.id')));
+  assert.ok(ERROR_HANDLER_SQL.includes(logical.fullyAcceptedSql("COALESCE(NULLIF(inbound.metadata->>'turn_anchor_id', '')::uuid, inbound.id)")));
   assert.ok(recovery.completionSql(fixture.input).includes(logical.fullyAcceptedSql('inbound.id')));
   const error = JSON.parse(fs.readFileSync(path.join(root, 'n8n/Global Error Handler.json')));
   assert.equal(error.nodes.find((n) => n.name === 'Insert Error Log (Error Handler)').parameters.query, ERROR_HANDLER_SQL);
@@ -69,8 +69,13 @@ test('every current transport completion path embeds the exact canonical predica
       const sql = n.parameters?.query || '';
       if (/processing_completed_at\s*=\s*(?:NOW\(|CASE)/i.test(sql)) {
         found.push(n.name);
-        assert.ok(sql.includes(logical.fullyAcceptedSql(n.name === 'Insert Error Log (Error Handler)' ? 'inbound.id' : 'message.id')), `${file}: ${n.name}`);
-        const remainder = sql.replace(logical.fullyAcceptedSql(n.name === 'Insert Error Log (Error Handler)' ? 'inbound.id' : 'message.id'), 'CANONICAL_PREDICATE');
+        const acceptedPredicate = n.name === 'Mark Session Inbound Complete'
+          ? logical.fullyAcceptedSql('anchor.id')
+          : n.name === 'Insert Error Log (Error Handler)'
+            ? logical.fullyAcceptedSql("COALESCE(NULLIF(inbound.metadata->>'turn_anchor_id', '')::uuid, inbound.id)")
+            : logical.fullyAcceptedSql('message.id');
+        assert.ok(sql.includes(acceptedPredicate), `${file}: ${n.name}`);
+        const remainder = sql.replace(acceptedPredicate, 'CANONICAL_PREDICATE');
         assert.doesNotMatch(remainder, /EXISTS[\s\S]*delivery_status\s+IN/i, `${file}: independent acceptance shortcut`);
       }
     }

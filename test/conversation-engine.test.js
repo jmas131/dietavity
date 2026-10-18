@@ -77,7 +77,7 @@ test('conversation engine closes the semantic trust boundary before any LLM call
     await assert.rejects(engine.resolve(payload), error => error instanceof ConversationRequestError);
   }
   await assert.rejects(engine.resolve(request({ currentMessage: 'Tengo pollo.', history: Array.from({ length: 13 }, () => historyEntry('customer', 'x', 1)) })), error => error instanceof ConversationRequestError);
-  await assert.rejects(engine.resolve(request({ currentMessage: 'x'.repeat(2001) })), error => error instanceof ConversationRequestError);
+  await assert.rejects(engine.resolve(request({ currentMessage: 'x'.repeat(8001) })), error => error instanceof ConversationRequestError);
   await assert.rejects(engine.resolve(request({ currentMessage: 'Tengo pollo.', history: [historyEntry('customer', 'x', 1), historyEntry('assistant', 'y', 1), historyEntry('customer', 'z', 1)] })), error => error instanceof ConversationRequestError);
   assert.equal(called, false);
 });

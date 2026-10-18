@@ -428,7 +428,7 @@ workflow.connections['If Customer Has WhatsApp'] = {
 // their WhatsApp identity has a historical users row.
 const detectRecovery = {
   parameters: {
-    jsCode: `${policy.normalizeMessage.toString()}\n${policy.hasDeterministicPortalRecoveryRequest.toString()}\nconst message = $('Claim Next Session Inbound').item.json.body;\nconst recovery = hasDeterministicPortalRecoveryRequest(message);\nreturn [{ json: { identity_verification_purpose: recovery ? 'recover_portal' : null } }];`,
+    jsCode: `${policy.normalizeMessage.toString()}\n${policy.hasDeterministicPortalRecoveryRequest.toString()}\nconst claimed = $('Claim Next Session Inbound').item.json;\nconst message = claimed.combined_body || claimed.body;\nconst recovery = hasDeterministicPortalRecoveryRequest(message);\nreturn [{ json: { identity_verification_purpose: recovery ? 'recover_portal' : null } }];`,
   },
   type: 'n8n-nodes-base.code', typeVersion: 2,
   position: [64320, 47024], id: 'a28c036d-8c15-4454-a776-defba0280001',
@@ -1117,6 +1117,18 @@ const routeClaimNode = {
           conditions: {
             options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 },
             conditions: [{
+              id: 'e4ebc8da-5d0f-4e27-a2da-17c100000082',
+              leftValue: '={{ $json.claim_state }}',
+              rightValue: 'deferred',
+              operator: { type: 'string', operation: 'equals' },
+            }],
+            combinator: 'and',
+          },
+        },
+        {
+          conditions: {
+            options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 },
+            conditions: [{
               id: 'e4ebc8da-5d0f-4e27-a2da-17c100000003',
               leftValue: '={{ $json.claim_state }}',
               rightValue: 'busy',
@@ -1147,6 +1159,15 @@ const waitNode = {
   name: 'Wait Before Session Claim Retry',
   notes: 'Only contended same-session work waits. The Twilio Trigger webhook was already acknowledged on receipt.',
 };
+const quietWaitNode = {
+  parameters: { resume: 'specificTime', dateTime: '={{ $json.quiet_until }}' },
+  type: 'n8n-nodes-base.wait',
+  typeVersion: 1.1,
+  position: [-1168, 528],
+  id: 'e4ebc8da-5d0f-4e27-a2da-17c100000083',
+  name: 'Wait For Turn Quiet Period',
+  notes: `Waits until the database-computed ${ordering.TURN_QUIET_SECONDS}-second same-session quiet boundary before retrying the atomic turn claim.`,
+};
 const completeNode = {
   parameters: {
     operation: 'executeQuery',
@@ -1166,7 +1187,7 @@ const completeNode = {
   credentials: postgresCredentials,
   notes: 'Safe boundary: the canonical outbound is no longer pending and branch-specific state persistence has completed. Final delivered status is not awaited.',
 };
-workflow.nodes.push(claimNode, routeClaimNode, waitNode, completeNode);
+workflow.nodes.push(claimNode, routeClaimNode, waitNode, quietWaitNode, completeNode);
 
 workflow.connections['Reserve Canonical Inbound Message'] = {
   main: [[{ node: 'Claim Next Session Inbound', type: 'main', index: 0 }]],
@@ -1178,10 +1199,13 @@ workflow.connections['Route Session Claim State'] = {
   main: [
     [{ node: 'Get User from Supabase', type: 'main', index: 0 }],
     [{ node: 'Wait Before Session Claim Retry', type: 'main', index: 0 }],
-    [],
+    [{ node: 'Wait For Turn Quiet Period', type: 'main', index: 0 }],
   ],
 };
 workflow.connections['Wait Before Session Claim Retry'] = {
+  main: [[{ node: 'Claim Next Session Inbound', type: 'main', index: 0 }]],
+};
+workflow.connections['Wait For Turn Quiet Period'] = {
   main: [[{ node: 'Claim Next Session Inbound', type: 'main', index: 0 }]],
 };
 
@@ -1267,8 +1291,12 @@ for (const nodeName of inboundReferenceNodes) {
     .replaceAll("$('Canonicalize Inbound WhatsApp')", "$('Claim Next Session Inbound')")
     .replaceAll("$('Reserve Canonical Inbound Message')", "$('Claim Next Session Inbound')")
     .replaceAll(
-      "$('Incoming Message').item.json.data.body",
       "$('Claim Next Session Inbound').item.json.body",
+      "($('Claim Next Session Inbound').item.json.combined_body || $('Claim Next Session Inbound').item.json.body)",
+    )
+    .replaceAll(
+      "$('Incoming Message').item.json.data.body",
+      "($('Claim Next Session Inbound').item.json.combined_body || $('Claim Next Session Inbound').item.json.body)",
     )
     .replaceAll(
       "$('Incoming Message').item.json.data.numMedia",
@@ -1280,7 +1308,7 @@ for (const nodeName of inboundReferenceNodes) {
     )
     .replaceAll(
       "$('Incoming Message').first().json.data?.body",
-      "$('Claim Next Session Inbound').first().json.body",
+      "($('Claim Next Session Inbound').first().json.combined_body || $('Claim Next Session Inbound').first().json.body)",
     );
   node.parameters = JSON.parse(serialized);
 }
@@ -1425,42 +1453,47 @@ legacy_eligible_history AS (
   ORDER BY message.timestamp DESC, message.id DESC
   LIMIT 12
 ),
+canonical_customer_turns AS (
+  SELECT anchor.processing_order AS source_processing_order,
+    STRING_AGG(COALESCE(member.body, ''), E'\\n' ORDER BY member.processing_order, member.id) AS text,
+    MIN(member.timestamp) AS timestamp, anchor.id
+  FROM public.messages AS anchor
+  JOIN public.messages AS member
+    ON member.session_id = anchor.session_id
+    AND COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text
+  CROSS JOIN current_inbound
+  WHERE anchor.session_id = current_inbound.session_id
+    AND anchor.direction = 'inbound'
+    AND anchor.processing_order < current_inbound.processing_order
+    AND anchor.id <> current_inbound.id
+    AND COALESCE(anchor.metadata->>'turn_anchor_id', anchor.id::text) = anchor.id::text
+    AND member.direction = 'inbound'
+    AND member.processing_order < current_inbound.processing_order
+  GROUP BY anchor.id, anchor.processing_order
+),
 canonical_eligible_history AS (
-  SELECT
-    CASE WHEN message.direction = 'outbound' THEN 'assistant' ELSE 'customer' END AS role,
-    message.body AS text,
-    CASE
-      WHEN message.direction = 'outbound' THEN replied_inbound.processing_order
-      ELSE message.processing_order
-    END AS source_processing_order,
-    message.timestamp,
-    message.id,
-    CASE WHEN message.direction = 'outbound' THEN 1 ELSE 0 END AS role_sort
+  SELECT 'customer'::text AS role, text, source_processing_order, timestamp, id, 0 AS role_sort
+  FROM canonical_customer_turns
+  UNION ALL
+  SELECT 'assistant'::text AS role, message.body AS text,
+    replied_inbound.processing_order AS source_processing_order,
+    message.timestamp, message.id, 1 AS role_sort
   FROM public.messages AS message
   CROSS JOIN current_inbound
-  LEFT JOIN public.messages AS replied_inbound
+  JOIN public.messages AS replied_inbound
     ON replied_inbound.id = message.in_reply_to_id
     AND replied_inbound.session_id = current_inbound.session_id
     AND replied_inbound.direction = 'inbound'
   WHERE message.session_id = current_inbound.session_id
-    AND message.id <> current_inbound.id
+    AND message.direction = 'outbound'
+    AND message.message_kind IN ('sales_deterministic', 'sales_ai', 'checkout')
+    AND message.delivery_status IN ('accepted', 'sent', 'delivered')
+    AND replied_inbound.processing_order < current_inbound.processing_order
     AND (
-      (
-        message.direction = 'inbound'
-        AND message.processing_order < current_inbound.processing_order
-      )
-      OR (
-        message.direction = 'outbound'
-        AND message.message_kind IN ('sales_deterministic', 'sales_ai', 'checkout')
-        AND message.delivery_status IN ('accepted', 'sent', 'delivered')
-        AND replied_inbound.processing_order < current_inbound.processing_order
-        AND (
-          message.provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$'
-          OR message.metadata->>'provider_acceptance_evidence' = 'message_sid'
-        )
-      )
+      message.provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$'
+      OR message.metadata->>'provider_acceptance_evidence' = 'message_sid'
     )
-  ORDER BY source_processing_order DESC, role_sort DESC, message.timestamp DESC, message.id DESC
+  ORDER BY source_processing_order DESC, role_sort DESC, timestamp DESC, id DESC
   LIMIT 12
 )
 SELECT
@@ -1518,14 +1551,15 @@ if (typeof historyValue === 'string') { try { const parsed = JSON.parse(historyV
 const fail = () => { throw new Error('CONVERSATION_ENGINE_REQUEST_INVALID'); };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const processing_order = typeof claimed.processing_order === 'string' && /^[1-9]\\d*$/.test(claimed.processing_order) ? Number(claimed.processing_order) : claimed.processing_order;
-if (!Array.isArray(historyRows) || historyRows.length > 12 || !uuid.test(String(claimed.id || '')) || typeof claimed.session_id !== 'string' || !claimed.session_id.trim() || claimed.session_id.length > 200 || !Number.isSafeInteger(processing_order) || processing_order < 1 || typeof claimed.body !== 'string' || !claimed.body.trim() || claimed.body.length > 2000) fail();
+const current_message = claimed.combined_body || claimed.body;
+if (!Array.isArray(historyRows) || historyRows.length > 12 || !uuid.test(String(claimed.id || '')) || typeof claimed.session_id !== 'string' || !claimed.session_id.trim() || claimed.session_id.length > 200 || !Number.isSafeInteger(processing_order) || processing_order < 1 || typeof current_message !== 'string' || !current_message.trim() || current_message.length > 8000) fail();
 let previousOrder = 0; let previousRole = null;
 const canonical_history = historyRows.map(row => {
   if (!row || typeof row !== 'object' || Array.isArray(row) || Object.getOwnPropertySymbols(row).length || Object.keys(row).length !== 3 || !Object.hasOwn(row, 'role') || !Object.hasOwn(row, 'text') || !Object.hasOwn(row, 'source_processing_order') || !['customer', 'assistant'].includes(row.role) || typeof row.text !== 'string' || row.text.length > 1000 || !Number.isSafeInteger(row.source_processing_order) || row.source_processing_order < 1 || row.source_processing_order >= processing_order || row.source_processing_order < previousOrder || (row.source_processing_order === previousOrder && previousRole === 'assistant' && row.role === 'customer')) fail();
   previousOrder = row.source_processing_order; previousRole = row.role;
   return { role: row.role, text: row.text, source_processing_order: row.source_processing_order };
 });
-return [{ json: { contract_version: 'conversation-engine-request-v1', request_id: claimed.id, session_id: claimed.session_id, inbound_message_id: claimed.id, processing_order, current_message: claimed.body, canonical_history } }];` },
+return [{ json: { contract_version: 'conversation-engine-request-v1', request_id: claimed.id, session_id: claimed.session_id, inbound_message_id: claimed.id, processing_order, current_message, canonical_history } }];` },
   notes: 'Builds the closed Node conversation-engine request solely from the claimed inbound and canonical bounded history. It never forwards legacy semantic or response state.',
 };
 const callConversationEngine = {

@@ -76,12 +76,16 @@ test('B1 builds an ordered closed Node request from claimed canonical inputs onl
   }, () => claimed), /CONVERSATION_ENGINE_REQUEST_INVALID/);
 });
 
-test('B1 history query preserves canonical roles, source order, delivery filtering, and current-turn exclusion', () => {
+test('B1 history query projects each completed coalesced burst as one canonical customer turn', () => {
   const query = node('Get Direct RAG Conversation History').parameters.query;
   assert.match(query, /LIMIT 12/);
   assert.match(query, /message\.id <> current_inbound\.id/);
-  assert.match(query, /CASE WHEN message\.direction = 'outbound' THEN 'assistant' ELSE 'customer' END AS role/);
-  assert.match(query, /WHEN message\.direction = 'outbound' THEN replied_inbound\.processing_order/);
+  assert.match(query, /canonical_customer_turns AS/);
+  assert.match(query, /STRING_AGG\(COALESCE\(member\.body, ''\), E'\\n'/);
+  assert.match(query, /COALESCE\(member\.metadata->>'turn_anchor_id', member\.id::text\)/);
+  assert.match(query, /SELECT 'customer'::text AS role/);
+  assert.match(query, /SELECT 'assistant'::text AS role/);
+  assert.match(query, /replied_inbound\.processing_order AS source_processing_order/);
   assert.match(query, /ORDER BY source_processing_order ASC, role_sort ASC, timestamp ASC, id ASC/);
   assert.match(query, /message\.delivery_status IN \('accepted', 'sent', 'delivered'\)/);
   assert.match(query, /provider_acceptance_evidence/);

@@ -151,20 +151,28 @@ test('distinct SIDs survive and duplicate delivery still deduplicates independen
   assert.match(reserveSql, /nextval\('public\.messages_inbound_processing_order_seq'\)/);
 });
 
-test('three-message bursts claim in reservation order without loss or duplicates', () => {
+test('three-message bursts are one quiet-gated turn with one outbound anchor', () => {
   const queue = new ReferenceQueue();
   for (const sid of ['A', 'B', 'C']) queue.reserve('session-a', sid, sid);
-  const observed = [];
-  for (let index = 0; index < 3; index += 1) {
-    const claim = queue.claim('session-a', `worker-${index}`);
-    assert.equal(claim.state, 'acquired');
-    assert.equal(queue.reserveOutbound(claim.row, `worker-${index}`, 'sales'), true);
-    observed.push(claim.row.sid);
-    queue.complete(claim.row, `worker-${index}`);
-  }
-  assert.deepEqual(observed, ['A', 'B', 'C']);
+  const rows = [...queue.bySid.values()].sort((a, b) => a.order - b.order);
+  const combined = rows.map(row => row.body).join('\n');
+  assert.equal(combined, 'A\nB\nC');
+  const claim = queue.claim('session-a', 'worker');
+  assert.equal(claim.state, 'acquired');
+  assert.equal(queue.reserveOutbound(claim.row, 'worker', 'sales'), true);
+  for (const row of rows) { row.owner = 'worker'; queue.complete(row, 'worker'); }
   assert.equal(queue.claim('session-a', 'last').state, 'empty');
-  assert.equal(queue.outboundKeys.size, 3);
+  assert.equal(queue.outboundKeys.size, 1);
+});
+
+test('quiet-gated claim exposes a single explicit three-second turn boundary', () => {
+  assert.equal(ordering.TURN_QUIET_SECONDS, 3);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /'deferred'::text AS claim_state/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /newest_received_at > NOW\(\) - INTERVAL '3 seconds'/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /STRING_AGG\(COALESCE\(body, ''\), E'\\n'/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /turn_anchor_id/);
+  assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /completed_boundary/);
+  assert.match(ordering.COMPLETE_INBOUND_SQL, /COALESCE\(message\.metadata->>'turn_anchor_id', message\.id::text\) = anchor\.id::text/);
 });
 
 test('different sessions do not share a lock or execution tail', async () => {
@@ -212,13 +220,18 @@ test('lease recovery preserves ambiguous work until acceptance is reconciled', (
   assert.match(errorSql, /processing_outcome = CASE/);
 });
 
-test('workflow waits only on a busy same-session claim after Twilio reservation', () => {
+test('workflow waits on busy claims and database-computed quiet boundaries after reservation', () => {
   assert.deepEqual(outputs('Incoming Message'), ['Canonicalize Inbound WhatsApp']);
   assert.deepEqual(outputs('Canonicalize Inbound WhatsApp'), ['Reserve Canonical Inbound Message']);
   assert.deepEqual(outputs('Reserve Canonical Inbound Message'), ['Claim Next Session Inbound']);
   assert.deepEqual(outputs('Route Session Claim State', 0), ['Get User from Supabase']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait Before Session Claim Retry']);
   assert.deepEqual(outputs('Wait Before Session Claim Retry'), ['Claim Next Session Inbound']);
+  assert.deepEqual(outputs('Route Session Claim State', 2), ['Wait For Turn Quiet Period']);
+  assert.deepEqual(outputs('Wait For Turn Quiet Period'), ['Claim Next Session Inbound']);
+  assert.deepEqual(nodes.get('Wait For Turn Quiet Period').parameters, {
+    resume: 'specificTime', dateTime: '={{ $json.quiet_until }}',
+  });
   assert.deepEqual(nodes.get('Wait Before Session Claim Retry').parameters, {});
   assert.equal(nodes.get('Incoming Message').type, 'n8n-nodes-base.twilioTrigger');
   for (const node of workflow.nodes) {
@@ -272,7 +285,7 @@ test('a later yes cannot consume an assistant question that has not reached the 
   assert.ok(completionPredecessors.includes('Persist Sales Response State and Events'));
   assert.ok(!completionPredecessors.includes('Reserve Sales Reply'));
   assert.ok(!completionPredecessors.includes('Respond to Chat'));
-  assert.ok(ordering.COMPLETE_INBOUND_SQL.includes(require('../lib/logical-reply').fullyAcceptedSql('message.id')));
+  assert.ok(ordering.COMPLETE_INBOUND_SQL.includes(require('../lib/logical-reply').fullyAcceptedSql('anchor.id')));
 });
 
 test('reminder scheduling and confirmation finish before the session advances', () => {

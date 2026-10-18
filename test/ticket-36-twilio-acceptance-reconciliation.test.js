@@ -76,7 +76,7 @@ test('paid reply follows reserve, send, reconcile, assert, state, completion', (
 });
 
 test('ambiguous or failed outbound cannot complete or duplicate-send', () => {
-  assert.ok(ordering.COMPLETE_INBOUND_SQL.includes(require('../lib/logical-reply').fullyAcceptedSql('message.id')));
+  assert.ok(ordering.COMPLETE_INBOUND_SQL.includes(require('../lib/logical-reply').fullyAcceptedSql('anchor.id')));
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL, /'reconciliation'::text AS claim_state/);
   assert.match(ordering.CLAIM_NEXT_INBOUND_SQL,
     /delivery_status IN \('accepted', 'scheduled', 'sent', 'delivered'\)/);
