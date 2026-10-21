@@ -141,7 +141,8 @@ test('B1 HTTP node has one credential placeholder, a bounded timeout, and no ser
   assert.doesNotMatch(cutover, /DIETAVITY_CONVERSATION_ENGINE_SECRET|x-dietavity-conversation-engine-secret\s*[:=]\s*[^\s]/i);
 });
 
-test('B1 preserves live omitted defaults for unrelated batch and session-claim retry nodes', () => {
+test('B1 preserves live omitted defaults for unrelated batch nodes', () => {
   assert.deepEqual(node('Loop Paid WhatsApp Parts').parameters, { options: {} });
-  assert.deepEqual(node('Wait Before Session Claim Retry').parameters, {});
+  assert.equal(workflow.nodes.find(item => item.name === 'Wait Before Session Claim Retry'), undefined);
+  assert.deepEqual(node('End — Turn Already Owned').parameters, { jsCode: 'return $input.all();' });
 });

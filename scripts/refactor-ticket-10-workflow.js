@@ -1147,17 +1147,17 @@ const routeClaimNode = {
   id: 'e4ebc8da-5d0f-4e27-a2da-17c100000004',
   name: 'Route Session Claim State',
 };
-const waitNode = {
-  // Preserve the live n8n serialization until its version-specific defaults
-  // are independently qualified. This is intentionally an omitted-default
-  // representation, not a retry-policy change.
-  parameters: {},
-  type: 'n8n-nodes-base.wait',
-  typeVersion: 1.1,
+const busyTerminalNode = {
+  // A busy claim belongs to another execution. Keep this branch explicit in
+  // execution traces, but intentionally give it no outgoing connection: it
+  // must not wait, retry, or inherit a turn if its current owner later fails.
+  parameters: { jsCode: 'return $input.all();' },
+  type: 'n8n-nodes-base.code',
+  typeVersion: 2,
   position: [-1168, 384],
   id: 'e4ebc8da-5d0f-4e27-a2da-17c100000005',
-  name: 'Wait Before Session Claim Retry',
-  notes: 'Only contended same-session work waits. The Twilio Trigger webhook was already acknowledged on receipt.',
+  name: 'End — Turn Already Owned',
+  notes: 'Ticket 83A terminal branch for claim_state=busy. It performs no ownership, turn, outbound, or retry mutation.',
 };
 const quietWaitNode = {
   // Postgres v2.6 exposes the deferred timestamptz in item JSON as an
@@ -1189,7 +1189,7 @@ const completeNode = {
   credentials: postgresCredentials,
   notes: 'Safe boundary: the canonical outbound is no longer pending and branch-specific state persistence has completed. Final delivered status is not awaited.',
 };
-workflow.nodes.push(claimNode, routeClaimNode, waitNode, quietWaitNode, completeNode);
+workflow.nodes.push(claimNode, routeClaimNode, busyTerminalNode, quietWaitNode, completeNode);
 
 workflow.connections['Reserve Canonical Inbound Message'] = {
   main: [[{ node: 'Claim Next Session Inbound', type: 'main', index: 0 }]],
@@ -1201,11 +1201,8 @@ workflow.connections['Route Session Claim State'] = {
   main: [
     [{ node: 'Get User from Supabase', type: 'main', index: 0 }],
     [{ node: 'Wait For Turn Quiet Period', type: 'main', index: 0 }],
-    [{ node: 'Wait Before Session Claim Retry', type: 'main', index: 0 }],
+    [{ node: 'End — Turn Already Owned', type: 'main', index: 0 }],
   ],
-};
-workflow.connections['Wait Before Session Claim Retry'] = {
-  main: [[{ node: 'Claim Next Session Inbound', type: 'main', index: 0 }]],
 };
 workflow.connections['Wait For Turn Quiet Period'] = {
   main: [[{ node: 'Claim Next Session Inbound', type: 'main', index: 0 }]],

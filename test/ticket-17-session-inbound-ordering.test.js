@@ -469,15 +469,15 @@ test('lease recovery preserves ambiguous work until acceptance is reconciled', (
   assert.match(errorSql, /processing_outcome = CASE/);
 });
 
-test('workflow waits on busy claims and database-computed quiet boundaries after reservation', () => {
+test('workflow terminates busy claims and waits only for database-computed quiet boundaries after reservation', () => {
   assert.deepEqual(outputs('Incoming Message'), ['Canonicalize Inbound WhatsApp']);
   assert.deepEqual(outputs('Canonicalize Inbound WhatsApp'), ['Reserve Canonical Inbound Message']);
   assert.deepEqual(outputs('Reserve Canonical Inbound Message'), ['Claim Next Session Inbound']);
   assert.deepEqual(outputs('Route Session Claim State', 0), ['Get User from Supabase']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
   assert.deepEqual(outputs('Wait For Turn Quiet Period'), ['Claim Next Session Inbound']);
-  assert.deepEqual(outputs('Route Session Claim State', 2), ['Wait Before Session Claim Retry']);
-  assert.deepEqual(outputs('Wait Before Session Claim Retry'), ['Claim Next Session Inbound']);
+  assert.deepEqual(outputs('Route Session Claim State', 2), ['End — Turn Already Owned']);
+  assert.deepEqual(outputs('End — Turn Already Owned'), []);
   assert.deepEqual(nodes.get('Wait For Turn Quiet Period').parameters, {
     resume: 'specificTime', dateTime: '={{ $json.quiet_until }}',
   });
@@ -487,7 +487,8 @@ test('workflow waits on busy claims and database-computed quiet boundaries after
   const quietUntil = '2026-10-18T16:55:57.340Z';
   assert.match(quietUntil, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   assert.equal(new Date(quietUntil).toISOString(), quietUntil);
-  assert.deepEqual(nodes.get('Wait Before Session Claim Retry').parameters, {});
+  assert.equal(nodes.get('Wait Before Session Claim Retry'), undefined);
+  assert.deepEqual(nodes.get('End — Turn Already Owned').parameters, { jsCode: 'return $input.all();' });
   assert.equal(nodes.get('Incoming Message').type, 'n8n-nodes-base.twilioTrigger');
   for (const node of workflow.nodes) {
     if (node.name === 'Canonicalize Inbound WhatsApp') continue;

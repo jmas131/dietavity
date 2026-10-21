@@ -4515,16 +4515,18 @@
       "name": "Route Session Claim State"
     },
     {
-      "parameters": {},
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -1168,
         384
       ],
       "id": "e4ebc8da-5d0f-4e27-a2da-17c100000005",
-      "name": "Wait Before Session Claim Retry",
-      "notes": "Only contended same-session work waits. The Twilio Trigger webhook was already acknowledged on receipt."
+      "name": "End — Turn Already Owned",
+      "notes": "Ticket 83A terminal branch for claim_state=busy. It performs no ownership, turn, outbound, or retry mutation."
     },
     {
       "parameters": {
@@ -7002,18 +7004,7 @@
         ],
         [
           {
-            "node": "Wait Before Session Claim Retry",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait Before Session Claim Retry": {
-      "main": [
-        [
-          {
-            "node": "Claim Next Session Inbound",
+            "node": "End — Turn Already Owned",
             "type": "main",
             "index": 0
           }
