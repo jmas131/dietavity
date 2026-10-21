@@ -1584,7 +1584,91 @@ const callConversationEngine = {
       name: 'Dietavity Conversation Engine Internal Header Auth',
     },
   },
-  notes: 'B1 placeholder credential reference only. B3 must bind an n8n HTTP Header Auth credential whose sole header is x-dietavity-conversation-engine-secret; no secret is serialized here. No retry or legacy fallback occurs on this path.',
+  // Keep the normal HTTP node non-retrying.  continueRegularOutput merely
+  // exposes a controlled 503 to the narrow Ticket 85 classifier below; every
+  // other HTTP failure remains a normal failed execution.
+  onError: 'continueRegularOutput',
+  continueOnFail: true,
+  notes: 'B1 placeholder credential reference only. B3 must bind an n8n HTTP Header Auth credential whose sole header is x-dietavity-conversation-engine-secret; no secret is serialized here. HTTP retries remain disabled; a controlled 503 is classified for the bounded Ticket 85 path only.',
+};
+const classifyConversationEngineResult = {
+  name: 'Classify Conversation Engine Result', id: 'd74a0001-0000-4000-8000-000000000017',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: [68864, 49792],
+  parameters: { jsCode: `const raw = $input.first().json;
+const request = $('Build Conversation Engine Request').item.json;
+const ownDataOnly = (value, keys) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getOwnPropertySymbols(value).length) return false;
+  const names = Object.getOwnPropertyNames(value);
+  return names.length === keys.length && names.every(name => keys.includes(name) && Object.getOwnPropertyDescriptor(value, name)?.enumerable === true && Object.prototype.hasOwnProperty.call(value, name));
+};
+const parse = value => {
+  if (!value || typeof value === 'object') return value;
+  if (typeof value !== 'string') return null;
+  try { return JSON.parse(value); } catch { return null; }
+};
+const error = raw && typeof raw.error === 'object' && raw.error ? raw.error : {};
+const status = Number(raw.statusCode ?? raw.status_code ?? raw.httpCode ?? error.statusCode ?? error.status_code ?? error.httpCode ?? error.status ?? 0);
+const candidates = [raw.body, raw.data, error.body, error.data, error.response?.body, error.response?.data, error.message, raw.message].map(parse);
+const controlled = candidates.find(value => ownDataOnly(value, ['contract_version', 'engine_version', 'request_id', 'resolution', 'assistant_response', 'persistence', 'diagnostics'])
+  && value.contract_version === 'conversation-engine-response-v1'
+  && value.engine_version === 'direct-rag-v3-v1_3'
+  && value.request_id === request.request_id
+  && ownDataOnly(value.resolution, ['status', 'type', 'delivery_permitted'])
+  && value.resolution.status === 'infrastructure_failure'
+  && value.resolution.type === 'engine_unavailable'
+  && value.resolution.delivery_permitted === false
+  && value.assistant_response === null
+  && value.persistence === null);
+if (controlled && status === 503) return [{ json: { result_kind: 'ticket85_recovery_candidate' } }];
+if (status >= 400 || error?.message || raw?.error) return [{ json: { result_kind: 'unrecoverable_failure' } }];
+return [{ json: { result_kind: 'success', response: raw } }];` },
+  notes: 'Classifies only the correlated controlled 503 infrastructure_failure/engine_unavailable contract. It never treats transport errors, ordinary 5xx responses, malformed bodies, or non-infrastructure CE results as recoverable.',
+};
+const routeConversationEngineResult = {
+  name: 'Route Conversation Engine Result', id: 'd74a0001-0000-4000-8000-000000000018',
+  type: 'n8n-nodes-base.switch', typeVersion: 3.4, position: [69120, 49792],
+  parameters: { rules: { values: [
+    { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 }, conditions: [{ leftValue: '={{ $json.result_kind }}', rightValue: 'success', operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } },
+    { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 }, conditions: [{ leftValue: '={{ $json.result_kind }}', rightValue: 'ticket85_recovery_candidate', operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } },
+  ] }, options: { fallbackOutput: 'extra' } },
+  notes: 'The only recovery branch is the exact Ticket 85 controlled infrastructure response; all other results fail closed.',
+};
+const authorizeConversationEngineRecovery = {
+  name: 'Authorize Conversation Engine Recovery', id: 'd74a0001-0000-4000-8000-000000000019',
+  type: 'n8n-nodes-base.postgres', typeVersion: 2.6, position: [69376, 49904],
+  parameters: { operation: 'executeQuery', query: ordering.AUTHORIZE_CONVERSATION_ENGINE_RECOVERY_SQL, options: { queryReplacement: `={{ JSON.stringify({ inbound_message_id: $('Claim Next Session Inbound').item.json.id, processing_owner: $execution.id }) }}` } },
+  credentials: postgresCredentials,
+  notes: 'Atomically consumes Ticket 85 recovery only if this execution still owns every unfinished turn member, its lease is live, and no canonical outbound reservation exists.',
+};
+const routeConversationEngineRecoveryAuthorization = {
+  name: 'Route Conversation Engine Recovery Authorization', id: 'd74a0001-0000-4000-8000-000000000020',
+  type: 'n8n-nodes-base.switch', typeVersion: 3.4, position: [69632, 49904],
+  parameters: { rules: { values: [{ conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 }, conditions: [{ leftValue: '={{ $json.recovery_state }}', rightValue: 'authorized', operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } }] }, options: { fallbackOutput: 'extra' } },
+  notes: 'Only an explicit atomic authorization may reach the one recovery call; ineligible ownership or reservation state fails closed.',
+};
+const waitBeforeConversationEngineRecovery = {
+  name: 'Wait Before Conversation Engine Recovery', id: 'd74a0001-0000-4000-8000-000000000021',
+  type: 'n8n-nodes-base.wait', typeVersion: 1.1, position: [69888, 49904],
+  parameters: { amount: 1, unit: 'seconds' },
+  notes: 'Ticket 85 bounded one-second pause before the single authorized recovery call.',
+};
+const callConversationEngineRecovery = JSON.parse(JSON.stringify(callConversationEngine));
+callConversationEngineRecovery.name = 'Call Conversation Engine Recovery';
+callConversationEngineRecovery.id = 'd74a0001-0000-4000-8000-000000000022';
+callConversationEngineRecovery.position = [70144, 49904];
+callConversationEngineRecovery.parameters.jsonBody = "={{ JSON.stringify($('Build Conversation Engine Request').item.json) }}";
+callConversationEngineRecovery.notes = 'Ticket 85: one separately authorized call with the exact original closed request. It has no outgoing recovery path and never enables generic HTTP retries.';
+const classifyConversationEngineRecoveryResult = JSON.parse(JSON.stringify(classifyConversationEngineResult));
+classifyConversationEngineRecoveryResult.name = 'Classify Conversation Engine Recovery Result';
+classifyConversationEngineRecoveryResult.id = 'd74a0001-0000-4000-8000-000000000023';
+classifyConversationEngineRecoveryResult.position = [70400, 49904];
+classifyConversationEngineRecoveryResult.parameters.jsCode = classifyConversationEngineRecoveryResult.parameters.jsCode.replace("return [{ json: { result_kind: 'ticket85_recovery_candidate' } }];", "return [{ json: { result_kind: 'unrecoverable_failure' } }];");
+classifyConversationEngineRecoveryResult.notes = 'Ticket 85: classifies the recovery response for validation only. A second controlled 503 is unrecoverable and cannot loop.';
+const failConversationEngineResult = {
+  name: 'Fail Closed Conversation Engine Result', id: 'd74a0001-0000-4000-8000-000000000024',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: [69376, 49536],
+  parameters: { jsCode: "throw new Error('CONVERSATION_ENGINE_UNRECOVERABLE_RESULT');" },
+  notes: 'Preserves the existing failure behavior for malformed, non-infrastructure, ineligible, and exhausted CE results.',
 };
 const validateConversationEngineResponse = {
   name: 'Validate/Adapt Conversation Engine Response', id: 'd74a0001-0000-4000-8000-000000000016',
@@ -1596,7 +1680,7 @@ const ownDataOnly = (value, keys) => {
   if (names.length !== keys.length || names.some(name => !keys.includes(name))) return false;
   return names.every(name => { const descriptor = Object.getOwnPropertyDescriptor(value, name); return descriptor && descriptor.enumerable === true && Object.prototype.hasOwnProperty.call(descriptor, 'value'); });
 };
-const response = $input.first().json;
+const response = $input.first().json.response;
 const request = $('Build Conversation Engine Request').item.json;
 const topKeys = ['contract_version', 'engine_version', 'request_id', 'resolution', 'assistant_response', 'persistence', 'diagnostics'];
 const persistenceKeys = ['pending_action', 'strategy', 'buyer_signal', 'topic', 'conversation_stage', 'goal', 'next_last_question_type', 'events'];
@@ -1718,7 +1802,7 @@ const output = unsafe || !response ? fallback || 'No tengo información confirma
 return [{ json: { ...value, output, final_gate: { cleared: valid && !unsafe, fallback_used: !valid || unsafe, required_obligation_ids: required, obsolete_claims_rejected: obsolete.test(String(parsed?.response || '')) }, next_last_question_type: null, allow_purchase_cta: false, deterministic_reason: 'direct_rag_v3_final_gate' } }];` }, notes: 'One final deterministic V3 grounding/policy gate. Invalid drafts get one safe grounded fallback; no unbounded regeneration.' };
 const directModel = cloneWorkflowNode(byName('Sales Interpretation Model')); directModel.name = 'Sales Obligations Model'; directModel.id = 'd74a0001-0000-4000-8000-000000000010'; directModel.position = [68608, 49760];
 const directComposerModel = cloneWorkflowNode(byName('Sales Response Model')); directComposerModel.name = 'Grounded Sales Response Model'; directComposerModel.id = 'd74a0001-0000-4000-8000-000000000011'; directComposerModel.position = [69888, 50128];
-workflow.nodes.push(directHistory, selectDirectRagBackend, buildConversationEngineRequest, callConversationEngine, validateConversationEngineResponse, directContext, directInterpreter, directParser, directResolver, directRoute, directEnvelope, directComposer, directGate, directModel, directComposerModel);
+workflow.nodes.push(directHistory, selectDirectRagBackend, buildConversationEngineRequest, callConversationEngine, classifyConversationEngineResult, routeConversationEngineResult, authorizeConversationEngineRecovery, routeConversationEngineRecoveryAuthorization, waitBeforeConversationEngineRecovery, callConversationEngineRecovery, classifyConversationEngineRecoveryResult, failConversationEngineResult, validateConversationEngineResponse, directContext, directInterpreter, directParser, directResolver, directRoute, directEnvelope, directComposer, directGate, directModel, directComposerModel);
 // Bypass the legacy giant-knowledge node altogether. The two existing session
 // branches enter the bounded-context lookup directly.
 workflow.connections['If Existing Onboarding Session'] = { main: [[{ node: directHistory.name, type: 'main', index: 0 }], [{ node: 'Initialize Sales Lead v3', type: 'main', index: 0 }]] };
@@ -1729,7 +1813,21 @@ workflow.connections[selectDirectRagBackend.name] = { main: [
   [{ node: buildConversationEngineRequest.name, type: 'main', index: 0 }],
 ] };
 workflow.connections[buildConversationEngineRequest.name] = { main: [[{ node: callConversationEngine.name, type: 'main', index: 0 }]] };
-workflow.connections[callConversationEngine.name] = { main: [[{ node: validateConversationEngineResponse.name, type: 'main', index: 0 }]] };
+workflow.connections[callConversationEngine.name] = { main: [[{ node: classifyConversationEngineResult.name, type: 'main', index: 0 }]] };
+workflow.connections[classifyConversationEngineResult.name] = { main: [[{ node: routeConversationEngineResult.name, type: 'main', index: 0 }]] };
+workflow.connections[routeConversationEngineResult.name] = { main: [
+  [{ node: validateConversationEngineResponse.name, type: 'main', index: 0 }],
+  [{ node: authorizeConversationEngineRecovery.name, type: 'main', index: 0 }],
+  [{ node: failConversationEngineResult.name, type: 'main', index: 0 }],
+] };
+workflow.connections[authorizeConversationEngineRecovery.name] = { main: [[{ node: routeConversationEngineRecoveryAuthorization.name, type: 'main', index: 0 }]] };
+workflow.connections[routeConversationEngineRecoveryAuthorization.name] = { main: [
+  [{ node: waitBeforeConversationEngineRecovery.name, type: 'main', index: 0 }],
+  [{ node: failConversationEngineResult.name, type: 'main', index: 0 }],
+] };
+workflow.connections[waitBeforeConversationEngineRecovery.name] = { main: [[{ node: callConversationEngineRecovery.name, type: 'main', index: 0 }]] };
+workflow.connections[callConversationEngineRecovery.name] = { main: [[{ node: classifyConversationEngineRecoveryResult.name, type: 'main', index: 0 }]] };
+workflow.connections[classifyConversationEngineRecoveryResult.name] = { main: [[{ node: routeConversationEngineResult.name, type: 'main', index: 0 }]] };
 workflow.connections[validateConversationEngineResponse.name] = { main: [[{ node: salesResponsePersistenceEnvelope.name, type: 'main', index: 0 }]] };
 workflow.connections[directContext.name] = { main: [[{ node: directInterpreter.name, type: 'main', index: 0 }]] };
 // n8n stores an AI dependency under the model node (source), not the agent

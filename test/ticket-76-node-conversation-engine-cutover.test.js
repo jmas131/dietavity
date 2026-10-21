@@ -100,7 +100,7 @@ test('B1 validates and adapts only a correlated delivery-permitted Node response
     diagnostics: { recommendation: { source: 'meal_recommendation_engine_v1_3', status: 'resolved', failure_code: null }, llm: { obligations: 'valid', composition: 'valid' } },
   };
   assert.equal(validateResponse(valid), valid);
-  const output = runCode('Validate/Adapt Conversation Engine Response', valid, target => {
+  const output = runCode('Validate/Adapt Conversation Engine Response', { response: valid }, target => {
     assert.equal(target, 'Build Conversation Engine Request');
     return { request_id: UUID_A };
   });
@@ -108,13 +108,15 @@ test('B1 validates and adapts only a correlated delivery-permitted Node response
   assert.equal(output.pending_action, 'respond');
   assert.equal(output.session_id, undefined);
   assert.equal(output.conversation_engine.recommendation_source, 'meal_recommendation_engine_v1_3');
-  assert.throws(() => runCode('Validate/Adapt Conversation Engine Response', { ...valid, request_id: UUID_B }, () => ({ request_id: UUID_A })), /CONVERSATION_ENGINE_RESPONSE_INVALID/);
-  assert.throws(() => runCode('Validate/Adapt Conversation Engine Response', { ...valid, resolution: { ...valid.resolution, delivery_permitted: false } }, () => ({ request_id: UUID_A })), /CONVERSATION_ENGINE_RESPONSE_INVALID/);
+  assert.throws(() => runCode('Validate/Adapt Conversation Engine Response', { response: { ...valid, request_id: UUID_B } }, () => ({ request_id: UUID_A })), /CONVERSATION_ENGINE_RESPONSE_INVALID/);
+  assert.throws(() => runCode('Validate/Adapt Conversation Engine Response', { response: { ...valid, resolution: { ...valid.resolution, delivery_permitted: false } } }, () => ({ request_id: UUID_A })), /CONVERSATION_ENGINE_RESPONSE_INVALID/);
 });
 
 test('B1 Node branch is isolated from legacy intelligence and rejoins the existing reservation tail', () => {
   assert.deepEqual(outputs('Build Conversation Engine Request'), ['Call Conversation Engine']);
-  assert.deepEqual(outputs('Call Conversation Engine'), ['Validate/Adapt Conversation Engine Response']);
+  assert.deepEqual(outputs('Call Conversation Engine'), ['Classify Conversation Engine Result']);
+  assert.deepEqual(outputs('Classify Conversation Engine Result'), ['Route Conversation Engine Result']);
+  assert.deepEqual(outputs('Route Conversation Engine Result', 0), ['Validate/Adapt Conversation Engine Response']);
   assert.deepEqual(outputs('Validate/Adapt Conversation Engine Response'), ['Build Sales Response Persistence Envelope']);
   assert.deepEqual(outputs('Final Direct RAG Customer Response Gate'), ['Build Sales Response Persistence Envelope']);
   assert.deepEqual(outputs('Build Sales Response Persistence Envelope'), ['Reserve Sales Reply']);

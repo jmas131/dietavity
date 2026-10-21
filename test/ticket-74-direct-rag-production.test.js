@@ -175,7 +175,9 @@ test('generated workflow enters direct RAG, preserves action routes, and has a g
   assert.deepEqual(outputs('Select Direct RAG Backend', 0), ['Build Direct RAG Conversation Context']);
   assert.deepEqual(outputs('Select Direct RAG Backend', 1), ['Build Conversation Engine Request']);
   assert.deepEqual(outputs('Build Conversation Engine Request'), ['Call Conversation Engine']);
-  assert.deepEqual(outputs('Call Conversation Engine'), ['Validate/Adapt Conversation Engine Response']);
+  assert.deepEqual(outputs('Call Conversation Engine'), ['Classify Conversation Engine Result']);
+  assert.deepEqual(outputs('Classify Conversation Engine Result'), ['Route Conversation Engine Result']);
+  assert.deepEqual(outputs('Route Conversation Engine Result', 0), ['Validate/Adapt Conversation Engine Response']);
   assert.deepEqual(outputs('Validate/Adapt Conversation Engine Response'), ['Build Sales Response Persistence Envelope']);
   assert.deepEqual(outputs('Interpret Sales Obligations'), ['Parse Direct RAG Obligations']);
   assert.deepEqual(workflow.connections['Sales Obligations Model'].ai_languageModel, [[{ node: 'Interpret Sales Obligations', type: 'ai_languageModel', index: 0 }]]);

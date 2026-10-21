@@ -4721,7 +4721,224 @@
           "name": "Dietavity Conversation Engine Internal Header Auth"
         }
       },
-      "notes": "B1 placeholder credential reference only. B3 must bind an n8n HTTP Header Auth credential whose sole header is x-dietavity-conversation-engine-secret; no secret is serialized here. No retry or legacy fallback occurs on this path."
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "notes": "B1 placeholder credential reference only. B3 must bind an n8n HTTP Header Auth credential whose sole header is x-dietavity-conversation-engine-secret; no secret is serialized here. HTTP retries remain disabled; a controlled 503 is classified for the bounded Ticket 85 path only."
+    },
+    {
+      "name": "Classify Conversation Engine Result",
+      "id": "d74a0001-0000-4000-8000-000000000017",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        68864,
+        49792
+      ],
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst request = $('Build Conversation Engine Request').item.json;\nconst ownDataOnly = (value, keys) => {\n  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getOwnPropertySymbols(value).length) return false;\n  const names = Object.getOwnPropertyNames(value);\n  return names.length === keys.length && names.every(name => keys.includes(name) && Object.getOwnPropertyDescriptor(value, name)?.enumerable === true && Object.prototype.hasOwnProperty.call(value, name));\n};\nconst parse = value => {\n  if (!value || typeof value === 'object') return value;\n  if (typeof value !== 'string') return null;\n  try { return JSON.parse(value); } catch { return null; }\n};\nconst error = raw && typeof raw.error === 'object' && raw.error ? raw.error : {};\nconst status = Number(raw.statusCode ?? raw.status_code ?? raw.httpCode ?? error.statusCode ?? error.status_code ?? error.httpCode ?? error.status ?? 0);\nconst candidates = [raw.body, raw.data, error.body, error.data, error.response?.body, error.response?.data, error.message, raw.message].map(parse);\nconst controlled = candidates.find(value => ownDataOnly(value, ['contract_version', 'engine_version', 'request_id', 'resolution', 'assistant_response', 'persistence', 'diagnostics'])\n  && value.contract_version === 'conversation-engine-response-v1'\n  && value.engine_version === 'direct-rag-v3-v1_3'\n  && value.request_id === request.request_id\n  && ownDataOnly(value.resolution, ['status', 'type', 'delivery_permitted'])\n  && value.resolution.status === 'infrastructure_failure'\n  && value.resolution.type === 'engine_unavailable'\n  && value.resolution.delivery_permitted === false\n  && value.assistant_response === null\n  && value.persistence === null);\nif (controlled && status === 503) return [{ json: { result_kind: 'ticket85_recovery_candidate' } }];\nif (status >= 400 || error?.message || raw?.error) return [{ json: { result_kind: 'unrecoverable_failure' } }];\nreturn [{ json: { result_kind: 'success', response: raw } }];"
+      },
+      "notes": "Classifies only the correlated controlled 503 infrastructure_failure/engine_unavailable contract. It never treats transport errors, ordinary 5xx responses, malformed bodies, or non-infrastructure CE results as recoverable."
+    },
+    {
+      "name": "Route Conversation Engine Result",
+      "id": "d74a0001-0000-4000-8000-000000000018",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        69120,
+        49792
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.result_kind }}",
+                    "rightValue": "success",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.result_kind }}",
+                    "rightValue": "ticket85_recovery_candidate",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "notes": "The only recovery branch is the exact Ticket 85 controlled infrastructure response; all other results fail closed."
+    },
+    {
+      "name": "Authorize Conversation Engine Recovery",
+      "id": "d74a0001-0000-4000-8000-000000000019",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        69376,
+        49904
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (\n  SELECT $1::jsonb AS payload\n), anchor AS (\n  SELECT inbound.id, inbound.session_id\n  FROM public.messages AS inbound\n  CROSS JOIN input\n  WHERE inbound.id = NULLIF(input.payload->>'inbound_message_id', '')::uuid\n    AND inbound.direction = 'inbound'\n  FOR UPDATE OF inbound\n), turn_members AS (\n  SELECT member.*\n  FROM public.messages AS member\n  CROSS JOIN anchor\n  WHERE COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text\n  FOR UPDATE OF member\n), eligible AS (\n  SELECT anchor.id\n  FROM anchor\n  CROSS JOIN input\n  WHERE NOT EXISTS (\n    SELECT 1 FROM public.messages AS outbound\n    WHERE outbound.in_reply_to_id = anchor.id\n      AND outbound.direction = 'outbound'\n  )\n    AND NOT EXISTS (\n      SELECT 1 FROM turn_members AS member\n      WHERE member.processing_completed_at IS NOT NULL\n        OR member.processing_owner IS DISTINCT FROM input.payload->>'processing_owner'\n        OR member.processing_lease_until IS NULL\n        OR member.processing_lease_until <= NOW()\n    )\n    AND NOT EXISTS (\n      SELECT 1 FROM public.messages AS claimed_anchor\n      WHERE claimed_anchor.id = anchor.id\n        AND claimed_anchor.metadata ? 'ticket85_conversation_engine_recovery_attempted_at'\n    )\n), consumed AS (\n  UPDATE public.messages AS member\n  SET processing_lease_until = NOW() + INTERVAL '15 minutes',\n      metadata = CASE WHEN member.id = (SELECT id FROM eligible)\n        THEN member.metadata || jsonb_build_object(\n          'ticket85_conversation_engine_recovery_attempted_at', NOW(),\n          'ticket85_conversation_engine_recovery_owner', input.payload->>'processing_owner'\n        )\n        ELSE member.metadata\n      END\n  FROM input\n  WHERE member.id IN (SELECT id FROM turn_members)\n    AND EXISTS (SELECT 1 FROM eligible)\n  RETURNING member.id\n)\nSELECT CASE WHEN EXISTS (SELECT 1 FROM eligible)\n  AND (SELECT COUNT(*) FROM consumed) = (SELECT COUNT(*) FROM turn_members)\n  THEN 'authorized' ELSE 'ineligible' END AS recovery_state;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ inbound_message_id: $('Claim Next Session Inbound').item.json.id, processing_owner: $execution.id }) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Atomically consumes Ticket 85 recovery only if this execution still owns every unfinished turn member, its lease is live, and no canonical outbound reservation exists."
+    },
+    {
+      "name": "Route Conversation Engine Recovery Authorization",
+      "id": "d74a0001-0000-4000-8000-000000000020",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        69632,
+        49904
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.recovery_state }}",
+                    "rightValue": "authorized",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "notes": "Only an explicit atomic authorization may reach the one recovery call; ineligible ownership or reservation state fails closed."
+    },
+    {
+      "name": "Wait Before Conversation Engine Recovery",
+      "id": "d74a0001-0000-4000-8000-000000000021",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        69888,
+        49904
+      ],
+      "parameters": {
+        "amount": 1,
+        "unit": "seconds"
+      },
+      "notes": "Ticket 85 bounded one-second pause before the single authorized recovery call."
+    },
+    {
+      "name": "Call Conversation Engine Recovery",
+      "id": "d74a0001-0000-4000-8000-000000000022",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        70144,
+        49904
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:12751/internal/conversation-engine/v1/resolve",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build Conversation Engine Request').item.json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CONVERSATION_ENGINE_HEADER_AUTH_CREDENTIAL_ID__",
+          "name": "Dietavity Conversation Engine Internal Header Auth"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "notes": "Ticket 85: one separately authorized call with the exact original closed request. It has no outgoing recovery path and never enables generic HTTP retries."
+    },
+    {
+      "name": "Classify Conversation Engine Recovery Result",
+      "id": "d74a0001-0000-4000-8000-000000000023",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        70400,
+        49904
+      ],
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst request = $('Build Conversation Engine Request').item.json;\nconst ownDataOnly = (value, keys) => {\n  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getOwnPropertySymbols(value).length) return false;\n  const names = Object.getOwnPropertyNames(value);\n  return names.length === keys.length && names.every(name => keys.includes(name) && Object.getOwnPropertyDescriptor(value, name)?.enumerable === true && Object.prototype.hasOwnProperty.call(value, name));\n};\nconst parse = value => {\n  if (!value || typeof value === 'object') return value;\n  if (typeof value !== 'string') return null;\n  try { return JSON.parse(value); } catch { return null; }\n};\nconst error = raw && typeof raw.error === 'object' && raw.error ? raw.error : {};\nconst status = Number(raw.statusCode ?? raw.status_code ?? raw.httpCode ?? error.statusCode ?? error.status_code ?? error.httpCode ?? error.status ?? 0);\nconst candidates = [raw.body, raw.data, error.body, error.data, error.response?.body, error.response?.data, error.message, raw.message].map(parse);\nconst controlled = candidates.find(value => ownDataOnly(value, ['contract_version', 'engine_version', 'request_id', 'resolution', 'assistant_response', 'persistence', 'diagnostics'])\n  && value.contract_version === 'conversation-engine-response-v1'\n  && value.engine_version === 'direct-rag-v3-v1_3'\n  && value.request_id === request.request_id\n  && ownDataOnly(value.resolution, ['status', 'type', 'delivery_permitted'])\n  && value.resolution.status === 'infrastructure_failure'\n  && value.resolution.type === 'engine_unavailable'\n  && value.resolution.delivery_permitted === false\n  && value.assistant_response === null\n  && value.persistence === null);\nif (controlled && status === 503) return [{ json: { result_kind: 'unrecoverable_failure' } }];\nif (status >= 400 || error?.message || raw?.error) return [{ json: { result_kind: 'unrecoverable_failure' } }];\nreturn [{ json: { result_kind: 'success', response: raw } }];"
+      },
+      "notes": "Ticket 85: classifies the recovery response for validation only. A second controlled 503 is unrecoverable and cannot loop."
+    },
+    {
+      "name": "Fail Closed Conversation Engine Result",
+      "id": "d74a0001-0000-4000-8000-000000000024",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        69376,
+        49536
+      ],
+      "parameters": {
+        "jsCode": "throw new Error('CONVERSATION_ENGINE_UNRECOVERABLE_RESULT');"
+      },
+      "notes": "Preserves the existing failure behavior for malformed, non-infrastructure, ineligible, and exhausted CE results."
     },
     {
       "name": "Validate/Adapt Conversation Engine Response",
@@ -4733,7 +4950,7 @@
         49792
       ],
       "parameters": {
-        "jsCode": "const fail = () => { throw new Error('CONVERSATION_ENGINE_RESPONSE_INVALID'); };\nconst ownDataOnly = (value, keys) => {\n  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getOwnPropertySymbols(value).length) return false;\n  const names = Object.getOwnPropertyNames(value);\n  if (names.length !== keys.length || names.some(name => !keys.includes(name))) return false;\n  return names.every(name => { const descriptor = Object.getOwnPropertyDescriptor(value, name); return descriptor && descriptor.enumerable === true && Object.prototype.hasOwnProperty.call(descriptor, 'value'); });\n};\nconst response = $input.first().json;\nconst request = $('Build Conversation Engine Request').item.json;\nconst topKeys = ['contract_version', 'engine_version', 'request_id', 'resolution', 'assistant_response', 'persistence', 'diagnostics'];\nconst persistenceKeys = ['pending_action', 'strategy', 'buyer_signal', 'topic', 'conversation_stage', 'goal', 'next_last_question_type', 'events'];\nif (!ownDataOnly(response, topKeys) || response.contract_version !== 'conversation-engine-response-v1' || response.engine_version !== 'direct-rag-v3-v1_3' || response.request_id !== request.request_id || typeof response.assistant_response !== 'string' || !response.assistant_response.trim() || response.assistant_response.length > 4000 || !ownDataOnly(response.resolution, ['status', 'type', 'delivery_permitted']) || !['resolved', 'safe_fallback'].includes(response.resolution.status) || response.resolution.type !== 'direct_rag_response' || response.resolution.delivery_permitted !== true || !ownDataOnly(response.persistence, persistenceKeys) || response.persistence.pending_action !== 'respond' || !Array.isArray(response.persistence.events) || response.persistence.events.length || !ownDataOnly(response.diagnostics, ['recommendation', 'llm']) || !ownDataOnly(response.diagnostics.recommendation, ['source', 'status', 'failure_code']) || !ownDataOnly(response.diagnostics.llm, ['obligations', 'composition'])) fail();\nfor (const key of ['strategy', 'buyer_signal', 'topic', 'conversation_stage', 'goal', 'next_last_question_type']) if (response.persistence[key] !== null && typeof response.persistence[key] !== 'string') fail();\nreturn [{ json: { output: response.assistant_response, pending_action: response.persistence.pending_action, strategy: response.persistence.strategy, buyer_signal: response.persistence.buyer_signal, topic: response.persistence.topic, conversation_stage: response.persistence.conversation_stage, goal: response.persistence.goal, next_last_question_type: response.persistence.next_last_question_type, events: response.persistence.events, conversation_engine: { request_id: response.request_id, resolution_status: response.resolution.status, resolution_type: response.resolution.type, recommendation_source: response.diagnostics.recommendation.source, recommendation_status: response.diagnostics.recommendation.status, recommendation_failure_code: response.diagnostics.recommendation.failure_code, llm_obligations_status: response.diagnostics.llm.obligations, llm_composition_status: response.diagnostics.llm.composition } } }];"
+        "jsCode": "const fail = () => { throw new Error('CONVERSATION_ENGINE_RESPONSE_INVALID'); };\nconst ownDataOnly = (value, keys) => {\n  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getOwnPropertySymbols(value).length) return false;\n  const names = Object.getOwnPropertyNames(value);\n  if (names.length !== keys.length || names.some(name => !keys.includes(name))) return false;\n  return names.every(name => { const descriptor = Object.getOwnPropertyDescriptor(value, name); return descriptor && descriptor.enumerable === true && Object.prototype.hasOwnProperty.call(descriptor, 'value'); });\n};\nconst response = $input.first().json.response;\nconst request = $('Build Conversation Engine Request').item.json;\nconst topKeys = ['contract_version', 'engine_version', 'request_id', 'resolution', 'assistant_response', 'persistence', 'diagnostics'];\nconst persistenceKeys = ['pending_action', 'strategy', 'buyer_signal', 'topic', 'conversation_stage', 'goal', 'next_last_question_type', 'events'];\nif (!ownDataOnly(response, topKeys) || response.contract_version !== 'conversation-engine-response-v1' || response.engine_version !== 'direct-rag-v3-v1_3' || response.request_id !== request.request_id || typeof response.assistant_response !== 'string' || !response.assistant_response.trim() || response.assistant_response.length > 4000 || !ownDataOnly(response.resolution, ['status', 'type', 'delivery_permitted']) || !['resolved', 'safe_fallback'].includes(response.resolution.status) || response.resolution.type !== 'direct_rag_response' || response.resolution.delivery_permitted !== true || !ownDataOnly(response.persistence, persistenceKeys) || response.persistence.pending_action !== 'respond' || !Array.isArray(response.persistence.events) || response.persistence.events.length || !ownDataOnly(response.diagnostics, ['recommendation', 'llm']) || !ownDataOnly(response.diagnostics.recommendation, ['source', 'status', 'failure_code']) || !ownDataOnly(response.diagnostics.llm, ['obligations', 'composition'])) fail();\nfor (const key of ['strategy', 'buyer_signal', 'topic', 'conversation_stage', 'goal', 'next_last_question_type']) if (response.persistence[key] !== null && typeof response.persistence[key] !== 'string') fail();\nreturn [{ json: { output: response.assistant_response, pending_action: response.persistence.pending_action, strategy: response.persistence.strategy, buyer_signal: response.persistence.buyer_signal, topic: response.persistence.topic, conversation_stage: response.persistence.conversation_stage, goal: response.persistence.goal, next_last_question_type: response.persistence.next_last_question_type, events: response.persistence.events, conversation_engine: { request_id: response.request_id, resolution_status: response.resolution.status, resolution_type: response.resolution.type, recommendation_source: response.diagnostics.recommendation.source, recommendation_status: response.diagnostics.recommendation.status, recommendation_failure_code: response.diagnostics.recommendation.failure_code, llm_obligations_status: response.diagnostics.llm.obligations, llm_composition_status: response.diagnostics.llm.composition } } }];"
       },
       "notes": "Fails closed on malformed, uncorrelated, non-deliverable, or incomplete Node results. It maps only validated customer response and persistence metadata; claimed identity remains authoritative downstream."
     },
@@ -7128,7 +7345,105 @@
       "main": [
         [
           {
+            "node": "Classify Conversation Engine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Conversation Engine Result": {
+      "main": [
+        [
+          {
+            "node": "Route Conversation Engine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Conversation Engine Result": {
+      "main": [
+        [
+          {
             "node": "Validate/Adapt Conversation Engine Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Authorize Conversation Engine Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fail Closed Conversation Engine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorize Conversation Engine Recovery": {
+      "main": [
+        [
+          {
+            "node": "Route Conversation Engine Recovery Authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Conversation Engine Recovery Authorization": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Conversation Engine Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fail Closed Conversation Engine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Conversation Engine Recovery": {
+      "main": [
+        [
+          {
+            "node": "Call Conversation Engine Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Conversation Engine Recovery": {
+      "main": [
+        [
+          {
+            "node": "Classify Conversation Engine Recovery Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Conversation Engine Recovery Result": {
+      "main": [
+        [
+          {
+            "node": "Route Conversation Engine Result",
             "type": "main",
             "index": 0
           }
