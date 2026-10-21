@@ -8,6 +8,18 @@ node_modules/
 !.env.example
 !.env.example.text
 
+# Local credential and private-key artifacts
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+credentials.json
+secrets.json
+.npmrc
+.netrc
+
 # macOS
 .DS_Store
 
