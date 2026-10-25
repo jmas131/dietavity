@@ -1842,6 +1842,207 @@ workflow.connections[directComposer.name] = { main: [[{ node: directGate.name, t
 workflow.connections[directComposerModel.name] = { ai_languageModel: [[{ node: directComposer.name, type: 'ai_languageModel', index: 0 }]] };
 workflow.connections[directGate.name] = { main: [[{ node: salesResponsePersistenceEnvelope.name, type: 'main', index: 0 }]] };
 
+// Conversation Engine V4 replaces the conversational branch after a logical
+// turn has been claimed. The retained V3 nodes remain in this generated
+// artifact only as rollback/reference material; acquired turns never enter
+// them. The context query uses the canonical messages ledger exclusively.
+const getV4ConversationContext = {
+  name: 'Get V4 Conversation Context', id: 'd74a0001-0000-4000-8000-000000000101',
+  type: 'n8n-nodes-base.postgres', typeVersion: 2.6, position: [68120, 49792],
+  parameters: { operation: 'executeQuery', query: `WITH current_inbound AS (
+  SELECT id, session_id, user_id, processing_order
+  FROM public.messages
+  WHERE id = $2::uuid AND session_id = $1 AND direction = 'inbound'
+), canonical_customer_turns AS (
+  SELECT anchor.processing_order AS source_processing_order,
+    STRING_AGG(COALESCE(member.body, ''), E'\\n' ORDER BY member.processing_order, member.id) AS text,
+    MIN(member.timestamp) AS timestamp, anchor.id, 0 AS role_sort
+  FROM public.messages AS anchor
+  JOIN public.messages AS member
+    ON member.session_id = anchor.session_id
+    AND COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text
+  CROSS JOIN current_inbound
+  WHERE anchor.session_id = current_inbound.session_id
+    AND anchor.direction = 'inbound'
+    AND anchor.processing_order < current_inbound.processing_order
+    AND COALESCE(anchor.metadata->>'turn_anchor_id', anchor.id::text) = anchor.id::text
+    AND anchor.processing_outcome = 'completed'
+    AND member.direction = 'inbound'
+    AND member.processing_outcome = 'completed'
+  GROUP BY anchor.id, anchor.processing_order
+), outbound_parts AS (
+  SELECT outbound.*, replied.processing_order AS source_processing_order,
+    COALESCE(NULLIF(outbound.metadata->>'logical_reply_key', ''), outbound.idempotency_key) AS logical_key,
+    CASE WHEN outbound.metadata ? 'part_index' AND outbound.metadata->>'part_index' ~ '^[1-9][0-9]{0,2}$' THEN (outbound.metadata->>'part_index')::integer ELSE 1 END AS part_index,
+    CASE WHEN outbound.metadata ? 'part_count' AND outbound.metadata->>'part_count' ~ '^[1-9][0-9]{0,2}$' THEN (outbound.metadata->>'part_count')::integer ELSE 1 END AS part_count
+  FROM public.messages AS outbound
+  JOIN public.messages AS replied ON replied.id = outbound.in_reply_to_id
+  CROSS JOIN current_inbound
+  WHERE outbound.session_id = current_inbound.session_id
+    AND outbound.direction = 'outbound'
+    AND replied.direction = 'inbound'
+    AND replied.processing_order < current_inbound.processing_order
+    AND replied.processing_outcome = 'completed'
+), canonical_assistant_turns AS (
+  SELECT source_processing_order,
+    (ARRAY_AGG(COALESCE(NULLIF(assistant_response, ''), body) ORDER BY part_index, id))[1] AS text,
+    MIN(timestamp) AS timestamp, MIN(id) AS id, 1 AS role_sort
+  FROM outbound_parts
+  GROUP BY in_reply_to_id, logical_key, source_processing_order
+  HAVING COUNT(*) = MIN(part_count)
+    AND MIN(part_count) = MAX(part_count)
+    AND COUNT(DISTINCT part_index) = MIN(part_count)
+    AND MIN(part_index) = 1
+    AND MAX(part_index) = MIN(part_count)
+    AND BOOL_AND(delivery_status IN ('accepted', 'sent', 'delivered')
+      AND (provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$' OR metadata->>'provider_acceptance_evidence' = 'message_sid'))
+), chronological_history AS (
+  SELECT 'customer'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_customer_turns
+  UNION ALL
+  SELECT 'assistant'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_assistant_turns
+), bounded_history AS (
+  SELECT * FROM chronological_history
+  ORDER BY source_processing_order DESC, role_sort DESC, timestamp DESC, id DESC
+  LIMIT 30
+), active_memory AS (
+  SELECT memory.kind, memory.value
+  FROM current_inbound
+  CROSS JOIN LATERAL public.read_conversation_durable_memory(current_inbound.session_id, current_inbound.user_id) AS memory
+)
+SELECT
+  COALESCE((SELECT jsonb_agg(jsonb_build_object('role', role, 'text', text) ORDER BY source_processing_order ASC, role_sort ASC, timestamp ASC, id ASC) FROM bounded_history), '[]'::jsonb) AS canonical_history,
+  jsonb_build_object(
+    'allergies', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'allergy'), '[]'::jsonb),
+    'dietary_restrictions', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'dietary_restriction'), '[]'::jsonb),
+    'preferences', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'preference'), '[]'::jsonb)
+  ) AS durable_memory;`, options: { queryReplacement: "={{ [ $('Claim Next Session Inbound').item.json.session_id, $('Claim Next Session Inbound').item.json.id ] }}" } },
+  credentials: { postgres: byName('Reserve Canonical Inbound Message').credentials.postgres },
+  notes: 'V4 reads only canonical visible history and active durable memory after the Ticket 83A claim. It has no semantic state, classification, or V3 dependency.',
+};
+const buildV4ConversationRequest = {
+  name: 'Build V4 Conversation Engine Request', id: 'd74a0001-0000-4000-8000-000000000102',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: [68352, 49792],
+  parameters: { jsCode: `const claimed = $('Claim Next Session Inbound').item.json;
+const value = $input.first().json;
+const parse = raw => { if (Array.isArray(raw) || (raw && typeof raw === 'object')) return raw; if (typeof raw !== 'string') return null; try { return JSON.parse(raw); } catch { return null; } };
+const fail = () => { throw new Error('CONVERSATION_V4_REQUEST_INVALID'); };
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const history = parse(value.canonical_history);
+const durable_memory = parse(value.durable_memory);
+const processing_order = typeof claimed.processing_order === 'string' && /^[1-9]\\d*$/.test(claimed.processing_order) ? Number(claimed.processing_order) : claimed.processing_order;
+const current_message = claimed.combined_body || claimed.body;
+if (!uuid.test(String(claimed.id || '')) || typeof claimed.session_id !== 'string' || !claimed.session_id.trim() || claimed.session_id.length > 320 || !Number.isSafeInteger(processing_order) || processing_order < 1 || typeof current_message !== 'string' || !current_message.trim() || current_message.length > 6000 || !Array.isArray(history) || history.length > 30 || !durable_memory || typeof durable_memory !== 'object' || Array.isArray(durable_memory) || Object.keys(durable_memory).length !== 3) fail();
+for (const item of history) if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).length !== 2 || !['customer', 'assistant'].includes(item.role) || typeof item.text !== 'string' || !item.text.trim() || item.text.length > 3000) fail();
+for (const key of ['allergies', 'dietary_restrictions', 'preferences']) if (!Array.isArray(durable_memory[key]) || durable_memory[key].length > 30 || durable_memory[key].some(item => typeof item !== 'string' || !item.trim() || item.length > 160 || /[\\r\\n\\t]/.test(item))) fail();
+return [{ json: { request_id: claimed.id, session_id: claimed.session_id, claimed_inbound_message_id: claimed.id, processing_order, current_message, canonical_history: history, durable_memory } }];` },
+  notes: 'Builds the V4 technical request from the claimed logical turn, canonical ledger history, and active durable memory only.',
+};
+const callV4ConversationEngine = {
+  name: 'Call V4 Conversation Engine', id: 'd74a0001-0000-4000-8000-000000000103',
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.3, position: [68608, 49792],
+  parameters: { method: 'POST', url: 'http://172.18.0.1:12751/internal/conversation-engine/v4/resolve', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth', sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json) }}', options: { timeout: 30000 } },
+  credentials: { httpHeaderAuth: { id: '__CONVERSATION_ENGINE_HEADER_AUTH_CREDENTIAL_ID__', name: 'Dietavity Conversation Engine Internal Header Auth' } },
+  onError: 'continueRegularOutput', continueOnFail: true,
+  notes: 'V4 has no HTTP retries. Only its exact controlled 503 availability envelope reaches Ticket 85.',
+};
+const classifyV4ConversationEngineResult = {
+  name: 'Classify V4 Conversation Engine Result', id: 'd74a0001-0000-4000-8000-000000000104',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: [68864, 49792],
+  parameters: { jsCode: `const raw = $input.first().json;
+const request = $('Build V4 Conversation Engine Request').item.json;
+const own = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.getOwnPropertySymbols(value).length === 0 && Object.getOwnPropertyNames(value).length === keys.length && keys.every(key => Object.prototype.hasOwnProperty.call(value, key));
+const parse = value => { if (!value || typeof value === 'object') return value; if (typeof value !== 'string') return null; try { return JSON.parse(value); } catch { return null; } };
+const error = raw && typeof raw.error === 'object' && raw.error ? raw.error : {};
+const status = Number(raw.statusCode ?? raw.status_code ?? raw.httpCode ?? error.statusCode ?? error.status_code ?? error.httpCode ?? error.status ?? 0);
+const candidates = [raw.body, raw.data, error.body, error.data, error.response?.body, error.response?.data, error.message, raw.message].map(parse);
+const controlled = candidates.find(value => own(value, ['contract_version', 'engine_version', 'request_id', 'generation_status', 'failure_category']) && value.contract_version === 'conversation-engine-v4-response-v1' && value.engine_version === 'conversation-engine-v4-primary-v1' && value.request_id === request.request_id && value.generation_status === 'infrastructure_failure' && value.failure_category === 'engine_unavailable');
+if (controlled && status === 503) return [{ json: { result_kind: 'ticket85_recovery_candidate' } }];
+if (status >= 400 || error?.message || raw?.error) return [{ json: { result_kind: 'unrecoverable_failure' } }];
+return [{ json: { result_kind: 'success', response: raw } }];` },
+  notes: 'Only a correlated V4 controlled availability failure is Ticket 85 recoverable. Malformed output and all other failures are terminal.',
+};
+const routeV4ConversationEngineResult = {
+  name: 'Route V4 Conversation Engine Result', id: 'd74a0001-0000-4000-8000-000000000105',
+  type: 'n8n-nodes-base.switch', typeVersion: 3.4, position: [69120, 49792],
+  parameters: { rules: { values: [
+    { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 }, conditions: [{ leftValue: '={{ $json.result_kind }}', rightValue: 'success', operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } },
+    { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 }, conditions: [{ leftValue: '={{ $json.result_kind }}', rightValue: 'ticket85_recovery_candidate', operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } },
+  ] }, options: { fallbackOutput: 'extra' } },
+};
+const validateV4ConversationEngineResponse = {
+  name: 'Validate V4 Conversation Engine Response', id: 'd74a0001-0000-4000-8000-000000000106',
+  type: 'n8n-nodes-base.code', typeVersion: 2, position: [69376, 49536],
+  parameters: { jsCode: `const fail = () => { throw new Error('CONVERSATION_V4_RESPONSE_INVALID'); };
+const value = $input.first().json.response;
+const request = $('Build V4 Conversation Engine Request').item.json;
+const own = (input, keys) => input && typeof input === 'object' && !Array.isArray(input) && Object.getOwnPropertySymbols(input).length === 0 && Object.getOwnPropertyNames(input).length === keys.length && keys.every(key => Object.prototype.hasOwnProperty.call(input, key));
+if (!own(value, ['contract_version', 'engine_version', 'request_id', 'model', 'generation_status', 'response', 'memory_updates', 'memory_update_count']) || value.contract_version !== 'conversation-engine-v4-response-v1' || value.engine_version !== 'conversation-engine-v4-primary-v1' || value.request_id !== request.request_id || value.generation_status !== 'generated' || typeof value.model !== 'string' || !value.model.trim() || value.model.length > 120 || typeof value.response !== 'string' || !value.response.trim() || value.response.length > 4000 || !Array.isArray(value.memory_updates) || value.memory_updates.length > 12 || value.memory_update_count !== value.memory_updates.length) fail();
+for (const update of value.memory_updates) if (!own(update, ['kind', 'action', 'value']) || !['allergy', 'dietary_restriction', 'preference'].includes(update.kind) || !['add', 'remove'].includes(update.action) || typeof update.value !== 'string' || !update.value.trim() || update.value.length > 160 || /[\\r\\n\\t]/.test(update.value)) fail();
+return [{ json: { assistant_response: value.response, memory_updates: value.memory_updates, v4_observability: { request_id: value.request_id, engine_version: value.engine_version, model: value.model, memory_update_count: value.memory_update_count } } }];` },
+  notes: 'V4 validates only correlation, output structure, and technical bounds. It performs no semantic response or food validation.',
+};
+const prepareV4WhatsAppMessageParts = { name: 'Prepare V4 WhatsApp Message Parts', id: 'd74a0001-0000-4000-8000-000000000107', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69632, 49536], parameters: { jsCode: whatsappMessage.n8nPrepareMessageCode() }, notes: 'Uses the existing bounded WhatsApp formatter; it does not regenerate or alter V4 semantics.' };
+const reserveV4ReplyWithMemory = {
+  name: 'Reserve V4 Reply With Memory', id: 'd74a0001-0000-4000-8000-000000000108',
+  type: 'n8n-nodes-base.postgres', typeVersion: 2.6, position: [69888, 49536],
+  parameters: { operation: 'executeQuery', query: 'SELECT * FROM public.reserve_conversation_v4_reply_with_memory($1::jsonb);', options: { queryReplacement: `={{ JSON.stringify({
+  in_reply_to_id: $('Claim Next Session Inbound').item.json.id,
+  session_id: $('Claim Next Session Inbound').item.json.session_id,
+  processing_owner: $execution.id,
+  user_id: $('Claim Next Session Inbound').item.json.user_id || undefined,
+  base_idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':v4',
+  logical_body: $json.logical_assistant_response,
+  message_kind: 'sales_ai',
+  parts: $json.whatsapp_parts,
+  memory_updates: $json.memory_updates
+}) }` } },
+  credentials: { postgres: byName('Reserve Canonical Inbound Message').credentials.postgres },
+  notes: 'The V4 RPC atomically reserves all outbound parts and records memory updates. No Node or separate n8n memory write exists.',
+};
+const loopV4WhatsAppParts = { name: 'Loop V4 WhatsApp Parts', id: 'd74a0001-0000-4000-8000-000000000109', type: 'n8n-nodes-base.splitInBatches', typeVersion: 3, position: [70144, 49536], parameters: { options: {} }, notes: 'Delivers only rows returned by the durable V4 reservation, one part at a time.' };
+const respondToV4Chat = cloneWorkflowNode(byName('Respond to Chat')); respondToV4Chat.name = 'Respond to V4 Chat'; respondToV4Chat.id = 'd74a0001-0000-4000-8000-000000000110'; respondToV4Chat.position = [70400, 49536];
+const updateV4ReplyDelivery = cloneWorkflowNode(byName('Update Sales Reply Delivery')); updateV4ReplyDelivery.name = 'Update V4 Reply Delivery'; updateV4ReplyDelivery.id = 'd74a0001-0000-4000-8000-000000000111'; updateV4ReplyDelivery.position = [70656, 49536]; updateV4ReplyDelivery.parameters.options.queryReplacement = twilioDelivery.responseExpression('Loop V4 WhatsApp Parts', 'accepted');
+const assertV4ReplyAccepted = cloneWorkflowNode(byName('Assert Sales Reply Accepted')); assertV4ReplyAccepted.name = 'Assert V4 Reply Accepted'; assertV4ReplyAccepted.id = 'd74a0001-0000-4000-8000-000000000112'; assertV4ReplyAccepted.position = [70912, 49536];
+const authorizeV4ConversationEngineRecovery = cloneWorkflowNode(authorizeConversationEngineRecovery); authorizeV4ConversationEngineRecovery.name = 'Authorize V4 Conversation Engine Recovery'; authorizeV4ConversationEngineRecovery.id = 'd74a0001-0000-4000-8000-000000000113'; authorizeV4ConversationEngineRecovery.position = [69376, 49904];
+const routeV4ConversationEngineRecoveryAuthorization = cloneWorkflowNode(routeConversationEngineRecoveryAuthorization); routeV4ConversationEngineRecoveryAuthorization.name = 'Route V4 Conversation Engine Recovery Authorization'; routeV4ConversationEngineRecoveryAuthorization.id = 'd74a0001-0000-4000-8000-000000000114'; routeV4ConversationEngineRecoveryAuthorization.position = [69632, 49904];
+const waitBeforeV4ConversationEngineRecovery = cloneWorkflowNode(waitBeforeConversationEngineRecovery); waitBeforeV4ConversationEngineRecovery.name = 'Wait Before V4 Conversation Engine Recovery'; waitBeforeV4ConversationEngineRecovery.id = 'd74a0001-0000-4000-8000-000000000115'; waitBeforeV4ConversationEngineRecovery.position = [69888, 49904];
+const callV4ConversationEngineRecovery = cloneWorkflowNode(callV4ConversationEngine); callV4ConversationEngineRecovery.name = 'Call V4 Conversation Engine Recovery'; callV4ConversationEngineRecovery.id = 'd74a0001-0000-4000-8000-000000000116'; callV4ConversationEngineRecovery.position = [70144, 49904]; callV4ConversationEngineRecovery.parameters.jsonBody = "={{ JSON.stringify($('Build V4 Conversation Engine Request').item.json) }}";
+const classifyV4ConversationEngineRecoveryResult = cloneWorkflowNode(classifyV4ConversationEngineResult); classifyV4ConversationEngineRecoveryResult.name = 'Classify V4 Conversation Engine Recovery Result'; classifyV4ConversationEngineRecoveryResult.id = 'd74a0001-0000-4000-8000-000000000117'; classifyV4ConversationEngineRecoveryResult.position = [70400, 49904]; classifyV4ConversationEngineRecoveryResult.parameters.jsCode = classifyV4ConversationEngineRecoveryResult.parameters.jsCode.replace("return [{ json: { result_kind: 'ticket85_recovery_candidate' } }];", "return [{ json: { result_kind: 'unrecoverable_failure' } }];");
+const failV4ConversationEngineResult = { name: 'Fail Closed V4 Conversation Engine Result', id: 'd74a0001-0000-4000-8000-000000000118', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69376, 50160], parameters: { jsCode: "throw new Error('CONVERSATION_V4_UNRECOVERABLE_RESULT');" }, notes: 'V4 never retries malformed output, reservation failures, or arbitrary infrastructure failures.' };
+workflow.nodes.push(getV4ConversationContext, buildV4ConversationRequest, callV4ConversationEngine, classifyV4ConversationEngineResult, routeV4ConversationEngineResult, validateV4ConversationEngineResponse, prepareV4WhatsAppMessageParts, reserveV4ReplyWithMemory, loopV4WhatsAppParts, respondToV4Chat, updateV4ReplyDelivery, assertV4ReplyAccepted, authorizeV4ConversationEngineRecovery, routeV4ConversationEngineRecoveryAuthorization, waitBeforeV4ConversationEngineRecovery, callV4ConversationEngineRecovery, classifyV4ConversationEngineRecoveryResult, failV4ConversationEngineResult);
+workflow.connections['Route Session Claim State'] = { main: [
+  [{ node: getV4ConversationContext.name, type: 'main', index: 0 }],
+  [{ node: 'Wait For Turn Quiet Period', type: 'main', index: 0 }],
+  [{ node: 'End — Turn Already Owned', type: 'main', index: 0 }],
+] };
+workflow.connections[getV4ConversationContext.name] = { main: [[{ node: buildV4ConversationRequest.name, type: 'main', index: 0 }]] };
+workflow.connections[buildV4ConversationRequest.name] = { main: [[{ node: callV4ConversationEngine.name, type: 'main', index: 0 }]] };
+workflow.connections[callV4ConversationEngine.name] = { main: [[{ node: classifyV4ConversationEngineResult.name, type: 'main', index: 0 }]] };
+workflow.connections[classifyV4ConversationEngineResult.name] = { main: [[{ node: routeV4ConversationEngineResult.name, type: 'main', index: 0 }]] };
+workflow.connections[routeV4ConversationEngineResult.name] = { main: [
+  [{ node: validateV4ConversationEngineResponse.name, type: 'main', index: 0 }],
+  [{ node: authorizeV4ConversationEngineRecovery.name, type: 'main', index: 0 }],
+  [{ node: failV4ConversationEngineResult.name, type: 'main', index: 0 }],
+] };
+workflow.connections[validateV4ConversationEngineResponse.name] = { main: [[{ node: prepareV4WhatsAppMessageParts.name, type: 'main', index: 0 }]] };
+workflow.connections[prepareV4WhatsAppMessageParts.name] = { main: [[{ node: reserveV4ReplyWithMemory.name, type: 'main', index: 0 }]] };
+workflow.connections[reserveV4ReplyWithMemory.name] = { main: [[{ node: loopV4WhatsAppParts.name, type: 'main', index: 0 }]] };
+workflow.connections[loopV4WhatsAppParts.name] = { main: [
+  [{ node: respondToV4Chat.name, type: 'main', index: 0 }],
+  [{ node: 'Mark Session Inbound Complete', type: 'main', index: 0 }],
+] };
+workflow.connections[respondToV4Chat.name] = { main: [[{ node: updateV4ReplyDelivery.name, type: 'main', index: 0 }]] };
+workflow.connections[updateV4ReplyDelivery.name] = { main: [[{ node: assertV4ReplyAccepted.name, type: 'main', index: 0 }]] };
+workflow.connections[assertV4ReplyAccepted.name] = { main: [[{ node: loopV4WhatsAppParts.name, type: 'main', index: 0 }]] };
+workflow.connections[authorizeV4ConversationEngineRecovery.name] = { main: [[{ node: routeV4ConversationEngineRecoveryAuthorization.name, type: 'main', index: 0 }]] };
+workflow.connections[routeV4ConversationEngineRecoveryAuthorization.name] = { main: [
+  [{ node: waitBeforeV4ConversationEngineRecovery.name, type: 'main', index: 0 }],
+  [{ node: failV4ConversationEngineResult.name, type: 'main', index: 0 }],
+] };
+workflow.connections[waitBeforeV4ConversationEngineRecovery.name] = { main: [[{ node: callV4ConversationEngineRecovery.name, type: 'main', index: 0 }]] };
+workflow.connections[callV4ConversationEngineRecovery.name] = { main: [[{ node: classifyV4ConversationEngineRecoveryResult.name, type: 'main', index: 0 }]] };
+workflow.connections[classifyV4ConversationEngineRecoveryResult.name] = { main: [[{ node: routeV4ConversationEngineResult.name, type: 'main', index: 0 }]] };
+
 fs.writeFileSync(outputPath, `${JSON.stringify(workflow, null, 2)}\n`);
 console.log(`Wrote ${path.relative(root, outputPath)}`);
 

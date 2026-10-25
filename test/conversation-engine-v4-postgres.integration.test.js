@@ -82,7 +82,19 @@ test('V4 durable memory and outbound reservation integration', { skip: !url ? 'L
       ('00000000-0000-4000-8000-000000000002', 'session-v4-a', 'inbound', 'ya no soy alérgica al cacahuate', 'twilio', 'received', 'owner-v4', now() + interval '1 hour'),
       ('00000000-0000-4000-8000-000000000003', 'session-v4-b', 'inbound', 'prefiero comida suave', 'twilio', 'received', 'owner-v4', now() + interval '1 hour'),
       ('00000000-0000-4000-8000-000000000004', 'session-v4-fail', 'inbound', 'fallo', 'twilio', 'received', 'owner-v4', now() + interval '1 hour'),
-      ('00000000-0000-4000-8000-000000000005', 'session-v4-a', 'inbound', 'vuelvo a declarar alergia', 'twilio', 'received', 'owner-v4', now() + interval '1 hour');
+      ('00000000-0000-4000-8000-000000000005', 'session-v4-a', 'inbound', 'vuelvo a declarar alergia', 'twilio', 'received', 'owner-v4', now() + interval '1 hour'),
+      ('00000000-0000-4000-8000-000000000006', 'session-v4-parts', 'inbound', 'dos partes', 'twilio', 'received', 'owner-v4', now() + interval '1 hour'),
+      ('00000000-0000-4000-8000-000000000007', 'session-v4-parts', 'inbound', 'miembro', 'twilio', 'received', 'owner-v4', now() + interval '1 hour'),
+      ('00000000-0000-4000-8000-000000000008', 'session-v4-owner', 'inbound', 'otro dueño', 'twilio', 'received', 'other-owner', now() + interval '1 hour'),
+      ('00000000-0000-4000-8000-000000000009', 'session-v4-expired', 'inbound', 'lease vencido', 'twilio', 'received', 'owner-v4', now() - interval '1 second'),
+      ('00000000-0000-4000-8000-000000000010', 'session-v4-superseded', 'inbound', 'superseded', 'twilio', 'received', NULL, NULL);
+    UPDATE public.messages
+    SET metadata = '{"turn_anchor_id":"00000000-0000-4000-8000-000000000006"}'::jsonb
+    WHERE id = '00000000-0000-4000-8000-000000000007';
+    UPDATE public.messages
+    SET metadata = '{"turn_anchor_id":"00000000-0000-4000-8000-000000000010"}'::jsonb,
+        processing_completed_at = now()
+    WHERE id = '00000000-0000-4000-8000-000000000010';
     INSERT INTO public.users (id) VALUES ('00000000-0000-4000-8000-000000000099');
   `);
 
@@ -108,17 +120,27 @@ test('V4 durable memory and outbound reservation integration', { skip: !url ? 'L
   const reAdd = reservation('00000000-0000-4000-8000-000000000005', 'v4:re-add', [{ kind: 'allergy', action: 'add', value: 'cacahuate' }]);
   const linked = reservation('00000000-0000-4000-8000-000000000003', 'v4:linked', [{ kind: 'preference', action: 'add', value: 'comida suave' }], { session: 'session-v4-b', userId: '00000000-0000-4000-8000-000000000099' });
   const invalidUser = reservation('00000000-0000-4000-8000-000000000004', 'v4:failure', [{ kind: 'dietary_restriction', action: 'add', value: 'sin gluten' }], { session: 'session-v4-fail', userId: '00000000-0000-4000-8000-000000000098' });
+  const multipart = { ...reservation('00000000-0000-4000-8000-000000000006', 'v4:parts', [{ kind: 'preference', action: 'add', value: 'comida tibia' }], { session: 'session-v4-parts', body: 'Respuesta multipart' }), parts: ['Parte 1', 'Parte 2'] };
+  const wrongOwner = reservation('00000000-0000-4000-8000-000000000008', 'v4:wrong-owner', [], { session: 'session-v4-owner' });
+  const expiredLease = reservation('00000000-0000-4000-8000-000000000009', 'v4:expired', [], { session: 'session-v4-expired' });
+  const superseded = reservation('00000000-0000-4000-8000-000000000010', 'v4:superseded', [], { session: 'session-v4-superseded' });
   run(`
     SELECT * FROM public.reserve_conversation_v4_reply_with_memory(${payload(remove)});
     SELECT * FROM public.reserve_conversation_v4_reply_with_memory(${payload(reAdd)});
     SELECT * FROM public.reserve_conversation_v4_reply_with_memory(${payload(linked)});
+    SELECT * FROM public.reserve_conversation_v4_reply_with_memory(${payload(multipart)});
     DO $$ BEGIN
       IF (SELECT count(*) FROM public.conversation_durable_memory WHERE session_id='session-v4-a' AND kind='allergy' AND normalized_value='cacahuate') <> 1 THEN RAISE EXCEPTION 'add-remove-add created duplicate memory'; END IF;
       IF NOT EXISTS (SELECT 1 FROM public.conversation_durable_memory_updates WHERE source_inbound_message_id='00000000-0000-4000-8000-000000000002' AND action='remove' AND outcome='applied') THEN RAISE EXCEPTION 'remove receipt missing'; END IF;
       IF NOT EXISTS (SELECT 1 FROM public.conversation_durable_memory WHERE session_id='session-v4-a' AND kind='allergy' AND status='active' AND source_inbound_message_id='00000000-0000-4000-8000-000000000005') THEN RAISE EXCEPTION 'add-remove-add lifecycle missing'; END IF;
       IF NOT EXISTS (SELECT 1 FROM public.read_conversation_durable_memory('session-v4-b', '00000000-0000-4000-8000-000000000099') WHERE kind='preference' AND source='session') THEN RAISE EXCEPTION 'linked session read missing'; END IF;
       IF NOT EXISTS (SELECT 1 FROM public.read_conversation_durable_memory('session-v4-other', '00000000-0000-4000-8000-000000000099') WHERE kind='preference' AND source='user') THEN RAISE EXCEPTION 'linked user read missing'; END IF;
+      IF (SELECT count(*) FROM public.messages WHERE in_reply_to_id='00000000-0000-4000-8000-000000000006') <> 2 THEN RAISE EXCEPTION 'multipart reservation missing parts'; END IF;
+      IF NOT EXISTS (SELECT 1 FROM public.conversation_durable_memory_updates WHERE source_inbound_message_id='00000000-0000-4000-8000-000000000006' AND outcome='applied') THEN RAISE EXCEPTION 'multipart receipt missing'; END IF;
       BEGIN PERFORM public.reserve_conversation_v4_reply_with_memory(${payload(invalidUser)}); RAISE EXCEPTION 'unknown user accepted'; EXCEPTION WHEN SQLSTATE 'P0001' THEN NULL; END;
+      BEGIN PERFORM public.reserve_conversation_v4_reply_with_memory(${payload(wrongOwner)}); RAISE EXCEPTION 'wrong owner accepted'; EXCEPTION WHEN SQLSTATE 'P0001' THEN NULL; END;
+      BEGIN PERFORM public.reserve_conversation_v4_reply_with_memory(${payload(expiredLease)}); RAISE EXCEPTION 'expired lease accepted'; EXCEPTION WHEN SQLSTATE 'P0001' THEN NULL; END;
+      BEGIN PERFORM public.reserve_conversation_v4_reply_with_memory(${payload(superseded)}); RAISE EXCEPTION 'completed or superseded turn accepted'; EXCEPTION WHEN SQLSTATE 'P0001' THEN NULL; END;
       IF EXISTS (SELECT 1 FROM public.conversation_durable_memory WHERE session_id='session-v4-fail') OR EXISTS (SELECT 1 FROM public.messages WHERE in_reply_to_id='00000000-0000-4000-8000-000000000004') THEN RAISE EXCEPTION 'failed reservation committed state'; END IF;
       IF has_table_privilege('service_role', 'public.conversation_durable_memory', 'select') OR has_table_privilege('service_role', 'public.conversation_durable_memory_updates', 'insert') OR NOT has_function_privilege('service_role', 'public.reserve_conversation_v4_reply_with_memory(jsonb)', 'execute') THEN RAISE EXCEPTION 'durable-memory privilege boundary incorrect'; END IF;
     END $$;

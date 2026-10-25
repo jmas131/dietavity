@@ -473,7 +473,7 @@ test('workflow terminates busy claims and waits only for database-computed quiet
   assert.deepEqual(outputs('Incoming Message'), ['Canonicalize Inbound WhatsApp']);
   assert.deepEqual(outputs('Canonicalize Inbound WhatsApp'), ['Reserve Canonical Inbound Message']);
   assert.deepEqual(outputs('Reserve Canonical Inbound Message'), ['Claim Next Session Inbound']);
-  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get User from Supabase']);
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
   assert.deepEqual(outputs('Wait For Turn Quiet Period'), ['Claim Next Session Inbound']);
   assert.deepEqual(outputs('Route Session Claim State', 2), ['End — Turn Already Owned']);

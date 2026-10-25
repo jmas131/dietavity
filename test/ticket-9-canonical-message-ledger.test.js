@@ -82,7 +82,7 @@ test('inbound reservation is the shared concurrency gate before routing or side 
   assert.deepEqual(outputs('Incoming Message'), ['Canonicalize Inbound WhatsApp']);
   assert.deepEqual(outputs('Canonicalize Inbound WhatsApp'), ['Reserve Canonical Inbound Message']);
   assert.deepEqual(outputs('Reserve Canonical Inbound Message'), ['Claim Next Session Inbound']);
-  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get User from Supabase']);
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get V4 Conversation Context']);
   const sql = nodes.get('Reserve Canonical Inbound Message').parameters.query;
   assert.match(sql, /INSERT INTO public\.messages/);
   assert.match(sql, /ON CONFLICT \(idempotency_key\)[\s\S]*DO NOTHING/);
@@ -100,12 +100,15 @@ test('every Twilio customer send has a durable reservation and delivery update',
   for (const send of sends) {
     const incoming = predecessors(send.name);
     assert.equal(incoming.length, 1, send.name);
-    const reservationName = incoming[0] === 'Loop Paid WhatsApp Parts'
-      ? 'Reserve Paid Assistant Reply' : incoming[0];
-    if (incoming[0] === 'Loop Paid WhatsApp Parts') {
-      assert.deepEqual(outputs(reservationName), ['Loop Paid WhatsApp Parts']);
-      assert.deepEqual(outputs('Loop Paid WhatsApp Parts', 1), [send.name]);
-      assert.deepEqual(nodes.get('Loop Paid WhatsApp Parts').parameters, { options: {} });
+    const multipartReservations = new Map([
+      ['Loop Paid WhatsApp Parts', 'Reserve Paid Assistant Reply'],
+      ['Loop V4 WhatsApp Parts', 'Reserve V4 Reply With Memory'],
+    ]);
+    const reservationName = multipartReservations.get(incoming[0]) || incoming[0];
+    if (multipartReservations.has(incoming[0])) {
+      assert.deepEqual(outputs(reservationName), [incoming[0]]);
+      assert.deepEqual(outputs(incoming[0], incoming[0] === 'Loop V4 WhatsApp Parts' ? 0 : 1), [send.name]);
+      assert.deepEqual(nodes.get(incoming[0]).parameters, { options: {} });
     }
     assert.match(reservationName, /^Reserve /, send.name);
     const outgoing = outputs(send.name);
@@ -114,8 +117,12 @@ test('every Twilio customer send has a durable reservation and delivery update',
     assert.equal(send.onError, 'continueRegularOutput', send.name);
     assert.equal(send.retryOnFail, false, send.name);
     const reserveSql = nodes.get(reservationName).parameters.query;
-    assert.match(reserveSql, /ON CONFLICT \(idempotency_key\)[\s\S]*DO NOTHING/, send.name);
-    assert.match(reserveSql, /delivery_status[\s\S]*'pending'/, send.name);
+    if (reservationName === 'Reserve V4 Reply With Memory') {
+      assert.match(reserveSql, /reserve_conversation_v4_reply_with_memory/, send.name);
+    } else {
+      assert.match(reserveSql, /ON CONFLICT \(idempotency_key\)[\s\S]*DO NOTHING/, send.name);
+      assert.match(reserveSql, /delivery_status[\s\S]*'pending'/, send.name);
+    }
   }
 });
 

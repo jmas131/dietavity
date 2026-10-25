@@ -5218,6 +5218,419 @@
           "name": "Onboarding Agent"
         }
       }
+    },
+    {
+      "name": "Get V4 Conversation Context",
+      "id": "d74a0001-0000-4000-8000-000000000101",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        68120,
+        49792
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH current_inbound AS (\n  SELECT id, session_id, user_id, processing_order\n  FROM public.messages\n  WHERE id = $2::uuid AND session_id = $1 AND direction = 'inbound'\n), canonical_customer_turns AS (\n  SELECT anchor.processing_order AS source_processing_order,\n    STRING_AGG(COALESCE(member.body, ''), E'\\n' ORDER BY member.processing_order, member.id) AS text,\n    MIN(member.timestamp) AS timestamp, anchor.id, 0 AS role_sort\n  FROM public.messages AS anchor\n  JOIN public.messages AS member\n    ON member.session_id = anchor.session_id\n    AND COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text\n  CROSS JOIN current_inbound\n  WHERE anchor.session_id = current_inbound.session_id\n    AND anchor.direction = 'inbound'\n    AND anchor.processing_order < current_inbound.processing_order\n    AND COALESCE(anchor.metadata->>'turn_anchor_id', anchor.id::text) = anchor.id::text\n    AND anchor.processing_outcome = 'completed'\n    AND member.direction = 'inbound'\n    AND member.processing_outcome = 'completed'\n  GROUP BY anchor.id, anchor.processing_order\n), outbound_parts AS (\n  SELECT outbound.*, replied.processing_order AS source_processing_order,\n    COALESCE(NULLIF(outbound.metadata->>'logical_reply_key', ''), outbound.idempotency_key) AS logical_key,\n    CASE WHEN outbound.metadata ? 'part_index' AND outbound.metadata->>'part_index' ~ '^[1-9][0-9]{0,2}$' THEN (outbound.metadata->>'part_index')::integer ELSE 1 END AS part_index,\n    CASE WHEN outbound.metadata ? 'part_count' AND outbound.metadata->>'part_count' ~ '^[1-9][0-9]{0,2}$' THEN (outbound.metadata->>'part_count')::integer ELSE 1 END AS part_count\n  FROM public.messages AS outbound\n  JOIN public.messages AS replied ON replied.id = outbound.in_reply_to_id\n  CROSS JOIN current_inbound\n  WHERE outbound.session_id = current_inbound.session_id\n    AND outbound.direction = 'outbound'\n    AND replied.direction = 'inbound'\n    AND replied.processing_order < current_inbound.processing_order\n    AND replied.processing_outcome = 'completed'\n), canonical_assistant_turns AS (\n  SELECT source_processing_order,\n    (ARRAY_AGG(COALESCE(NULLIF(assistant_response, ''), body) ORDER BY part_index, id))[1] AS text,\n    MIN(timestamp) AS timestamp, MIN(id) AS id, 1 AS role_sort\n  FROM outbound_parts\n  GROUP BY in_reply_to_id, logical_key, source_processing_order\n  HAVING COUNT(*) = MIN(part_count)\n    AND MIN(part_count) = MAX(part_count)\n    AND COUNT(DISTINCT part_index) = MIN(part_count)\n    AND MIN(part_index) = 1\n    AND MAX(part_index) = MIN(part_count)\n    AND BOOL_AND(delivery_status IN ('accepted', 'sent', 'delivered')\n      AND (provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$' OR metadata->>'provider_acceptance_evidence' = 'message_sid'))\n), chronological_history AS (\n  SELECT 'customer'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_customer_turns\n  UNION ALL\n  SELECT 'assistant'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_assistant_turns\n), bounded_history AS (\n  SELECT * FROM chronological_history\n  ORDER BY source_processing_order DESC, role_sort DESC, timestamp DESC, id DESC\n  LIMIT 30\n), active_memory AS (\n  SELECT memory.kind, memory.value\n  FROM current_inbound\n  CROSS JOIN LATERAL public.read_conversation_durable_memory(current_inbound.session_id, current_inbound.user_id) AS memory\n)\nSELECT\n  COALESCE((SELECT jsonb_agg(jsonb_build_object('role', role, 'text', text) ORDER BY source_processing_order ASC, role_sort ASC, timestamp ASC, id ASC) FROM bounded_history), '[]'::jsonb) AS canonical_history,\n  jsonb_build_object(\n    'allergies', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'allergy'), '[]'::jsonb),\n    'dietary_restrictions', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'dietary_restriction'), '[]'::jsonb),\n    'preferences', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'preference'), '[]'::jsonb)\n  ) AS durable_memory;",
+        "options": {
+          "queryReplacement": "={{ [ $('Claim Next Session Inbound').item.json.session_id, $('Claim Next Session Inbound').item.json.id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "V4 reads only canonical visible history and active durable memory after the Ticket 83A claim. It has no semantic state, classification, or V3 dependency."
+    },
+    {
+      "name": "Build V4 Conversation Engine Request",
+      "id": "d74a0001-0000-4000-8000-000000000102",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        68352,
+        49792
+      ],
+      "parameters": {
+        "jsCode": "const claimed = $('Claim Next Session Inbound').item.json;\nconst value = $input.first().json;\nconst parse = raw => { if (Array.isArray(raw) || (raw && typeof raw === 'object')) return raw; if (typeof raw !== 'string') return null; try { return JSON.parse(raw); } catch { return null; } };\nconst fail = () => { throw new Error('CONVERSATION_V4_REQUEST_INVALID'); };\nconst uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\nconst history = parse(value.canonical_history);\nconst durable_memory = parse(value.durable_memory);\nconst processing_order = typeof claimed.processing_order === 'string' && /^[1-9]\\d*$/.test(claimed.processing_order) ? Number(claimed.processing_order) : claimed.processing_order;\nconst current_message = claimed.combined_body || claimed.body;\nif (!uuid.test(String(claimed.id || '')) || typeof claimed.session_id !== 'string' || !claimed.session_id.trim() || claimed.session_id.length > 320 || !Number.isSafeInteger(processing_order) || processing_order < 1 || typeof current_message !== 'string' || !current_message.trim() || current_message.length > 6000 || !Array.isArray(history) || history.length > 30 || !durable_memory || typeof durable_memory !== 'object' || Array.isArray(durable_memory) || Object.keys(durable_memory).length !== 3) fail();\nfor (const item of history) if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).length !== 2 || !['customer', 'assistant'].includes(item.role) || typeof item.text !== 'string' || !item.text.trim() || item.text.length > 3000) fail();\nfor (const key of ['allergies', 'dietary_restrictions', 'preferences']) if (!Array.isArray(durable_memory[key]) || durable_memory[key].length > 30 || durable_memory[key].some(item => typeof item !== 'string' || !item.trim() || item.length > 160 || /[\\r\\n\\t]/.test(item))) fail();\nreturn [{ json: { request_id: claimed.id, session_id: claimed.session_id, claimed_inbound_message_id: claimed.id, processing_order, current_message, canonical_history: history, durable_memory } }];"
+      },
+      "notes": "Builds the V4 technical request from the claimed logical turn, canonical ledger history, and active durable memory only."
+    },
+    {
+      "name": "Call V4 Conversation Engine",
+      "id": "d74a0001-0000-4000-8000-000000000103",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        68608,
+        49792
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:12751/internal/conversation-engine/v4/resolve",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CONVERSATION_ENGINE_HEADER_AUTH_CREDENTIAL_ID__",
+          "name": "Dietavity Conversation Engine Internal Header Auth"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "notes": "V4 has no HTTP retries. Only its exact controlled 503 availability envelope reaches Ticket 85."
+    },
+    {
+      "name": "Classify V4 Conversation Engine Result",
+      "id": "d74a0001-0000-4000-8000-000000000104",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        68864,
+        49792
+      ],
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst request = $('Build V4 Conversation Engine Request').item.json;\nconst own = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.getOwnPropertySymbols(value).length === 0 && Object.getOwnPropertyNames(value).length === keys.length && keys.every(key => Object.prototype.hasOwnProperty.call(value, key));\nconst parse = value => { if (!value || typeof value === 'object') return value; if (typeof value !== 'string') return null; try { return JSON.parse(value); } catch { return null; } };\nconst error = raw && typeof raw.error === 'object' && raw.error ? raw.error : {};\nconst status = Number(raw.statusCode ?? raw.status_code ?? raw.httpCode ?? error.statusCode ?? error.status_code ?? error.httpCode ?? error.status ?? 0);\nconst candidates = [raw.body, raw.data, error.body, error.data, error.response?.body, error.response?.data, error.message, raw.message].map(parse);\nconst controlled = candidates.find(value => own(value, ['contract_version', 'engine_version', 'request_id', 'generation_status', 'failure_category']) && value.contract_version === 'conversation-engine-v4-response-v1' && value.engine_version === 'conversation-engine-v4-primary-v1' && value.request_id === request.request_id && value.generation_status === 'infrastructure_failure' && value.failure_category === 'engine_unavailable');\nif (controlled && status === 503) return [{ json: { result_kind: 'ticket85_recovery_candidate' } }];\nif (status >= 400 || error?.message || raw?.error) return [{ json: { result_kind: 'unrecoverable_failure' } }];\nreturn [{ json: { result_kind: 'success', response: raw } }];"
+      },
+      "notes": "Only a correlated V4 controlled availability failure is Ticket 85 recoverable. Malformed output and all other failures are terminal."
+    },
+    {
+      "name": "Route V4 Conversation Engine Result",
+      "id": "d74a0001-0000-4000-8000-000000000105",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        69120,
+        49792
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.result_kind }}",
+                    "rightValue": "success",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.result_kind }}",
+                    "rightValue": "ticket85_recovery_candidate",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "name": "Validate V4 Conversation Engine Response",
+      "id": "d74a0001-0000-4000-8000-000000000106",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        69376,
+        49536
+      ],
+      "parameters": {
+        "jsCode": "const fail = () => { throw new Error('CONVERSATION_V4_RESPONSE_INVALID'); };\nconst value = $input.first().json.response;\nconst request = $('Build V4 Conversation Engine Request').item.json;\nconst own = (input, keys) => input && typeof input === 'object' && !Array.isArray(input) && Object.getOwnPropertySymbols(input).length === 0 && Object.getOwnPropertyNames(input).length === keys.length && keys.every(key => Object.prototype.hasOwnProperty.call(input, key));\nif (!own(value, ['contract_version', 'engine_version', 'request_id', 'model', 'generation_status', 'response', 'memory_updates', 'memory_update_count']) || value.contract_version !== 'conversation-engine-v4-response-v1' || value.engine_version !== 'conversation-engine-v4-primary-v1' || value.request_id !== request.request_id || value.generation_status !== 'generated' || typeof value.model !== 'string' || !value.model.trim() || value.model.length > 120 || typeof value.response !== 'string' || !value.response.trim() || value.response.length > 4000 || !Array.isArray(value.memory_updates) || value.memory_updates.length > 12 || value.memory_update_count !== value.memory_updates.length) fail();\nfor (const update of value.memory_updates) if (!own(update, ['kind', 'action', 'value']) || !['allergy', 'dietary_restriction', 'preference'].includes(update.kind) || !['add', 'remove'].includes(update.action) || typeof update.value !== 'string' || !update.value.trim() || update.value.length > 160 || /[\\r\\n\\t]/.test(update.value)) fail();\nreturn [{ json: { assistant_response: value.response, memory_updates: value.memory_updates, v4_observability: { request_id: value.request_id, engine_version: value.engine_version, model: value.model, memory_update_count: value.memory_update_count } } }];"
+      },
+      "notes": "V4 validates only correlation, output structure, and technical bounds. It performs no semantic response or food validation."
+    },
+    {
+      "name": "Prepare V4 WhatsApp Message Parts",
+      "id": "d74a0001-0000-4000-8000-000000000107",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        69632,
+        49536
+      ],
+      "parameters": {
+        "jsCode": "const SAFE_CHARACTER_LIMIT = 1500;\n\nfunction countCharacters(value) {\n  return String(value ?? '').length;\n}\n\nfunction compactWhitespace(value) {\n  return String(value ?? '')\n    .replace(/\\r\\n?/g, '\\n')\n    .split('\\n')\n    .map((line) => line.replace(/[\\t ]+/g, ' ').trim())\n    .join('\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\n\nfunction boundaryBefore(value, maximum) {\n  const window = value.slice(0, maximum + 1);\n  const minimumUsefulBoundary = Math.floor(maximum * 0.45);\n  const candidates = [\n    { expression: /\\n\\n/g, width: 2 },\n    { expression: /\\n/g, width: 1 },\n    { expression: /[.!?](?:[\"')\\]]*)\\s+/g, width: 0 },\n    { expression: /[;:]\\s+/g, width: 0 },\n    { expression: /,\\s+/g, width: 0 },\n    { expression: /\\s+/g, width: 0 },\n  ];\n\n  for (const candidate of candidates) {\n    let match;\n    let last = -1;\n    while ((match = candidate.expression.exec(window)) !== null) {\n      const end = match.index + match[0].length - candidate.width;\n      if (end <= maximum) last = end;\n    }\n    if (last >= minimumUsefulBoundary) return last;\n  }\n  return maximum;\n}\n\nfunction splitContent(value, maximum) {\n  const chunks = [];\n  let remaining = value;\n  while (countCharacters(remaining) > maximum) {\n    const boundary = boundaryBefore(remaining, maximum);\n    const chunk = remaining.slice(0, boundary).trim();\n    if (!chunk) throw new Error('Could not produce a non-empty WhatsApp message part');\n    chunks.push(chunk);\n    remaining = remaining.slice(boundary).trim();\n  }\n  if (remaining) chunks.push(remaining);\n  return chunks;\n}\n\nfunction formatWhatsAppMessage(value, limit = SAFE_CHARACTER_LIMIT) {\n  if (!Number.isInteger(limit) || limit < 100) {\n    throw new TypeError('WhatsApp safe character limit must be an integer of at least 100');\n  }\n  const original = String(value ?? '');\n  const originalCharacterCount = countCharacters(original);\n  if (!original.trim()) throw new Error('WhatsApp message body must not be empty');\n\n  if (originalCharacterCount <= limit) {\n    return {\n      original_character_count: originalCharacterCount,\n      final_character_count: originalCharacterCount,\n      was_compacted: false,\n      was_split: false,\n      part_count: 1,\n      parts: [original],\n    };\n  }\n\n  const compacted = compactWhitespace(original);\n  const wasCompacted = compacted !== original;\n  if (countCharacters(compacted) <= limit) {\n    return {\n      original_character_count: originalCharacterCount,\n      final_character_count: countCharacters(compacted),\n      was_compacted: wasCompacted,\n      was_split: false,\n      part_count: 1,\n      parts: [compacted],\n    };\n  }\n\n  // Reserve enough room even for unusually large part counts. The actual\n  // \"Parte i/n\" label is checked again below before any result is returned.\n  const contentLimit = limit - 24;\n  let rawParts = splitContent(compacted, contentLimit);\n  let parts = rawParts.map((part, index) => `Parte ${index + 1}/${rawParts.length}\\n${part}`);\n  if (parts.some((part) => countCharacters(part) > limit)) {\n    rawParts = splitContent(compacted, contentLimit - 8);\n    parts = rawParts.map((part, index) => `Parte ${index + 1}/${rawParts.length}\\n${part}`);\n  }\n  if (parts.some((part) => countCharacters(part) > limit)) {\n    throw new Error('WhatsApp multipart formatter exceeded its safe limit');\n  }\n\n  return {\n    original_character_count: originalCharacterCount,\n    final_character_count: parts.reduce((total, part) => total + countCharacters(part), 0),\n    was_compacted: wasCompacted,\n    was_split: true,\n    part_count: parts.length,\n    parts,\n  };\n}\n\nconst input = $input.first().json;\nconst formatted = formatWhatsAppMessage(input.assistant_response, SAFE_CHARACTER_LIMIT);\nif (formatted.part_count > 999) throw new Error('WhatsApp part count exceeds the supported integrity bound');\nreturn [{ json: {\n  ...input,\n  logical_assistant_response: String(input.assistant_response),\n  whatsapp_parts: formatted.parts,\n  whatsapp_length_metadata: {\n    original_character_count: formatted.original_character_count,\n    final_character_count: formatted.final_character_count,\n    was_compacted: formatted.was_compacted,\n    was_split: formatted.was_split,\n    part_count: formatted.part_count\n  }\n} }];"
+      },
+      "notes": "Uses the existing bounded WhatsApp formatter; it does not regenerate or alter V4 semantics."
+    },
+    {
+      "name": "Reserve V4 Reply With Memory",
+      "id": "d74a0001-0000-4000-8000-000000000108",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        69888,
+        49536
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM public.reserve_conversation_v4_reply_with_memory($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({\n  in_reply_to_id: $('Claim Next Session Inbound').item.json.id,\n  session_id: $('Claim Next Session Inbound').item.json.session_id,\n  processing_owner: $execution.id,\n  user_id: $('Claim Next Session Inbound').item.json.user_id || undefined,\n  base_idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':v4',\n  logical_body: $json.logical_assistant_response,\n  message_kind: 'sales_ai',\n  parts: $json.whatsapp_parts,\n  memory_updates: $json.memory_updates\n}) }"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "The V4 RPC atomically reserves all outbound parts and records memory updates. No Node or separate n8n memory write exists."
+    },
+    {
+      "name": "Loop V4 WhatsApp Parts",
+      "id": "d74a0001-0000-4000-8000-000000000109",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        70144,
+        49536
+      ],
+      "parameters": {
+        "options": {}
+      },
+      "notes": "Delivers only rows returned by the durable V4 reservation, one part at a time."
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $json.session_id }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        70400,
+        49536
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000110",
+      "name": "Respond to V4 Chat",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (SELECT $1::jsonb AS payload), classified AS (\n  SELECT\n    payload,\n    CASE\n      WHEN payload->>'error_code' = '21617'\n        OR LOWER(COALESCE(payload->>'provider_status', '')) IN ('canceled', 'failed', 'undelivered')\n        OR COALESCE(NULLIF(payload->>'status_code', '')::integer, 0) BETWEEN 400 AND 499\n        THEN 'failed'\n      WHEN payload->>'expected_status' = 'scheduled'\n        AND LOWER(COALESCE(payload->>'provider_status', '')) = 'scheduled'\n        AND payload->>'provider_message_sid' ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n        THEN 'scheduled'\n      WHEN payload->>'expected_status' = 'accepted'\n        AND payload->>'provider_message_sid' ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n        THEN 'accepted'\n      ELSE 'unknown'\n    END AS final_status\n  FROM input\n), updated AS (\n  UPDATE public.messages AS message\n  SET provider_message_sid = CASE\n        WHEN classified.payload->>'provider_message_sid' ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n          THEN classified.payload->>'provider_message_sid'\n        ELSE message.provider_message_sid\n      END,\n      delivery_status = classified.final_status,\n      metadata = message.metadata || jsonb_strip_nulls(jsonb_build_object(\n        'provider_status', NULLIF(classified.payload->>'provider_status', ''),\n        'provider_error_code', NULLIF(classified.payload->>'error_code', ''),\n        'provider_error_message', LEFT(NULLIF(classified.payload->>'error_message', ''), 300),\n        'provider_acceptance_evidence', CASE\n          WHEN classified.final_status IN ('accepted', 'scheduled') THEN 'message_sid'\n          WHEN classified.final_status = 'failed' THEN 'definitive_failure'\n          ELSE 'reconciliation_required'\n        END\n      ))\n  FROM classified\n  WHERE message.idempotency_key = classified.payload->>'idempotency_key'\n    AND message.delivery_status = 'pending'\n  RETURNING message.*\n)\nSELECT * FROM updated;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({\n    idempotency_key: $('Loop V4 WhatsApp Parts').item.json.idempotency_key,\n    expected_status: 'accepted',\n    provider_message_sid: $json.sid || $json.messageSid || $json.message_sid || ($json.data && ($json.data.sid || $json.data.messageSid || $json.data.message_sid)) || '',\n    provider_status: $json.status || $json.messageStatus || $json.message_status || ($json.data && ($json.data.status || $json.data.messageStatus || $json.data.message_status)) || '',\n    status_code: $json.statusCode || $json.httpCode || $json.status_code || ($json.error && typeof $json.error === 'object' && ($json.error.statusCode || $json.error.httpCode || $json.error.status_code)) || '',\n    error_code: $json.code || $json.errorCode || $json.error_code || ($json.error && typeof $json.error === 'object' && ($json.error.code || $json.error.errorCode || $json.error.error_code)) || String($json.message || $json.errorMessage || $json.error_message || (typeof $json.error === 'string' ? $json.error : '') || '').match(/(?:^|\\D)(21617)(?:\\D|$)/)?.[1] || '',\n    error_message: $json.message || $json.errorMessage || $json.error_message || ($json.error && typeof $json.error === 'object' && ($json.error.message || $json.error.errorMessage || $json.error.error_message)) || (typeof $json.error === 'string' ? $json.error : '') || ''\n  }) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        70656,
+        49536
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000111",
+      "name": "Update V4 Reply Delivery",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Ticket 36: a valid Message SID proves API acceptance; explicit failed/undelivered/canceled or HTTP 4xx is failed; missing acceptance evidence remains actionable unknown."
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nif (!['accepted', 'scheduled'].includes(row.delivery_status)) {\n  throw new Error('TICKET_9_TWILIO_SEND_REQUIRES_RECONCILIATION:' + row.idempotency_key + ':' + row.delivery_status);\n}\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        70912,
+        49536
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000112",
+      "name": "Assert V4 Reply Accepted",
+      "notes": "Ambiguous sends are never retried blindly. The Global Error Handler alerts after the unknown/failed state is durable."
+    },
+    {
+      "name": "Authorize V4 Conversation Engine Recovery",
+      "id": "d74a0001-0000-4000-8000-000000000113",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        69376,
+        49904
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (\n  SELECT $1::jsonb AS payload\n), anchor AS (\n  SELECT inbound.id, inbound.session_id\n  FROM public.messages AS inbound\n  CROSS JOIN input\n  WHERE inbound.id = NULLIF(input.payload->>'inbound_message_id', '')::uuid\n    AND inbound.direction = 'inbound'\n  FOR UPDATE OF inbound\n), turn_members AS (\n  SELECT member.*\n  FROM public.messages AS member\n  CROSS JOIN anchor\n  WHERE COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text\n  FOR UPDATE OF member\n), eligible AS (\n  SELECT anchor.id\n  FROM anchor\n  CROSS JOIN input\n  WHERE NOT EXISTS (\n    SELECT 1 FROM public.messages AS outbound\n    WHERE outbound.in_reply_to_id = anchor.id\n      AND outbound.direction = 'outbound'\n  )\n    AND NOT EXISTS (\n      SELECT 1 FROM turn_members AS member\n      WHERE member.processing_completed_at IS NOT NULL\n        OR member.processing_owner IS DISTINCT FROM input.payload->>'processing_owner'\n        OR member.processing_lease_until IS NULL\n        OR member.processing_lease_until <= NOW()\n    )\n    AND NOT EXISTS (\n      SELECT 1 FROM public.messages AS claimed_anchor\n      WHERE claimed_anchor.id = anchor.id\n        AND claimed_anchor.metadata ? 'ticket85_conversation_engine_recovery_attempted_at'\n    )\n), consumed AS (\n  UPDATE public.messages AS member\n  SET processing_lease_until = NOW() + INTERVAL '15 minutes',\n      metadata = CASE WHEN member.id = (SELECT id FROM eligible)\n        THEN member.metadata || jsonb_build_object(\n          'ticket85_conversation_engine_recovery_attempted_at', NOW(),\n          'ticket85_conversation_engine_recovery_owner', input.payload->>'processing_owner'\n        )\n        ELSE member.metadata\n      END\n  FROM input\n  WHERE member.id IN (SELECT id FROM turn_members)\n    AND EXISTS (SELECT 1 FROM eligible)\n  RETURNING member.id\n)\nSELECT CASE WHEN EXISTS (SELECT 1 FROM eligible)\n  AND (SELECT COUNT(*) FROM consumed) = (SELECT COUNT(*) FROM turn_members)\n  THEN 'authorized' ELSE 'ineligible' END AS recovery_state;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ inbound_message_id: $('Claim Next Session Inbound').item.json.id, processing_owner: $execution.id }) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Atomically consumes Ticket 85 recovery only if this execution still owns every unfinished turn member, its lease is live, and no canonical outbound reservation exists."
+    },
+    {
+      "name": "Route V4 Conversation Engine Recovery Authorization",
+      "id": "d74a0001-0000-4000-8000-000000000114",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        69632,
+        49904
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.recovery_state }}",
+                    "rightValue": "authorized",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "notes": "Only an explicit atomic authorization may reach the one recovery call; ineligible ownership or reservation state fails closed."
+    },
+    {
+      "name": "Wait Before V4 Conversation Engine Recovery",
+      "id": "d74a0001-0000-4000-8000-000000000115",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        69888,
+        49904
+      ],
+      "parameters": {
+        "amount": 1,
+        "unit": "seconds"
+      },
+      "notes": "Ticket 85 bounded one-second pause before the single authorized recovery call."
+    },
+    {
+      "name": "Call V4 Conversation Engine Recovery",
+      "id": "d74a0001-0000-4000-8000-000000000116",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        70144,
+        49904
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:12751/internal/conversation-engine/v4/resolve",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build V4 Conversation Engine Request').item.json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CONVERSATION_ENGINE_HEADER_AUTH_CREDENTIAL_ID__",
+          "name": "Dietavity Conversation Engine Internal Header Auth"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "notes": "V4 has no HTTP retries. Only its exact controlled 503 availability envelope reaches Ticket 85."
+    },
+    {
+      "name": "Classify V4 Conversation Engine Recovery Result",
+      "id": "d74a0001-0000-4000-8000-000000000117",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        70400,
+        49904
+      ],
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst request = $('Build V4 Conversation Engine Request').item.json;\nconst own = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.getOwnPropertySymbols(value).length === 0 && Object.getOwnPropertyNames(value).length === keys.length && keys.every(key => Object.prototype.hasOwnProperty.call(value, key));\nconst parse = value => { if (!value || typeof value === 'object') return value; if (typeof value !== 'string') return null; try { return JSON.parse(value); } catch { return null; } };\nconst error = raw && typeof raw.error === 'object' && raw.error ? raw.error : {};\nconst status = Number(raw.statusCode ?? raw.status_code ?? raw.httpCode ?? error.statusCode ?? error.status_code ?? error.httpCode ?? error.status ?? 0);\nconst candidates = [raw.body, raw.data, error.body, error.data, error.response?.body, error.response?.data, error.message, raw.message].map(parse);\nconst controlled = candidates.find(value => own(value, ['contract_version', 'engine_version', 'request_id', 'generation_status', 'failure_category']) && value.contract_version === 'conversation-engine-v4-response-v1' && value.engine_version === 'conversation-engine-v4-primary-v1' && value.request_id === request.request_id && value.generation_status === 'infrastructure_failure' && value.failure_category === 'engine_unavailable');\nif (controlled && status === 503) return [{ json: { result_kind: 'unrecoverable_failure' } }];\nif (status >= 400 || error?.message || raw?.error) return [{ json: { result_kind: 'unrecoverable_failure' } }];\nreturn [{ json: { result_kind: 'success', response: raw } }];"
+      },
+      "notes": "Only a correlated V4 controlled availability failure is Ticket 85 recoverable. Malformed output and all other failures are terminal."
+    },
+    {
+      "name": "Fail Closed V4 Conversation Engine Result",
+      "id": "d74a0001-0000-4000-8000-000000000118",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        69376,
+        50160
+      ],
+      "parameters": {
+        "jsCode": "throw new Error('CONVERSATION_V4_UNRECOVERABLE_RESULT');"
+      },
+      "notes": "V4 never retries malformed output, reservation failures, or arbitrary infrastructure failures."
     }
   ],
   "pinData": {},
@@ -7207,7 +7620,7 @@
       "main": [
         [
           {
-            "node": "Get User from Supabase",
+            "node": "Get V4 Conversation Context",
             "type": "main",
             "index": 0
           }
@@ -7568,6 +7981,221 @@
         [
           {
             "node": "Build Sales Response Persistence Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get V4 Conversation Context": {
+      "main": [
+        [
+          {
+            "node": "Build V4 Conversation Engine Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build V4 Conversation Engine Request": {
+      "main": [
+        [
+          {
+            "node": "Call V4 Conversation Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call V4 Conversation Engine": {
+      "main": [
+        [
+          {
+            "node": "Classify V4 Conversation Engine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify V4 Conversation Engine Result": {
+      "main": [
+        [
+          {
+            "node": "Route V4 Conversation Engine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route V4 Conversation Engine Result": {
+      "main": [
+        [
+          {
+            "node": "Validate V4 Conversation Engine Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Authorize V4 Conversation Engine Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fail Closed V4 Conversation Engine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate V4 Conversation Engine Response": {
+      "main": [
+        [
+          {
+            "node": "Prepare V4 WhatsApp Message Parts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare V4 WhatsApp Message Parts": {
+      "main": [
+        [
+          {
+            "node": "Reserve V4 Reply With Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reserve V4 Reply With Memory": {
+      "main": [
+        [
+          {
+            "node": "Loop V4 WhatsApp Parts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop V4 WhatsApp Parts": {
+      "main": [
+        [
+          {
+            "node": "Respond to V4 Chat",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Session Inbound Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to V4 Chat": {
+      "main": [
+        [
+          {
+            "node": "Update V4 Reply Delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update V4 Reply Delivery": {
+      "main": [
+        [
+          {
+            "node": "Assert V4 Reply Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert V4 Reply Accepted": {
+      "main": [
+        [
+          {
+            "node": "Loop V4 WhatsApp Parts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorize V4 Conversation Engine Recovery": {
+      "main": [
+        [
+          {
+            "node": "Route V4 Conversation Engine Recovery Authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route V4 Conversation Engine Recovery Authorization": {
+      "main": [
+        [
+          {
+            "node": "Wait Before V4 Conversation Engine Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fail Closed V4 Conversation Engine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before V4 Conversation Engine Recovery": {
+      "main": [
+        [
+          {
+            "node": "Call V4 Conversation Engine Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call V4 Conversation Engine Recovery": {
+      "main": [
+        [
+          {
+            "node": "Classify V4 Conversation Engine Recovery Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify V4 Conversation Engine Recovery Result": {
+      "main": [
+        [
+          {
+            "node": "Route V4 Conversation Engine Result",
             "type": "main",
             "index": 0
           }

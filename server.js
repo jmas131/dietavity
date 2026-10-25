@@ -16,6 +16,9 @@ const { parseListenerConfig } = require('./lib/listener-config');
 const { createConversationEngine } = require('./lib/conversation-engine/service');
 const { createOpenAiConversationLlmClient } = require('./lib/conversation-engine/llm-client');
 const { createConversationEngineHandler } = require('./lib/conversation-engine/internal-route');
+const { createConversationEngineV4 } = require('./lib/conversation-engine-v4/service');
+const { createPrimaryConversationLlmClient } = require('./lib/conversation-engine-v4/llm-client');
+const { createConversationEngineV4Handler } = require('./lib/conversation-engine-v4/internal-route');
 
 const app = express();
 
@@ -37,6 +40,13 @@ const conversationEngine = createConversationEngine({
   logger: event => console.info(JSON.stringify(event)),
 });
 app.post('/internal/conversation-engine/v1/resolve', createConversationEngineHandler({ engine: conversationEngine }));
+
+// V4 remains unreachable until the canonical n8n workflow explicitly calls
+// this route. It shares only internal authentication with V1, not semantics.
+const conversationEngineV4 = createConversationEngineV4({
+  llmClient: createPrimaryConversationLlmClient(),
+});
+app.post('/internal/conversation-engine/v4/resolve', createConversationEngineV4Handler({ engine: conversationEngineV4 }));
 
 app.set('view engine', 'ejs');
 

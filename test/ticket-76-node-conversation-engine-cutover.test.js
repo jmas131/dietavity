@@ -1,14 +1,11 @@
 'use strict';
 
-const assert = require('node:assert/strict');
 const test = require('node:test');
+const assert = require('node:assert/strict');
 const vm = require('node:vm');
-
 const workflow = require('../n8n/Dietavity Sales Engine (Ticket 10).json');
-const { validateRequest, validateResponse } = require('../lib/conversation-engine/contracts');
 
-const UUID_A = '11111111-1111-4111-8111-111111111111';
-const UUID_B = '22222222-2222-4222-8222-222222222222';
+const UUID = '11111111-1111-4111-8111-111111111111';
 
 function node(name) {
   const value = workflow.nodes.find(candidate => candidate.name === name);
@@ -28,123 +25,90 @@ function runCode(name, input, lookup) {
   })[0].json;
 }
 
-test('Node cutover selector chooses Node while preserving legacy as output 0', () => {
-  const selector = node('Select Direct RAG Backend');
-  assert.equal(selector.type, 'n8n-nodes-base.switch');
-  assert.equal(selector.typeVersion, 3.4);
-  const values = selector.parameters.rules.values;
-  assert.equal(values.length, 2);
-  assert.equal(values[0].conditions.conditions[0].leftValue, 'node');
-  assert.equal(values[0].conditions.conditions[0].rightValue, 'legacy');
-  assert.equal(values[1].conditions.conditions[0].leftValue, 'node');
-  assert.equal(values[1].conditions.conditions[0].rightValue, 'node');
-  assert.deepEqual(outputs(selector.name, 0), ['Build Direct RAG Conversation Context']);
-  assert.deepEqual(outputs(selector.name, 1), ['Build Conversation Engine Request']);
+test('V4 begins immediately after acquired claim and preserves deferred and busy Ticket 82/83A branches', () => {
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get V4 Conversation Context']);
+  assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
+  assert.deepEqual(outputs('Route Session Claim State', 2), ['End — Turn Already Owned']);
 });
 
-test('B1 builds an ordered closed Node request from claimed canonical inputs only', () => {
-  const history = [
-    { role: 'customer', text: 'Tengo pollo.', source_processing_order: 1 },
-    { role: 'assistant', text: '¿Qué quieres comer?', source_processing_order: 1 },
-    { role: 'customer', text: 'También tengo tortillas.', source_processing_order: 2 },
-  ];
-  const claimed = { id: UUID_A, session_id: 'synthetic-session', processing_order: 3, body: '¿Qué me recomiendas?' };
-  const built = runCode('Build Conversation Engine Request', { canonical_history: history }, target => {
+test('V4 builds a technical request from only claimed logical input, canonical history, and durable memory', () => {
+  const history = [{ role: 'customer', text: 'Tengo pollo.' }, { role: 'assistant', text: '¿Qué más tienes?' }];
+  const durable_memory = { allergies: ['cacahuate'], dietary_restrictions: ['cerdo'], preferences: ['le gusta el picante'] };
+  const claimed = { id: UUID, session_id: 'synthetic-session', processing_order: 3, combined_body: 'Tengo pollo\ny calabacitas', body: 'Tengo pollo' };
+  const built = runCode('Build V4 Conversation Engine Request', { canonical_history: history, durable_memory }, target => {
     assert.equal(target, 'Claim Next Session Inbound');
     return claimed;
   });
   assert.deepEqual(JSON.parse(JSON.stringify(built)), {
-    contract_version: 'conversation-engine-request-v1', request_id: UUID_A,
-    session_id: 'synthetic-session', inbound_message_id: UUID_A,
-    processing_order: 3, current_message: '¿Qué me recomiendas?', canonical_history: history,
+    request_id: UUID, session_id: 'synthetic-session', claimed_inbound_message_id: UUID,
+    processing_order: 3, current_message: 'Tengo pollo\ny calabacitas', canonical_history: history, durable_memory,
   });
-  assert.deepEqual(JSON.parse(JSON.stringify(validateRequest(built))), JSON.parse(JSON.stringify(built)));
-  const stringOrder = runCode('Build Conversation Engine Request', { canonical_history: history }, () => ({
-    ...claimed,
-    processing_order: '474',
-  }));
-  assert.equal(stringOrder.processing_order, 474);
-  assert.deepEqual(JSON.parse(JSON.stringify(validateRequest(stringOrder))), JSON.parse(JSON.stringify(stringOrder)));
-  for (const invalidOrder of ['', ' 474', '0474', '474.0', '4e2', '0', '-1', '9007199254740992', 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
-    assert.throws(() => runCode('Build Conversation Engine Request', { canonical_history: history }, () => ({
-      ...claimed,
-      processing_order: invalidOrder,
-    })), /CONVERSATION_ENGINE_REQUEST_INVALID/, String(invalidOrder));
-  }
-  assert.throws(() => runCode('Build Conversation Engine Request', {
-    canonical_history: [{ role: 'assistant', text: 'Primero', source_processing_order: 1 }, { role: 'customer', text: 'Después', source_processing_order: 1 }],
-  }, () => claimed), /CONVERSATION_ENGINE_REQUEST_INVALID/);
+  assert.throws(() => runCode('Build V4 Conversation Engine Request', { canonical_history: history, durable_memory: { ...durable_memory, inventory: ['pollo'] } }, () => claimed), /CONVERSATION_V4_REQUEST_INVALID/);
 });
 
-test('B1 history query projects each completed coalesced burst as one canonical customer turn', () => {
-  const query = node('Get Direct RAG Conversation History').parameters.query;
-  assert.match(query, /LIMIT 12/);
-  assert.match(query, /message\.id <> current_inbound\.id/);
+test('V4 canonical context query projects ledger-only chronological history and active durable memory', () => {
+  const query = node('Get V4 Conversation Context').parameters.query;
+  assert.match(query, /LIMIT 30/);
   assert.match(query, /canonical_customer_turns AS/);
   assert.match(query, /STRING_AGG\(COALESCE\(member\.body, ''\), E'\\n'/);
-  assert.match(query, /COALESCE\(member\.metadata->>'turn_anchor_id', member\.id::text\)/);
-  assert.match(query, /SELECT 'customer'::text AS role/);
-  assert.match(query, /SELECT 'assistant'::text AS role/);
-  assert.match(query, /replied_inbound\.processing_order AS source_processing_order/);
-  assert.match(query, /ORDER BY source_processing_order ASC, role_sort ASC, timestamp ASC, id ASC/);
-  assert.match(query, /message\.delivery_status IN \('accepted', 'sent', 'delivered'\)/);
-  assert.match(query, /provider_acceptance_evidence/);
+  assert.match(query, /canonical_assistant_turns AS/);
+  assert.match(query, /COALESCE\(NULLIF\(assistant_response, ''\), body\)/);
+  assert.match(query, /BOOL_AND\(delivery_status IN \('accepted', 'sent', 'delivered'\)/);
+  assert.match(query, /read_conversation_durable_memory\(current_inbound\.session_id, current_inbound\.user_id\)/);
+  assert.doesNotMatch(query, /inventory|obligation|buyer_signal|conversation_stage|semantic_context/iu);
 });
 
-test('B1 validates and adapts only a correlated delivery-permitted Node response', () => {
-  const valid = {
-    contract_version: 'conversation-engine-response-v1', engine_version: 'direct-rag-v3-v1_3', request_id: UUID_A,
-    resolution: { status: 'resolved', type: 'direct_rag_response', delivery_permitted: true },
-    assistant_response: 'Prepara tacos de pollo con aguacate.',
-    persistence: { pending_action: 'respond', strategy: 'direct_rag_response', buyer_signal: null, topic: 'food_decision', conversation_stage: null, goal: null, next_last_question_type: null, events: [] },
-    diagnostics: { recommendation: { source: 'meal_recommendation_engine_v1_3', status: 'resolved', failure_code: null }, llm: { obligations: 'valid', composition: 'valid' } },
-  };
-  assert.equal(validateResponse(valid), valid);
-  const output = runCode('Validate/Adapt Conversation Engine Response', { response: valid }, target => {
-    assert.equal(target, 'Build Conversation Engine Request');
-    return { request_id: UUID_A };
-  });
-  assert.equal(output.output, valid.assistant_response);
-  assert.equal(output.pending_action, 'respond');
-  assert.equal(output.session_id, undefined);
-  assert.equal(output.conversation_engine.recommendation_source, 'meal_recommendation_engine_v1_3');
-  assert.throws(() => runCode('Validate/Adapt Conversation Engine Response', { response: { ...valid, request_id: UUID_B } }, () => ({ request_id: UUID_A })), /CONVERSATION_ENGINE_RESPONSE_INVALID/);
-  assert.throws(() => runCode('Validate/Adapt Conversation Engine Response', { response: { ...valid, resolution: { ...valid.resolution, delivery_permitted: false } } }, () => ({ request_id: UUID_A })), /CONVERSATION_ENGINE_RESPONSE_INVALID/);
-});
-
-test('B1 Node branch is isolated from legacy intelligence and rejoins the existing reservation tail', () => {
-  assert.deepEqual(outputs('Build Conversation Engine Request'), ['Call Conversation Engine']);
-  assert.deepEqual(outputs('Call Conversation Engine'), ['Classify Conversation Engine Result']);
-  assert.deepEqual(outputs('Classify Conversation Engine Result'), ['Route Conversation Engine Result']);
-  assert.deepEqual(outputs('Route Conversation Engine Result', 0), ['Validate/Adapt Conversation Engine Response']);
-  assert.deepEqual(outputs('Validate/Adapt Conversation Engine Response'), ['Build Sales Response Persistence Envelope']);
-  assert.deepEqual(outputs('Final Direct RAG Customer Response Gate'), ['Build Sales Response Persistence Envelope']);
-  assert.deepEqual(outputs('Build Sales Response Persistence Envelope'), ['Reserve Sales Reply']);
-  const seen = new Set(['Build Conversation Engine Request']);
-  const queue = ['Build Conversation Engine Request'];
-  while (queue.length) {
-    const current = queue.shift();
-    if (current === 'Build Sales Response Persistence Envelope') continue;
-    for (const next of outputs(current)) if (!seen.has(next)) { seen.add(next); queue.push(next); }
-  }
-  for (const legacy of ['Build Direct RAG Conversation Context', 'Interpret Sales Obligations', 'Sales Obligations Model', 'Parse Direct RAG Obligations', 'Resolve Direct RAG Obligations', 'Route Direct RAG Authorized Action', 'Build Direct RAG Composition Envelope', 'Compose Grounded Sales Response', 'Grounded Sales Response Model', 'Final Direct RAG Customer Response Gate']) assert.equal(seen.has(legacy), false, legacy);
-});
-
-test('B1 HTTP node has one credential placeholder, a bounded timeout, and no serialized secret', () => {
-  const http = node('Call Conversation Engine');
-  assert.equal(http.type, 'n8n-nodes-base.httpRequest');
-  assert.equal(http.parameters.method, 'POST');
-  assert.equal(http.parameters.url, 'http://172.18.0.1:12751/internal/conversation-engine/v1/resolve');
+test('V4 uses the authenticated V4 route, structural validation, and atomic reservation before delivery', () => {
+  const http = node('Call V4 Conversation Engine');
+  assert.equal(http.parameters.url, 'http://172.18.0.1:12751/internal/conversation-engine/v4/resolve');
   assert.equal(http.parameters.options.timeout, 30000);
-  assert.equal(http.parameters.genericAuthType, 'httpHeaderAuth');
-  assert.deepEqual(Object.keys(http.credentials), ['httpHeaderAuth']);
-  assert.equal(http.credentials.httpHeaderAuth.name, 'Dietavity Conversation Engine Internal Header Auth');
-  const cutover = JSON.stringify([http, node('Build Conversation Engine Request'), node('Validate/Adapt Conversation Engine Response')]);
-  assert.doesNotMatch(cutover, /DIETAVITY_CONVERSATION_ENGINE_SECRET|x-dietavity-conversation-engine-secret\s*[:=]\s*[^\s]/i);
+  assert.deepEqual(outputs('Build V4 Conversation Engine Request'), ['Call V4 Conversation Engine']);
+  assert.deepEqual(outputs('Route V4 Conversation Engine Result', 0), ['Validate V4 Conversation Engine Response']);
+  assert.deepEqual(outputs('Validate V4 Conversation Engine Response'), ['Prepare V4 WhatsApp Message Parts']);
+  assert.deepEqual(outputs('Prepare V4 WhatsApp Message Parts'), ['Reserve V4 Reply With Memory']);
+  assert.deepEqual(outputs('Reserve V4 Reply With Memory'), ['Loop V4 WhatsApp Parts']);
+  assert.match(node('Reserve V4 Reply With Memory').parameters.query, /reserve_conversation_v4_reply_with_memory/);
+  assert.match(node('Reserve V4 Reply With Memory').parameters.options.queryReplacement, /memory_updates/);
+  assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 0), ['Respond to V4 Chat']);
+  assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 1), ['Mark Session Inbound Complete']);
 });
 
-test('B1 preserves live omitted defaults for unrelated batch nodes', () => {
-  assert.deepEqual(node('Loop Paid WhatsApp Parts').parameters, { options: {} });
-  assert.equal(workflow.nodes.find(item => item.name === 'Wait Before Session Claim Retry'), undefined);
-  assert.deepEqual(node('End — Turn Already Owned').parameters, { jsCode: 'return $input.all();' });
+test('V4 n8n response validation preserves arbitrary natural language and validates only structure', () => {
+  const response = {
+    contract_version: 'conversation-engine-v4-response-v1', engine_version: 'conversation-engine-v4-primary-v1',
+    request_id: UUID, model: 'gpt-6.1-sol', generation_status: 'generated',
+    response: 'Con huauzontlez puedes hacer algo rico aunque la palabra esté escrita distinto.',
+    memory_updates: [{ kind: 'preference', action: 'add', value: 'le gustan los huauzontles' }], memory_update_count: 1,
+  };
+  const validated = runCode('Validate V4 Conversation Engine Response', { response }, target => {
+    assert.equal(target, 'Build V4 Conversation Engine Request');
+    return { request_id: UUID };
+  });
+  assert.equal(validated.assistant_response, response.response);
+  assert.deepEqual(JSON.parse(JSON.stringify(validated.memory_updates)), response.memory_updates);
+  assert.throws(() => runCode('Validate V4 Conversation Engine Response', { response: { ...response, memory_update_count: 2 } }, () => ({ request_id: UUID })), /CONVERSATION_V4_RESPONSE_INVALID/);
+});
+
+test('V4 Ticket 85 retry is narrow and the recovery request is identical', () => {
+  assert.deepEqual(outputs('Route V4 Conversation Engine Result', 1), ['Authorize V4 Conversation Engine Recovery']);
+  assert.deepEqual(outputs('Route V4 Conversation Engine Result', 2), ['Fail Closed V4 Conversation Engine Result']);
+  assert.deepEqual(outputs('Authorize V4 Conversation Engine Recovery'), ['Route V4 Conversation Engine Recovery Authorization']);
+  assert.deepEqual(outputs('Route V4 Conversation Engine Recovery Authorization', 0), ['Wait Before V4 Conversation Engine Recovery']);
+  assert.deepEqual(outputs('Wait Before V4 Conversation Engine Recovery'), ['Call V4 Conversation Engine Recovery']);
+  assert.match(node('Call V4 Conversation Engine Recovery').parameters.jsonBody, /Build V4 Conversation Engine Request/);
+  assert.deepEqual(outputs('Classify V4 Conversation Engine Recovery Result'), ['Route V4 Conversation Engine Result']);
+});
+
+test('the acquired V4 graph cannot reach V3 semantics or V3 sales state persistence', () => {
+  const forbidden = new Set([
+    'Get User from Supabase', 'Detect Portal Recovery Request', 'If Portal Recovery Requested',
+    'Initialize Sales Lead v3', 'Get Direct RAG Conversation History', 'Select Direct RAG Backend',
+    'Build Direct RAG Conversation Context', 'Interpret Sales Obligations', 'Parse Direct RAG Obligations',
+    'Resolve Direct RAG Obligations', 'Compose Grounded Sales Response', 'Final Direct RAG Customer Response Gate',
+    'Build Sales Response Persistence Envelope', 'Reserve Sales Reply', 'Persist Sales Response State and Events',
+  ]);
+  const seen = new Set(['Get V4 Conversation Context']);
+  const queue = ['Get V4 Conversation Context'];
+  while (queue.length) for (const next of outputs(queue.shift())) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+  for (const name of forbidden) assert.equal(seen.has(name), false, name);
 });

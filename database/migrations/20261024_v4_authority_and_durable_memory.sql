@@ -113,10 +113,10 @@ DECLARE
 BEGIN
   IF jsonb_typeof(p) <> 'object'
     OR NOT (p ?& ARRAY['in_reply_to_id', 'session_id', 'processing_owner', 'base_idempotency_key', 'logical_body', 'message_kind', 'parts', 'memory_updates'])
-    OR CASE WHEN jsonb_typeof(p) = 'object' THEN EXISTS (
+    OR (CASE WHEN jsonb_typeof(p) = 'object' THEN EXISTS (
       SELECT 1 FROM jsonb_object_keys(p) AS supplied(key)
       WHERE supplied.key NOT IN ('in_reply_to_id', 'session_id', 'processing_owner', 'base_idempotency_key', 'logical_body', 'message_kind', 'parts', 'memory_updates', 'user_id')
-    ) ELSE false END
+    ) ELSE false END)
     OR jsonb_typeof(p->'parts') <> 'array'
     OR jsonb_typeof(p->'memory_updates') <> 'array'
     OR jsonb_array_length(p->'parts') < 1
@@ -172,10 +172,10 @@ BEGIN
     update_value := p->'memory_updates'->i;
     IF jsonb_typeof(update_value) <> 'object'
       OR NOT (update_value ?& ARRAY['kind', 'action', 'value'])
-      OR CASE WHEN jsonb_typeof(update_value) = 'object' THEN EXISTS (
+      OR (CASE WHEN jsonb_typeof(update_value) = 'object' THEN EXISTS (
         SELECT 1 FROM jsonb_object_keys(update_value) AS supplied(key)
         WHERE supplied.key NOT IN ('kind', 'action', 'value')
-      ) ELSE false END
+      ) ELSE false END)
       OR jsonb_typeof(update_value->'kind') <> 'string'
       OR jsonb_typeof(update_value->'action') <> 'string'
       OR jsonb_typeof(update_value->'value') <> 'string'

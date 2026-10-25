@@ -15,7 +15,7 @@ test('Ticket 83A makes a busy session claim terminal without changing the deferr
   assert.equal(terminal.parameters.jsCode, 'return $input.all();');
   assert.match(terminal.notes, /claim_state=busy/);
 
-  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get User from Supabase']);
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
   assert.deepEqual(outputs('Wait For Turn Quiet Period'), ['Claim Next Session Inbound']);
   assert.deepEqual(outputs('Route Session Claim State', 2), ['End — Turn Already Owned']);
