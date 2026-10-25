@@ -5,6 +5,7 @@
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -27,6 +28,12 @@ function run(sql) {
   return result.stdout;
 }
 
+function runFailure(sql, expected) {
+  const result = spawnSync(psql, [url, '-X', '-v', 'ON_ERROR_STOP=1'], { input: sql, encoding: 'utf8' });
+  assert.notEqual(result.status, 0, 'expected PostgreSQL command to fail');
+  assert.match(result.stderr, expected);
+}
+
 function payload(value) {
   return `'${JSON.stringify(value).replaceAll("'", "''")}'::jsonb`;
 }
@@ -43,6 +50,23 @@ function reservation(inbound, key, updates, options = {}) {
     memory_updates: updates,
     ...(options.userId ? { user_id: options.userId } : {}),
   };
+}
+
+function v4ReservationPayload(claimed, formatted, executionId = 'owner-v4') {
+  const node = workflow.nodes.find(candidate => candidate.name === 'Reserve V4 Reply With Memory');
+  assert.ok(node, 'Reserve V4 Reply With Memory workflow node is required');
+  const expression = node.parameters.options.queryReplacement;
+  assert.equal(expression.endsWith('}}'), true, 'V4 reservation expression must close');
+  const serialized = vm.runInNewContext(expression.slice(3, -2), {
+    JSON,
+    $execution: { id: executionId },
+    $json: formatted,
+    $: name => {
+      assert.equal(name, 'Claim Next Session Inbound');
+      return { item: { json: claimed } };
+    },
+  });
+  return JSON.parse(serialized);
 }
 
 test('V4 durable memory and outbound reservation integration', { skip: !url ? 'LOCAL_SUPABASE_DB_URL is required' : false }, () => {
@@ -114,7 +138,21 @@ test('V4 durable memory and outbound reservation integration', { skip: !url ? 'L
     .replace('$2::uuid', "'00000000-0000-4000-8000-000000000001'::uuid");
   run(canonicalHistoryQuery);
 
-  const add = reservation('00000000-0000-4000-8000-000000000001', 'v4:add', [{ kind: 'allergy', action: 'add', value: 'cacahuate' }]);
+  const generatedAnonymousPayload = v4ReservationPayload({
+    id: '00000000-0000-4000-8000-000000000001',
+    session_id: 'session-v4-a',
+    user_id: null,
+    provider_message_sid: 'SM11111111111111111111111111111111',
+  }, {
+    logical_assistant_response: 'Respuesta V4',
+    whatsapp_parts: ['Respuesta V4'],
+    memory_updates: [{ kind: 'allergy', action: 'add', value: 'cacahuate' }],
+  });
+  assert.equal(Object.hasOwn(generatedAnonymousPayload, 'user_id'), false);
+  assert.deepEqual(generatedAnonymousPayload, reservation('00000000-0000-4000-8000-000000000001', 'reply:SM11111111111111111111111111111111:v4', [{ kind: 'allergy', action: 'add', value: 'cacahuate' }]));
+  runFailure(`SELECT * FROM public.reserve_conversation_v4_reply_with_memory(${payload({ ...generatedAnonymousPayload, user_id: null })});`, /CONVERSATION_V4_RESERVATION_INVALID/);
+
+  const add = generatedAnonymousPayload;
   const changedPart = { ...add, parts: ['Una respuesta distinta'] };
   run(`
     SELECT * FROM public.reserve_conversation_v4_reply_with_memory(${payload(add)});

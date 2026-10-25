@@ -79,7 +79,7 @@ test('V4 uses the authenticated V4 route, structural validation, and atomic rese
   assert.match(node('Reserve V4 Reply With Memory').parameters.query, /reserve_conversation_v4_reply_with_memory/);
   const reservationReplacement = node('Reserve V4 Reply With Memory').parameters.options.queryReplacement;
   assert.match(reservationReplacement, /^=\{\{ JSON\.stringify\(\{/);
-  assert.match(reservationReplacement, /user_id: \$\('Claim Next Session Inbound'\)\.item\.json\.user_id \|\| null/);
+  assert.match(reservationReplacement, /user_id: \$\('Claim Next Session Inbound'\)\.item\.json\.user_id \} : \{\}/);
   assert.match(reservationReplacement, /memory_updates/);
   for (const v4Postgres of workflow.nodes.filter(candidate => candidate.type === 'n8n-nodes-base.postgres' && candidate.name.includes('V4'))) {
     assert.equal(typeof v4Postgres.parameters.options?.queryReplacement, 'string', v4Postgres.name);

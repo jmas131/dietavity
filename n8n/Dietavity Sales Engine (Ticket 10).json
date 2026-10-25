@@ -5404,7 +5404,7 @@
         "operation": "executeQuery",
         "query": "SELECT * FROM public.reserve_conversation_v4_reply_with_memory($1::jsonb);",
         "options": {
-          "queryReplacement": "={{ JSON.stringify({\n  in_reply_to_id: $('Claim Next Session Inbound').item.json.id,\n  session_id: $('Claim Next Session Inbound').item.json.session_id,\n  processing_owner: $execution.id,\n  user_id: $('Claim Next Session Inbound').item.json.user_id || null,\n  base_idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':v4',\n  logical_body: $json.logical_assistant_response,\n  message_kind: 'sales_ai',\n  parts: $json.whatsapp_parts,\n  memory_updates: $json.memory_updates\n}) }}"
+          "queryReplacement": "={{ JSON.stringify({\n  in_reply_to_id: $('Claim Next Session Inbound').item.json.id,\n  session_id: $('Claim Next Session Inbound').item.json.session_id,\n  processing_owner: $execution.id,\n  ...($('Claim Next Session Inbound').item.json.user_id ? { user_id: $('Claim Next Session Inbound').item.json.user_id } : {}),\n  base_idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':v4',\n  logical_body: $json.logical_assistant_response,\n  message_kind: 'sales_ai',\n  parts: $json.whatsapp_parts,\n  memory_updates: $json.memory_updates\n}) }}"
         }
       },
       "credentials": {
