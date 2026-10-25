@@ -1886,7 +1886,7 @@ const getV4ConversationContext = {
 ), canonical_assistant_turns AS (
   SELECT source_processing_order,
     (ARRAY_AGG(COALESCE(NULLIF(assistant_response, ''), body) ORDER BY part_index, id))[1] AS text,
-    MIN(timestamp) AS timestamp, MIN(id) AS id, 1 AS role_sort
+    MIN(timestamp) AS timestamp, MIN(id::text)::uuid AS id, 1 AS role_sort
   FROM outbound_parts
   GROUP BY in_reply_to_id, logical_key, source_processing_order
   HAVING COUNT(*) = MIN(part_count)

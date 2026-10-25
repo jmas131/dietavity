@@ -12,7 +12,14 @@ const url = process.env.LOCAL_SUPABASE_DB_URL;
 const psql = process.env.PSQL_BIN || '/opt/homebrew/opt/libpq/bin/psql';
 const root = path.join(__dirname, '..');
 const migration = path.join(root, 'database/migrations/20261024_v4_authority_and_durable_memory.sql');
+const workflow = require(path.join(root, 'n8n/Dietavity Sales Engine (Ticket 10).json'));
 const local = value => /^postgres(?:ql)?:\/\/[^@]+@(?:127\.0\.0\.1|localhost)(?::\d+)?\//.test(value || '');
+
+function v4CanonicalHistoryQuery() {
+  const node = workflow.nodes.find(candidate => candidate.name === 'Get V4 Conversation Context');
+  assert.ok(node, 'Get V4 Conversation Context workflow node is required');
+  return node.parameters.query;
+}
 
 function run(sql) {
   const result = spawnSync(psql, [url, '-X', '-v', 'ON_ERROR_STOP=1'], { input: sql, encoding: 'utf8' });
@@ -65,6 +72,10 @@ test('V4 durable memory and outbound reservation integration', { skip: !url ? 'L
       delivery_status text,
       metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
       assistant_response text,
+      provider_message_sid text,
+      timestamp timestamptz NOT NULL DEFAULT now(),
+      processing_order bigint,
+      processing_outcome text,
       processing_completed_at timestamptz,
       processing_owner text,
       processing_lease_until timestamptz
@@ -97,6 +108,11 @@ test('V4 durable memory and outbound reservation integration', { skip: !url ? 'L
     WHERE id = '00000000-0000-4000-8000-000000000010';
     INSERT INTO public.users (id) VALUES ('00000000-0000-4000-8000-000000000099');
   `);
+
+  const canonicalHistoryQuery = v4CanonicalHistoryQuery()
+    .replace('$1', "'session-v4-a'")
+    .replace('$2::uuid', "'00000000-0000-4000-8000-000000000001'::uuid");
+  run(canonicalHistoryQuery);
 
   const add = reservation('00000000-0000-4000-8000-000000000001', 'v4:add', [{ kind: 'allergy', action: 'add', value: 'cacahuate' }]);
   const changedPart = { ...add, parts: ['Una respuesta distinta'] };

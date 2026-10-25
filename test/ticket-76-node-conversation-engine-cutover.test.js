@@ -53,6 +53,8 @@ test('V4 canonical context query projects ledger-only chronological history and 
   assert.match(query, /STRING_AGG\(COALESCE\(member\.body, ''\), E'\\n'/);
   assert.match(query, /canonical_assistant_turns AS/);
   assert.match(query, /COALESCE\(NULLIF\(assistant_response, ''\), body\)/);
+  assert.match(query, /MIN\(id::text\)::uuid AS id/);
+  assert.doesNotMatch(query, /MIN\(id\) AS id/);
   assert.match(query, /BOOL_AND\(delivery_status IN \('accepted', 'sent', 'delivered'\)/);
   assert.match(query, /read_conversation_durable_memory\(current_inbound\.session_id, current_inbound\.user_id\)/);
   assert.doesNotMatch(query, /inventory|obligation|buyer_signal|conversation_stage|semantic_context/iu);
