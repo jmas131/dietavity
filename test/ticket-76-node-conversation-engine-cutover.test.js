@@ -70,7 +70,15 @@ test('V4 uses the authenticated V4 route, structural validation, and atomic rese
   assert.deepEqual(outputs('Prepare V4 WhatsApp Message Parts'), ['Reserve V4 Reply With Memory']);
   assert.deepEqual(outputs('Reserve V4 Reply With Memory'), ['Loop V4 WhatsApp Parts']);
   assert.match(node('Reserve V4 Reply With Memory').parameters.query, /reserve_conversation_v4_reply_with_memory/);
-  assert.match(node('Reserve V4 Reply With Memory').parameters.options.queryReplacement, /memory_updates/);
+  const reservationReplacement = node('Reserve V4 Reply With Memory').parameters.options.queryReplacement;
+  assert.match(reservationReplacement, /^=\{\{ JSON\.stringify\(\{/);
+  assert.match(reservationReplacement, /user_id: \$\('Claim Next Session Inbound'\)\.item\.json\.user_id \|\| null/);
+  assert.match(reservationReplacement, /memory_updates/);
+  assert.doesNotMatch(reservationReplacement, /\bundefined\b/);
+  for (const v4Postgres of workflow.nodes.filter(candidate => candidate.type === 'n8n-nodes-base.postgres' && candidate.name.includes('V4'))) {
+    assert.equal(typeof v4Postgres.parameters.options?.queryReplacement, 'string', v4Postgres.name);
+    assert.doesNotMatch(v4Postgres.parameters.options.queryReplacement, /\bundefined\b/, v4Postgres.name);
+  }
   assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 0), ['Respond to V4 Chat']);
   assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 1), ['Mark Session Inbound Complete']);
 });

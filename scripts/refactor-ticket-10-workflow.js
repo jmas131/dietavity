@@ -1989,7 +1989,7 @@ const reserveV4ReplyWithMemory = {
   in_reply_to_id: $('Claim Next Session Inbound').item.json.id,
   session_id: $('Claim Next Session Inbound').item.json.session_id,
   processing_owner: $execution.id,
-  user_id: $('Claim Next Session Inbound').item.json.user_id || undefined,
+  user_id: $('Claim Next Session Inbound').item.json.user_id || null,
   base_idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':v4',
   logical_body: $json.logical_assistant_response,
   message_kind: 'sales_ai',
