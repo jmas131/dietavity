@@ -21,12 +21,12 @@
       ],
       "id": "a28ac36d-8c15-4454-a776-defba28a0010",
       "name": "Resume Verified WhatsApp Requests",
-      "notes": "Ticket 28A wake-up only. The canonical messages ledger remains the queue and Claim Next Session Inbound preserves Ticket 17 ordering."
+      "notes": "Wake-up only for verified WhatsApp linking and ordinary recoverable inbound work. The canonical messages ledger remains the queue; Claim Next Session Inbound alone preserves ordering, leases, reconciliation, and outbound safety."
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT DISTINCT message.session_id\nFROM public.messages AS message\nJOIN public.users AS app_user ON app_user.whatsapp_id = message.session_id\nWHERE message.direction = 'inbound'\n  AND message.processing_order IS NOT NULL\n  AND message.processing_completed_at IS NULL\n  AND message.metadata->>'identity_verification_purpose' = 'link_whatsapp'\n  AND message.metadata->>'identity_verification_state' = 'verified'\nORDER BY message.session_id;",
+        "query": "SELECT DISTINCT message.session_id\nFROM public.messages AS message\nWHERE message.direction = 'inbound'\n  AND message.processing_order IS NOT NULL\n  AND message.processing_completed_at IS NULL\n  AND (\n    message.processing_owner IS NULL\n    OR message.processing_lease_until IS NULL\n    OR message.processing_lease_until <= NOW()\n  )\nORDER BY message.session_id;",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",

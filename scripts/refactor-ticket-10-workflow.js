@@ -560,19 +560,21 @@ const resumeVerifiedSchedule = {
   type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.2,
   position: [-1840, 496], id: 'a28ac36d-8c15-4454-a776-defba28a0010',
   name: 'Resume Verified WhatsApp Requests',
-  notes: 'Ticket 28A wake-up only. The canonical messages ledger remains the queue and Claim Next Session Inbound preserves Ticket 17 ordering.',
+  notes: 'Wake-up only for verified WhatsApp linking and ordinary recoverable inbound work. The canonical messages ledger remains the queue; Claim Next Session Inbound alone preserves ordering, leases, reconciliation, and outbound safety.',
 };
 const findVerifiedSessions = {
   parameters: {
     operation: 'executeQuery',
     query: `SELECT DISTINCT message.session_id
 FROM public.messages AS message
-JOIN public.users AS app_user ON app_user.whatsapp_id = message.session_id
 WHERE message.direction = 'inbound'
   AND message.processing_order IS NOT NULL
   AND message.processing_completed_at IS NULL
-  AND message.metadata->>'identity_verification_purpose' = 'link_whatsapp'
-  AND message.metadata->>'identity_verification_state' = 'verified'
+  AND (
+    message.processing_owner IS NULL
+    OR message.processing_lease_until IS NULL
+    OR message.processing_lease_until <= NOW()
+  )
 ORDER BY message.session_id;`,
     options: {},
   },
@@ -617,7 +619,7 @@ workflow.nodes.push({
   type: 'n8n-nodes-base.executeWorkflowTrigger', typeVersion: 1,
   position: [-1616, 496], id: 'a40ac36d-8c15-4454-a776-defba40a0002',
   name: 'Receive Verified WhatsApp Sessions',
-  notes: 'Ticket 40: accept the recovery poller session batch and enter the existing canonical claim path.',
+  notes: 'Accept the recovery-poller session batch and enter the existing canonical claim path. The poller never claims, completes, reconciles, reserves, or sends itself.',
 });
 workflow.connections['Receive Verified WhatsApp Sessions'] = {
   main: [[{ node: 'Claim Next Session Inbound', type: 'main', index: 0 }]],

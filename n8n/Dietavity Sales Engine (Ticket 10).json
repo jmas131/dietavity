@@ -4365,7 +4365,7 @@
       ],
       "id": "a40ac36d-8c15-4454-a776-defba40a0002",
       "name": "Receive Verified WhatsApp Sessions",
-      "notes": "Ticket 40: accept the recovery poller session batch and enter the existing canonical claim path."
+      "notes": "Accept the recovery-poller session batch and enter the existing canonical claim path. The poller never claims, completes, reconciles, reserves, or sends itself."
     },
     {
       "parameters": {

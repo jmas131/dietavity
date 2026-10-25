@@ -25,7 +25,17 @@ function outputs(name, index = 0) {
   return (workflow.connections[name]?.main?.[index] || []).map((edge) => edge.node);
 }
 
-test('verified WhatsApp recovery is a one-minute scheduled ledger lookup', () => {
+function isRecoveryEligible(message, now) {
+  return message.direction === 'inbound'
+    && message.processing_order !== null
+    && message.processing_order !== undefined
+    && message.processing_completed_at === null
+    && !(message.processing_owner
+      && message.processing_lease_until
+      && message.processing_lease_until > now);
+}
+
+test('WhatsApp recovery is a one-minute scheduled ledger wake-up', () => {
   const trigger = pollerNodes.get('Resume Verified WhatsApp Requests');
   const finder = pollerNodes.get('Find Verified WhatsApp Sessions');
 
@@ -41,16 +51,29 @@ test('verified WhatsApp recovery is a one-minute scheduled ledger lookup', () =>
   assert.equal(finder.parameters.operation, 'executeQuery');
 });
 
-test('lookup failure cannot mutate or complete the pending canonical inbound', () => {
+test('the read-only wake-up lookup selects only unfinished work without a live lease', () => {
   const sql = pollerNodes.get('Find Verified WhatsApp Sessions').parameters.query;
 
   assert.match(sql, /^SELECT DISTINCT message\.session_id/m);
   assert.match(sql, /FROM public\.messages AS message/);
-  assert.match(sql, /JOIN public\.users AS app_user ON app_user\.whatsapp_id = message\.session_id/);
+  assert.doesNotMatch(sql, /JOIN public\.users AS app_user/);
+  assert.match(sql, /message\.direction = 'inbound'/);
+  assert.match(sql, /message\.processing_order IS NOT NULL/);
   assert.match(sql, /message\.processing_completed_at IS NULL/);
-  assert.match(sql, /identity_verification_purpose' = 'link_whatsapp'/);
-  assert.match(sql, /identity_verification_state' = 'verified'/);
+  assert.match(sql, /message\.processing_owner IS NULL/);
+  assert.match(sql, /message\.processing_lease_until IS NULL/);
+  assert.match(sql, /message\.processing_lease_until <= NOW\(\)/);
   assert.doesNotMatch(sql, /\b(?:INSERT|UPDATE|DELETE|CALL)\b/i);
+
+  const now = Date.now();
+  assert.equal(isRecoveryEligible({ direction: 'inbound', processing_order: 1, processing_completed_at: null, processing_owner: null, processing_lease_until: null }, now), true, 'ordinary unclaimed inbound wakes');
+  assert.equal(isRecoveryEligible({ direction: 'inbound', processing_order: 1, processing_completed_at: null, processing_owner: 'failed-execution', processing_lease_until: now - 1 }, now), true, 'expired lease wakes');
+  assert.equal(isRecoveryEligible({ direction: 'inbound', processing_order: 1, processing_completed_at: null, processing_owner: 'active-execution', processing_lease_until: now + 1 }, now), false, 'live lease does not wake');
+  assert.equal(isRecoveryEligible({ direction: 'inbound', processing_order: 1, processing_completed_at: now, processing_owner: null, processing_lease_until: null }, now), false, 'completed inbound does not wake');
+
+  // Link verification was formerly the only poller predicate. It remains a
+  // canonical inbound and is therefore still woken when its lease is absent.
+  assert.equal(isRecoveryEligible({ direction: 'inbound', processing_order: 1, processing_completed_at: null, processing_owner: null, processing_lease_until: null, metadata: { identity_verification_purpose: 'link_whatsapp', identity_verification_state: 'verified' } }, now), true, 'verified link_whatsapp remains eligible');
 
   const verifiedBranch = linkingMigration.match(
     /ELSIF target_request\.purpose = 'link_whatsapp'[\s\S]*?END IF;/
@@ -60,6 +83,21 @@ test('lookup failure cannot mutate or complete the pending canonical inbound', (
   assert.match(verifiedBranch, /processing_completed_at = NULL/);
   assert.match(verifiedBranch, /identity_verification_state', 'verified'/);
   assert.doesNotMatch(verifiedBranch, /identity_verification_state', 'pending'/);
+});
+
+test('poller delegates durable-outbound reconciliation, concurrent ownership, and V4 routing to the canonical Sales Engine', () => {
+  const claim = nodes.get('Claim Next Session Inbound');
+  const v4Context = nodes.get('Get V4 Conversation Context');
+
+  assert.deepEqual(outputs('Receive Verified WhatsApp Sessions'), [claim.name]);
+  assert.match(claim.parameters.query, /pg_advisory_xact_lock/);
+  assert.match(claim.parameters.query, /processing_lease_until <= NOW\(\)/);
+  assert.match(claim.parameters.query, /outbound\.in_reply_to_id = candidate\.id/);
+  assert.match(claim.parameters.query, /'reconciliation'::text AS claim_state/);
+  assert.match(claim.parameters.query, /NOT EXISTS \(\s*SELECT 1\s*FROM public\.messages AS outbound[\s\S]*outbound\.in_reply_to_id = turn\.anchor_id/);
+  assert.deepEqual(outputs('Route Session Claim State'), [v4Context.name]);
+  assert.deepEqual(outputs(v4Context.name), ['Build V4 Conversation Engine Request']);
+  assert.doesNotMatch(JSON.stringify(poller), /Reserve V4 Reply With Memory|Respond to V4 Chat|twilio/i);
 });
 
 test('recovery deliberately relies on the next bounded scheduled execution', () => {

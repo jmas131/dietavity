@@ -90,8 +90,11 @@ test('ordinary linking preserves the portal credential and recovery still rotate
 test('historical pending WhatsApp links remain resumable through Ticket 17 ordering', () => {
   const finder = pollerNodes.get('Find Verified WhatsApp Sessions').parameters.query;
   assert.match(finder, /public\.messages/);
+  assert.match(finder, /message\.direction = 'inbound'/);
+  assert.match(finder, /processing_order IS NOT NULL/);
   assert.match(finder, /processing_completed_at IS NULL/);
-  assert.match(finder, /identity_verification_state' = 'verified'/);
+  assert.match(finder, /processing_owner IS NULL/);
+  assert.match(finder, /processing_lease_until <= NOW\(\)/);
   assert.deepEqual(workflow.connections['Receive Verified WhatsApp Sessions'].main[0]
     .map(connection => connection.node), ['Claim Next Session Inbound']);
   assert.match(nodes.get('Claim Next Session Inbound').parameters.query,
