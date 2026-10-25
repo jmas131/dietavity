@@ -25,6 +25,13 @@ function runCode(name, input, lookup) {
   })[0].json;
 }
 
+function assertN8nExpressionSyntax(expression, name) {
+  assert.match(expression, /^=\{\{/, name);
+  assert.equal(expression.endsWith('}}'), true, `${name} must close its n8n expression`);
+  const source = expression.slice(3, -2).trim();
+  assert.doesNotThrow(() => new vm.Script(`(${source})`), name);
+}
+
 test('V4 begins immediately after acquired claim and preserves deferred and busy Ticket 82/83A branches', () => {
   assert.deepEqual(outputs('Route Session Claim State', 0), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
@@ -74,10 +81,9 @@ test('V4 uses the authenticated V4 route, structural validation, and atomic rese
   assert.match(reservationReplacement, /^=\{\{ JSON\.stringify\(\{/);
   assert.match(reservationReplacement, /user_id: \$\('Claim Next Session Inbound'\)\.item\.json\.user_id \|\| null/);
   assert.match(reservationReplacement, /memory_updates/);
-  assert.doesNotMatch(reservationReplacement, /\bundefined\b/);
   for (const v4Postgres of workflow.nodes.filter(candidate => candidate.type === 'n8n-nodes-base.postgres' && candidate.name.includes('V4'))) {
     assert.equal(typeof v4Postgres.parameters.options?.queryReplacement, 'string', v4Postgres.name);
-    assert.doesNotMatch(v4Postgres.parameters.options.queryReplacement, /\bundefined\b/, v4Postgres.name);
+    assertN8nExpressionSyntax(v4Postgres.parameters.options.queryReplacement, v4Postgres.name);
   }
   assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 0), ['Respond to V4 Chat']);
   assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 1), ['Mark Session Inbound Complete']);

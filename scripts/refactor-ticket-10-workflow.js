@@ -1995,7 +1995,7 @@ const reserveV4ReplyWithMemory = {
   message_kind: 'sales_ai',
   parts: $json.whatsapp_parts,
   memory_updates: $json.memory_updates
-}) }` } },
+}) }}` } },
   credentials: { postgres: byName('Reserve Canonical Inbound Message').credentials.postgres },
   notes: 'The V4 RPC atomically reserves all outbound parts and records memory updates. No Node or separate n8n memory write exists.',
 };
