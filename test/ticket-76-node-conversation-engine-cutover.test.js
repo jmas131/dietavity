@@ -32,6 +32,30 @@ function assertN8nExpressionSyntax(expression, name) {
   assert.doesNotThrow(() => new vm.Script(`(${source})`), name);
 }
 
+function modelV4PartDelivery(parts) {
+  const loop = node('Loop V4 WhatsApp Parts');
+  assert.equal(loop.type, 'n8n-nodes-base.splitInBatches');
+  assert.equal(loop.typeVersion, 3);
+  // SplitInBatches v3 labels its outputs [done, loop]. The delivery path must
+  // therefore originate at output 1 and completion at output 0.
+  assert.deepEqual(outputs(loop.name, 0), ['Mark Session Inbound Complete']);
+  assert.deepEqual(outputs(loop.name, 1), ['Respond to V4 Chat']);
+  assert.deepEqual(outputs('Respond to V4 Chat'), ['Update V4 Reply Delivery']);
+  assert.deepEqual(outputs('Update V4 Reply Delivery'), ['Assert V4 Reply Accepted']);
+  assert.deepEqual(outputs('Assert V4 Reply Accepted'), [loop.name]);
+
+  const events = [];
+  for (const part of parts) {
+    events.push({ stage: 'loop', output: 1, part });
+    events.push({ stage: 'send', part });
+    events.push({ stage: 'persist_delivery', part });
+    events.push({ stage: 'assert_accepted', part });
+  }
+  events.push({ stage: 'loop', output: 0 });
+  events.push({ stage: 'complete' });
+  return events;
+}
+
 test('V4 begins immediately after acquired claim and preserves deferred and busy Ticket 82/83A branches', () => {
   assert.deepEqual(outputs('Route Session Claim State', 0), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
@@ -85,8 +109,28 @@ test('V4 uses the authenticated V4 route, structural validation, and atomic rese
     assert.equal(typeof v4Postgres.parameters.options?.queryReplacement, 'string', v4Postgres.name);
     assertN8nExpressionSyntax(v4Postgres.parameters.options.queryReplacement, v4Postgres.name);
   }
-  assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 0), ['Respond to V4 Chat']);
-  assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 1), ['Mark Session Inbound Complete']);
+  assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 0), ['Mark Session Inbound Complete']);
+  assert.deepEqual(outputs('Loop V4 WhatsApp Parts', 1), ['Respond to V4 Chat']);
+});
+
+test('V4 SplitInBatches delivers one reserved part before completing the claimed turn', () => {
+  const events = modelV4PartDelivery(['mensaje único']);
+  assert.deepEqual(events.map(event => event.stage), [
+    'loop', 'send', 'persist_delivery', 'assert_accepted', 'loop', 'complete',
+  ]);
+  assert.equal(events.filter(event => event.stage === 'send').length, 1);
+  assert.equal(events.find(event => event.stage === 'send').part, 'mensaje único');
+  assert.ok(events.findIndex(event => event.stage === 'complete') > events.findIndex(event => event.stage === 'assert_accepted'));
+});
+
+test('V4 SplitInBatches delivers every reserved multipart reply in order before completion', () => {
+  const parts = ['primera parte', 'segunda parte', 'tercera parte'];
+  const events = modelV4PartDelivery(parts);
+  assert.deepEqual(events.filter(event => event.stage === 'send').map(event => event.part), parts);
+  assert.deepEqual(events.filter(event => event.stage === 'assert_accepted').map(event => event.part), parts);
+  const completion = events.findIndex(event => event.stage === 'complete');
+  const lastAcceptance = events.reduce((last, event, index) => event.stage === 'assert_accepted' ? index : last, -1);
+  assert.ok(completion > lastAcceptance, 'completion must wait for every reserved part to be accepted');
 });
 
 test('V4 n8n response validation preserves arbitrary natural language and validates only structure', () => {

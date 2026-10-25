@@ -8093,14 +8093,14 @@
       "main": [
         [
           {
-            "node": "Respond to V4 Chat",
+            "node": "Mark Session Inbound Complete",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Mark Session Inbound Complete",
+            "node": "Respond to V4 Chat",
             "type": "main",
             "index": 0
           }

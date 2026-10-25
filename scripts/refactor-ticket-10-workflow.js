@@ -2028,8 +2028,8 @@ workflow.connections[validateV4ConversationEngineResponse.name] = { main: [[{ no
 workflow.connections[prepareV4WhatsAppMessageParts.name] = { main: [[{ node: reserveV4ReplyWithMemory.name, type: 'main', index: 0 }]] };
 workflow.connections[reserveV4ReplyWithMemory.name] = { main: [[{ node: loopV4WhatsAppParts.name, type: 'main', index: 0 }]] };
 workflow.connections[loopV4WhatsAppParts.name] = { main: [
-  [{ node: respondToV4Chat.name, type: 'main', index: 0 }],
   [{ node: 'Mark Session Inbound Complete', type: 'main', index: 0 }],
+  [{ node: respondToV4Chat.name, type: 'main', index: 0 }],
 ] };
 workflow.connections[respondToV4Chat.name] = { main: [[{ node: updateV4ReplyDelivery.name, type: 'main', index: 0 }]] };
 workflow.connections[updateV4ReplyDelivery.name] = { main: [[{ node: assertV4ReplyAccepted.name, type: 'main', index: 0 }]] };

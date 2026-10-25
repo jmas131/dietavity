@@ -107,7 +107,7 @@ test('every Twilio customer send has a durable reservation and delivery update',
     const reservationName = multipartReservations.get(incoming[0]) || incoming[0];
     if (multipartReservations.has(incoming[0])) {
       assert.deepEqual(outputs(reservationName), [incoming[0]]);
-      assert.deepEqual(outputs(incoming[0], incoming[0] === 'Loop V4 WhatsApp Parts' ? 0 : 1), [send.name]);
+      assert.deepEqual(outputs(incoming[0], 1), [send.name]);
       assert.deepEqual(nodes.get(incoming[0]).parameters, { options: {} });
     }
     assert.match(reservationName, /^Reserve /, send.name);
