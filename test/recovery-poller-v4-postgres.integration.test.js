@@ -31,6 +31,7 @@ const withPayload = (sql, payload) => sql.replace('$1::jsonb', json(payload));
 function run(sql) {
   const result = spawnSync(psql, [url, '-X', '-v', 'ON_ERROR_STOP=1'], { input: sql, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
+  return result.stdout;
 }
 
 function v4Payload(claimed, body) {
@@ -70,6 +71,7 @@ test('recovery poller qualification uses generated canonical claim, error-releas
     session_id: session,
     processing_owner: owner,
   }));
+  const captureClaim = (label, session, owner) => `${claimSql(session, owner)}\n\\gset ${label}_\nSELECT 'claim:${label}:' || :'${label}_claim_state';`;
   const completeSql = (sid, owner) => complete.replace('$1::jsonb', `jsonb_build_object(
     'inbound_message_id', ${idFor(sid)}::text,
     'processing_owner', ${JSON.stringify(owner)}
@@ -86,7 +88,7 @@ test('recovery poller qualification uses generated canonical claim, error-releas
   const v4 = (sid, session, owner, body) => `SELECT * FROM public.reserve_conversation_v4_reply_with_memory(
     jsonb_set(${reserveV4(sid, session, owner, body)}, '{in_reply_to_id}', to_jsonb(${idFor(sid)}::text))
   )`;
-  run(`
+  const output = run(`
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
     DROP FUNCTION IF EXISTS public.reserve_conversation_v4_reply_with_memory(jsonb) CASCADE;
     DROP FUNCTION IF EXISTS public.read_conversation_durable_memory(text, uuid) CASCADE;
@@ -122,8 +124,8 @@ test('recovery poller qualification uses generated canonical claim, error-releas
     -- Scenario 1: actual reservation, claim A, exact Global Error Handler release, poller, claim B, V4, completion.
     ${inbound('recovery-s1', 'SM11111111111111111111111111111111', 'inbound:s1')};
     UPDATE public.messages SET timestamp = now() - interval '20 seconds' WHERE provider_message_sid = 'SM11111111111111111111111111111111';
+    ${captureClaim('s1a', 'recovery-s1', 'owner-a')}
     DO $$ BEGIN
-      IF (SELECT claim_state FROM (${claimSql('recovery-s1', 'owner-a')}) AS q) <> 'acquired' THEN RAISE EXCEPTION 's1 owner A did not acquire'; END IF;
       IF NOT EXISTS (SELECT 1 FROM public.messages WHERE provider_message_sid = 'SM11111111111111111111111111111111' AND processing_owner = 'owner-a' AND processing_lease_until > now()) THEN RAISE EXCEPTION 's1 live lease missing'; END IF;
     END $$;
     ${releaseSql('owner-a')};
@@ -131,8 +133,8 @@ test('recovery poller qualification uses generated canonical claim, error-releas
       IF EXISTS (SELECT 1 FROM public.messages WHERE provider_message_sid = 'SM11111111111111111111111111111111' AND (processing_completed_at IS NOT NULL OR processing_owner IS NOT NULL OR processing_lease_until IS NOT NULL)) THEN RAISE EXCEPTION 's1 release state wrong'; END IF;
       IF EXISTS (SELECT 1 FROM public.messages WHERE in_reply_to_id = ${idFor('SM11111111111111111111111111111111')} AND direction = 'outbound') THEN RAISE EXCEPTION 's1 unexpected outbound'; END IF;
       IF NOT ${pollerHas('recovery-s1')} THEN RAISE EXCEPTION 's1 poller did not wake'; END IF;
-      IF (SELECT claim_state FROM (${claimSql('recovery-s1', 'owner-b')}) AS q) <> 'acquired' THEN RAISE EXCEPTION 's1 owner B did not acquire'; END IF;
     END $$;
+    ${captureClaim('s1b', 'recovery-s1', 'owner-b')}
     ${v4('SM11111111111111111111111111111111', 'recovery-s1', 'owner-b', 'Respuesta V4 uno')};
     UPDATE public.messages SET delivery_status = 'accepted', provider_message_sid = 'SMaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' WHERE in_reply_to_id = ${idFor('SM11111111111111111111111111111111')} AND direction = 'outbound';
     ${completeSql('SM11111111111111111111111111111111', 'owner-b')};
@@ -145,12 +147,12 @@ test('recovery poller qualification uses generated canonical claim, error-releas
     -- Scenario 2: stale pre-reservation lease wakes and the canonical claim re-acquires it.
     ${inbound('recovery-s2', 'SM22222222222222222222222222222222', 'inbound:s2')};
     UPDATE public.messages SET timestamp = now() - interval '20 seconds' WHERE provider_message_sid = 'SM22222222222222222222222222222222';
-    DO $$ BEGIN IF (SELECT claim_state FROM (${claimSql('recovery-s2', 'owner-a')}) AS q) <> 'acquired' THEN RAISE EXCEPTION 's2 owner A'; END IF; END $$;
+    ${captureClaim('s2a', 'recovery-s2', 'owner-a')}
     UPDATE public.messages SET processing_lease_until = now() - interval '1 second' WHERE provider_message_sid = 'SM22222222222222222222222222222222';
     DO $$ BEGIN
       IF NOT ${pollerHas('recovery-s2')} THEN RAISE EXCEPTION 's2 poller did not wake'; END IF;
-      IF (SELECT claim_state FROM (${claimSql('recovery-s2', 'owner-b')}) AS q) <> 'acquired' THEN RAISE EXCEPTION 's2 owner B did not acquire'; END IF;
     END $$;
+    ${captureClaim('s2b', 'recovery-s2', 'owner-b')}
     ${v4('SM22222222222222222222222222222222', 'recovery-s2', 'owner-b', 'Respuesta V4 dos')};
     DO $$ BEGIN
       IF (SELECT count(*) FROM public.messages WHERE in_reply_to_id = ${idFor('SM22222222222222222222222222222222')} AND direction = 'outbound') <> 1 THEN RAISE EXCEPTION 's2 outbound count'; END IF;
@@ -159,13 +161,15 @@ test('recovery poller qualification uses generated canonical claim, error-releas
     -- Scenario 3: a stale claimed turn with a pending durable outbound wakes only to reconciliation.
     ${inbound('recovery-s3', 'SM33333333333333333333333333333333', 'inbound:s3')};
     UPDATE public.messages SET timestamp = now() - interval '20 seconds' WHERE provider_message_sid = 'SM33333333333333333333333333333333';
-    DO $$ BEGIN IF (SELECT claim_state FROM (${claimSql('recovery-s3', 'owner-a')}) AS q) <> 'acquired' THEN RAISE EXCEPTION 's3 owner A'; END IF; END $$;
+    ${captureClaim('s3a', 'recovery-s3', 'owner-a')}
     ${v4('SM33333333333333333333333333333333', 'recovery-s3', 'owner-a', 'Respuesta V4 tres')};
     UPDATE public.messages SET processing_lease_until = now() - interval '1 second' WHERE provider_message_sid = 'SM33333333333333333333333333333333';
     DO $$ BEGIN
       IF NOT ${pollerHas('recovery-s3')} THEN RAISE EXCEPTION 's3 poller did not wake'; END IF;
-      IF (SELECT claim_state FROM (${claimSql('recovery-s3', 'owner-b')}) AS q) <> 'reconciliation' THEN RAISE EXCEPTION 's3 was not reconciliation'; END IF;
       IF (SELECT count(*) FROM public.messages WHERE in_reply_to_id = ${idFor('SM33333333333333333333333333333333')} AND direction = 'outbound') <> 1 THEN RAISE EXCEPTION 's3 duplicate outbound'; END IF;
+    END $$;
+    ${captureClaim('s3b', 'recovery-s3', 'owner-b')}
+    DO $$ BEGIN
       BEGIN
         PERFORM * FROM public.reserve_conversation_v4_reply_with_memory(jsonb_set(
           ${reserveV4('SM33333333333333333333333333333333', 'recovery-s3', 'owner-b', 'must not reserve')},
@@ -179,9 +183,14 @@ test('recovery poller qualification uses generated canonical claim, error-releas
     -- Scenario 4: a live lease is not selected.
     ${inbound('recovery-s4', 'SM44444444444444444444444444444444', 'inbound:s4')};
     UPDATE public.messages SET timestamp = now() - interval '20 seconds' WHERE provider_message_sid = 'SM44444444444444444444444444444444';
+    ${captureClaim('s4a', 'recovery-s4', 'owner-a')}
     DO $$ BEGIN
-      IF (SELECT claim_state FROM (${claimSql('recovery-s4', 'owner-a')}) AS q) <> 'acquired' THEN RAISE EXCEPTION 's4 owner A'; END IF;
       IF ${pollerHas('recovery-s4')} THEN RAISE EXCEPTION 's4 live lease woke'; END IF;
     END $$;
   `);
+  for (const [label, state] of [
+    ['s1a', 'acquired'], ['s1b', 'acquired'], ['s2a', 'acquired'],
+    ['s2b', 'acquired'], ['s3a', 'acquired'], ['s3b', 'reconciliation'],
+    ['s4a', 'acquired'],
+  ]) assert.match(output, new RegExp(`claim:${label}:${state}`));
 });
