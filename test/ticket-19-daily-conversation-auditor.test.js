@@ -25,6 +25,7 @@ function runBuilder(items, secret = hmacSecret) {
     json: {
       reporting_start_date: '2026-08-17',
       reporting_end_date: '2026-08-23',
+      window_start: '2026-08-17T06:00:00.000Z',
       ...(item.json || {}),
     },
   }));
@@ -42,13 +43,13 @@ const fixture = runBuilder([
   { json: {
     id: '00000000-0000-0000-0000-000000000003', session_id: '+5215511112222',
     timestamp: '2026-08-18T10:03:00.000Z', direction: 'inbound',
-    body: 'Sí, cuesta $149 por 28 días. Mi correo es ana+lead@example.com.',
+    body: 'Tengo poco apetito y huevos; ¿qué me recomiendas? Mi correo es ana+lead@example.com.',
     message_kind: 'user', delivery_status: 'received',
   } },
   { json: {
     id: '00000000-0000-0000-0000-000000000001', session_id: '+5215511112222',
     timestamp: '2026-08-18T10:01:00.000Z', direction: 'outbound',
-    body: '¿Quieres comprar el programa?', message_kind: 'sales_deterministic',
+    body: 'Con poco apetito, prueba huevo con frijoles en una porción pequeña.', message_kind: 'assistant',
     delivery_status: 'delivered',
   } },
   { json: {
@@ -68,20 +69,20 @@ test('preserves stable keyed HMAC labels without exposing raw sessions', () => {
   assert.doesNotMatch(JSON.stringify(fixture), new RegExp(hmacSecret));
 });
 
-test('preserves PII/token redaction and useful commercial facts', () => {
+test('preserves PII/token redaction and useful food-decision evidence', () => {
   assert.doesNotMatch(fixture.user_message, /ana\+lead@example\.com|55 1234 5678|private-token-123/i);
   assert.match(fixture.user_message, /\[EMAIL REDACTED\]/);
   assert.match(fixture.user_message, /\[PHONE REDACTED\]/);
   assert.match(fixture.user_message, /\[SENSITIVE LINK REDACTED\]/);
-  assert.match(fixture.user_message, /\$149/);
-  assert.match(fixture.user_message, /28 días/);
+  assert.match(fixture.user_message, /poco apetito/i);
+  assert.match(fixture.user_message, /huevo con frijoles/i);
 });
 
 test('preserves chronological reconstruction and customer-visible metadata', () => {
-  const question = fixture.user_message.indexOf('¿Quieres comprar el programa?');
-  const answer = fixture.user_message.indexOf('Sí, cuesta $149');
+  const question = fixture.user_message.indexOf('Con poco apetito, prueba huevo con frijoles');
+  const answer = fixture.user_message.indexOf('Tengo poco apetito y huevos');
   assert.ok(question >= 0 && answer > question);
-  assert.match(fixture.user_message, /DIETAVITY \[sales_deterministic\] \[delivery: delivered\]/);
+  assert.match(fixture.user_message, /DIETAVITY \[assistant\]/);
   assert.match(fixture.user_message, /CUSTOMER \[user\]/);
   assert.doesNotMatch(fixture.user_message, /00000000-0000|in_reply_to_id/);
 });
@@ -90,13 +91,13 @@ test('zero conversations bypass AI and still produce a valid weekly report', () 
   const empty = runBuilder([{ json: {} }]);
   assert.equal(empty.analysis_required, false);
   assert.equal(empty.total_conversations, 0);
-  assert.match(empty.report_html, /WEEKLY CONVERSATION &amp; SALES INTELLIGENCE REPORT/);
+  assert.match(empty.report_html, /WEEKLY PRODUCT &amp; CONVERSATION INTELLIGENCE/);
   assert.match(empty.report_html, /2026-08-17 to 2026-08-23/);
-  assert.match(empty.report_html, /None recommended this week\./);
+  assert.match(empty.report_html, /No customer-visible conversations were available for analysis\./);
   assert.equal(empty.system_message, undefined);
 
   const route = workflow.connections['Has Conversations to Analyze?'].main;
-  assert.equal(route[0][0].node, 'AI Weekly Sales Intelligence Auditor');
+  assert.equal(route[0][0].node, 'AI Weekly Product Intelligence Auditor');
   assert.equal(route[1][0].node, 'Email Weekly Intelligence');
 });
 

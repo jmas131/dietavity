@@ -11,7 +11,7 @@ const workflowText = fs.readFileSync(workflowPath, 'utf8');
 const workflow = JSON.parse(workflowText);
 const nodes = new Map(workflow.nodes.map((node) => [node.name, node]));
 const generator = require('../scripts/refactor-ticket-32-weekly-conversation-sales-intelligence');
-const requestTemplate = nodes.get('AI Weekly Sales Intelligence Auditor').parameters.jsonBody;
+const requestTemplate = nodes.get('AI Weekly Product Intelligence Auditor').parameters.jsonBody;
 
 function renderRequestTemplate(systemMessage, userMessage) {
   assert.ok(requestTemplate.startsWith('={'), 'body must be an n8n JSON text template');
@@ -51,18 +51,18 @@ test('dynamic Spanish prompts survive JSON rendering without syntax loss', () =>
   assert.equal(request.messages[1].content, userMessage);
 });
 
-test('structured-output keeps the zero-or-one engineering-ticket contract', () => {
+test('structured output keeps the weekly product-intelligence contract', () => {
   const request = renderRequestTemplate('system', 'user');
   const format = request.response_format;
   assert.equal(format.type, 'json_schema');
-  assert.equal(format.json_schema.name, 'weekly_conversation_sales_intelligence');
+  assert.equal(format.json_schema.name, 'weekly_product_conversation_intelligence');
   assert.equal(format.json_schema.strict, true);
   assert.deepEqual(format.json_schema.schema, generator.RESPONSE_SCHEMA);
 
-  const proposed = format.json_schema.schema.properties.proposed_ticket;
-  assert.equal(proposed.anyOf.length, 2);
-  assert.deepEqual(proposed.anyOf.map((option) => option.type), ['null', 'object']);
-  assert.equal(proposed.type, undefined);
+  assert.ok(format.json_schema.schema.required.includes('usage_classification'));
+  assert.ok(format.json_schema.schema.required.includes('medical_boundary_handling'));
+  assert.ok(format.json_schema.schema.required.includes('commercial_wtp_signals'));
+  assert.ok(format.json_schema.schema.required.includes('priorities_next_week'));
 });
 
 test('generated artifact stays synchronized with the corrected request source', () => {
