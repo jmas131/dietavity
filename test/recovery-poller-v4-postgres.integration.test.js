@@ -25,6 +25,7 @@ const node = (workflow, name) => {
   return value;
 };
 const json = value => `'${JSON.stringify(value).replaceAll("'", "''")}'::jsonb`;
+const sqlText = value => `'${String(value).replaceAll("'", "''")}'`;
 const subquery = sql => sql.trim().replace(/;$/u, '');
 const withPayload = (sql, payload) => sql.replace('$1::jsonb', json(payload));
 
@@ -74,11 +75,11 @@ test('recovery poller qualification uses generated canonical claim, error-releas
   const captureClaim = (label, session, owner) => `${claimSql(session, owner)}\n\\gset ${label}_\nSELECT 'claim:${label}:' || :'${label}_claim_state';`;
   const completeSql = (sid, owner) => complete.replace('$1::jsonb', `jsonb_build_object(
     'inbound_message_id', ${idFor(sid)}::text,
-    'processing_owner', ${JSON.stringify(owner)}
+    'processing_owner', ${sqlText(owner)}
   )`);
   const releaseSql = owner => withPayload(release, { execution_id: owner, error_message: 'synthetic pre-reservation failure' });
-  const pollerHas = session => `EXISTS (SELECT 1 FROM (${subquery(findRecoverable)}) AS selected WHERE selected.session_id = ${JSON.stringify(session)})`;
-  const idFor = sid => `(SELECT id FROM public.messages WHERE provider_message_sid = ${JSON.stringify(sid)})`;
+  const pollerHas = session => `EXISTS (SELECT 1 FROM (${subquery(findRecoverable)}) AS selected WHERE selected.session_id = ${sqlText(session)})`;
+  const idFor = sid => `(SELECT id FROM public.messages WHERE provider_message_sid = ${sqlText(sid)})`;
   const reserveV4 = (sid, session, owner, body) => json(v4Payload({
     id: `__ID_${sid}__`, session_id: session, provider_message_sid: sid, processing_owner: owner,
   }, body));
