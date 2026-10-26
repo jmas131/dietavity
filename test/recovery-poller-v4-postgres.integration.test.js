@@ -66,7 +66,10 @@ test('recovery poller qualification uses generated canonical claim, error-releas
     provider_message_sid: sid, idempotency_key: key, num_media: 0,
     workflow_execution_id: 'qualification', provider_event_timestamp: null,
   });
-  const claimSql = (session, owner) => withPayload(claim, { session_id: session, processing_owner: owner });
+  const claimSql = (session, owner) => subquery(withPayload(claim, {
+    session_id: session,
+    processing_owner: owner,
+  }));
   const completeSql = (sid, owner) => complete.replace('$1::jsonb', `jsonb_build_object(
     'inbound_message_id', ${idFor(sid)}::text,
     'processing_owner', ${JSON.stringify(owner)}
