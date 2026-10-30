@@ -105,17 +105,22 @@ test('every Twilio customer send has a durable reservation and delivery update',
       ['Loop V4 WhatsApp Parts', 'Reserve V4 Reply With Memory'],
     ]);
     const reservationName = multipartReservations.get(incoming[0]) || incoming[0];
+    const reconciliationSend = reservationName === 'Route V4 Outbound Reconciliation';
     if (multipartReservations.has(incoming[0])) {
       assert.deepEqual(outputs(reservationName), [incoming[0]]);
       assert.deepEqual(outputs(incoming[0], 1), [send.name]);
       assert.deepEqual(nodes.get(incoming[0]).parameters, { options: {} });
     }
-    assert.match(reservationName, /^Reserve /, send.name);
+    assert.ok(reconciliationSend || /^Reserve /.test(reservationName), send.name);
     const outgoing = outputs(send.name);
     assert.equal(outgoing.length, 1, send.name);
-    assert.match(outgoing[0], /^Update .* Delivery$/, send.name);
+    assert.ok(reconciliationSend || /^Update .* Delivery$/.test(outgoing[0]), send.name);
     assert.equal(send.onError, 'continueRegularOutput', send.name);
     assert.equal(send.retryOnFail, false, send.name);
+    if (reconciliationSend) {
+      assert.match(nodes.get('Reconcile V4 Outbound Reservation').parameters.query, /claim_v4_outbound_reconciliation/);
+      continue;
+    }
     const reserveSql = nodes.get(reservationName).parameters.query;
     if (reservationName === 'Reserve V4 Reply With Memory') {
       assert.match(reserveSql, /reserve_conversation_v4_reply_with_memory/, send.name);

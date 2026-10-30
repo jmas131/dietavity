@@ -26,7 +26,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT DISTINCT message.session_id\nFROM public.messages AS message\nWHERE message.direction = 'inbound'\n  AND message.processing_order IS NOT NULL\n  AND message.processing_completed_at IS NULL\n  AND (\n    message.processing_owner IS NULL\n    OR message.processing_lease_until IS NULL\n    OR message.processing_lease_until <= NOW()\n  )\nORDER BY message.session_id;",
+        "query": "SELECT DISTINCT message.session_id\nFROM public.messages AS message\nWHERE message.direction = 'inbound'\n  AND message.processing_order IS NOT NULL\n  AND message.processing_completed_at IS NULL\n  AND NOT EXISTS (\n    SELECT 1\n    FROM public.messages AS head\n    WHERE head.session_id = message.session_id\n      AND head.direction = 'inbound'\n      AND head.processing_order IS NOT NULL\n      AND head.processing_completed_at IS NULL\n      AND head.processing_order = (\n        SELECT MIN(earlier.processing_order)\n        FROM public.messages AS earlier\n        WHERE earlier.session_id = message.session_id\n          AND earlier.direction = 'inbound'\n          AND earlier.processing_order IS NOT NULL\n          AND earlier.processing_completed_at IS NULL\n      )\n      AND head.metadata->>'reconciliation_state' = 'operator_required'\n  )\n  AND (\n    message.processing_owner IS NULL\n    OR message.processing_lease_until IS NULL\n    OR message.processing_lease_until <= NOW()\n  )\nORDER BY message.session_id;",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",

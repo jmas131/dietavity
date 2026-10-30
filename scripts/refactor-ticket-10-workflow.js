@@ -570,6 +570,23 @@ FROM public.messages AS message
 WHERE message.direction = 'inbound'
   AND message.processing_order IS NOT NULL
   AND message.processing_completed_at IS NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.messages AS head
+    WHERE head.session_id = message.session_id
+      AND head.direction = 'inbound'
+      AND head.processing_order IS NOT NULL
+      AND head.processing_completed_at IS NULL
+      AND head.processing_order = (
+        SELECT MIN(earlier.processing_order)
+        FROM public.messages AS earlier
+        WHERE earlier.session_id = message.session_id
+          AND earlier.direction = 'inbound'
+          AND earlier.processing_order IS NOT NULL
+          AND earlier.processing_completed_at IS NULL
+      )
+      AND head.metadata->>'reconciliation_state' = 'operator_required'
+  )
   AND (
     message.processing_owner IS NULL
     OR message.processing_lease_until IS NULL
@@ -2005,17 +2022,37 @@ const loopV4WhatsAppParts = { name: 'Loop V4 WhatsApp Parts', id: 'd74a0001-0000
 const respondToV4Chat = cloneWorkflowNode(byName('Respond to Chat')); respondToV4Chat.name = 'Respond to V4 Chat'; respondToV4Chat.id = 'd74a0001-0000-4000-8000-000000000110'; respondToV4Chat.position = [70400, 49536];
 const updateV4ReplyDelivery = cloneWorkflowNode(byName('Update Sales Reply Delivery')); updateV4ReplyDelivery.name = 'Update V4 Reply Delivery'; updateV4ReplyDelivery.id = 'd74a0001-0000-4000-8000-000000000111'; updateV4ReplyDelivery.position = [70656, 49536]; updateV4ReplyDelivery.parameters.options.queryReplacement = twilioDelivery.responseExpression('Loop V4 WhatsApp Parts', 'accepted');
 const assertV4ReplyAccepted = cloneWorkflowNode(byName('Assert Sales Reply Accepted')); assertV4ReplyAccepted.name = 'Assert V4 Reply Accepted'; assertV4ReplyAccepted.id = 'd74a0001-0000-4000-8000-000000000112'; assertV4ReplyAccepted.position = [70912, 49536];
+const reconcileV4OutboundReservation = {
+  name: 'Reconcile V4 Outbound Reservation', id: 'd74a0001-0000-4000-8000-000000000119',
+  type: 'n8n-nodes-base.postgres', typeVersion: 2.6, position: [67392, 49792],
+  parameters: { operation: 'executeQuery', query: ordering.CLAIM_V4_OUTBOUND_RECONCILIATION_SQL, options: { queryReplacement: `={{ JSON.stringify({
+    inbound_message_id: $('Claim Next Session Inbound').item.json.id,
+    session_id: $('Claim Next Session Inbound').item.json.session_id,
+    processing_owner: $execution.id
+  }) }}` } },
+  credentials: { postgres: byName('Reserve Canonical Inbound Message').credentials.postgres },
+  notes: 'Claims the existing FIFO-head reservation atomically. It never calls the model or inserts an outbound row: valid persisted Twilio SIDs are completed, one proven 21617 non-submission may resend its existing body, and all ambiguity escalates.'
+};
+const routeV4OutboundReconciliation = { name: 'Route V4 Outbound Reconciliation', id: 'd74a0001-0000-4000-8000-000000000120', type: 'n8n-nodes-base.switch', typeVersion: 3.4, position: [67648, 49792], parameters: { rules: { values: [
+  { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 }, conditions: [{ leftValue: '={{ $json.reconciliation_state }}', rightValue: 'accepted', operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } },
+  { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 }, conditions: [{ leftValue: '={{ $json.reconciliation_state }}', rightValue: 'redispatch', operator: { type: 'string', operation: 'equals' } }], combinator: 'and' } }
+] }, options: { fallbackOutput: 'extra' } } };
+const respondToReconciledV4Reservation = cloneWorkflowNode(respondToV4Chat); respondToReconciledV4Reservation.name = 'Respond to Reconciled V4 Reservation'; respondToReconciledV4Reservation.id = 'd74a0001-0000-4000-8000-000000000121'; respondToReconciledV4Reservation.position = [67904, 49904];
+const updateReconciledV4Reservation = cloneWorkflowNode(updateV4ReplyDelivery); updateReconciledV4Reservation.name = 'Persist Reconciled V4 Provider Result'; updateReconciledV4Reservation.id = 'd74a0001-0000-4000-8000-000000000122'; updateReconciledV4Reservation.position = [68160, 49904]; updateReconciledV4Reservation.parameters.query = twilioDelivery.DELIVERY_UPDATE_SQL.replace("AND message.delivery_status = 'pending'", "AND message.delivery_status = 'pending' AND message.metadata->>'reconciliation_redispatch_token' = classified.payload->>'redispatch_token'"); updateReconciledV4Reservation.parameters.options.queryReplacement = twilioDelivery.responseExpression('Reconcile V4 Outbound Reservation', 'accepted').replace("idempotency_key: $('Reconcile V4 Outbound Reservation').item.json.idempotency_key,", "idempotency_key: $('Reconcile V4 Outbound Reservation').item.json.idempotency_key,\n    redispatch_token: $('Reconcile V4 Outbound Reservation').item.json.redispatch_token,");
+const assertReconciledV4Reservation = cloneWorkflowNode(assertV4ReplyAccepted); assertReconciledV4Reservation.name = 'Assert Reconciled V4 Reservation Accepted'; assertReconciledV4Reservation.id = 'd74a0001-0000-4000-8000-000000000123'; assertReconciledV4Reservation.position = [68416, 49904];
+const endV4ReconciliationEscalated = { name: 'End — V4 Reconciliation Escalated', id: 'd74a0001-0000-4000-8000-000000000124', type: 'n8n-nodes-base.code', typeVersion: 2, position: [67904, 50160], parameters: { jsCode: 'return $input.all();' }, notes: 'Terminal bounded escalation. The database records operator_required; the poller excludes it until provider evidence is reconciled through an approved procedure.' };
 const authorizeV4ConversationEngineRecovery = cloneWorkflowNode(authorizeConversationEngineRecovery); authorizeV4ConversationEngineRecovery.name = 'Authorize V4 Conversation Engine Recovery'; authorizeV4ConversationEngineRecovery.id = 'd74a0001-0000-4000-8000-000000000113'; authorizeV4ConversationEngineRecovery.position = [69376, 49904];
 const routeV4ConversationEngineRecoveryAuthorization = cloneWorkflowNode(routeConversationEngineRecoveryAuthorization); routeV4ConversationEngineRecoveryAuthorization.name = 'Route V4 Conversation Engine Recovery Authorization'; routeV4ConversationEngineRecoveryAuthorization.id = 'd74a0001-0000-4000-8000-000000000114'; routeV4ConversationEngineRecoveryAuthorization.position = [69632, 49904];
 const waitBeforeV4ConversationEngineRecovery = cloneWorkflowNode(waitBeforeConversationEngineRecovery); waitBeforeV4ConversationEngineRecovery.name = 'Wait Before V4 Conversation Engine Recovery'; waitBeforeV4ConversationEngineRecovery.id = 'd74a0001-0000-4000-8000-000000000115'; waitBeforeV4ConversationEngineRecovery.position = [69888, 49904];
 const callV4ConversationEngineRecovery = cloneWorkflowNode(callV4ConversationEngine); callV4ConversationEngineRecovery.name = 'Call V4 Conversation Engine Recovery'; callV4ConversationEngineRecovery.id = 'd74a0001-0000-4000-8000-000000000116'; callV4ConversationEngineRecovery.position = [70144, 49904]; callV4ConversationEngineRecovery.parameters.jsonBody = "={{ JSON.stringify($('Build V4 Conversation Engine Request').item.json) }}";
 const classifyV4ConversationEngineRecoveryResult = cloneWorkflowNode(classifyV4ConversationEngineResult); classifyV4ConversationEngineRecoveryResult.name = 'Classify V4 Conversation Engine Recovery Result'; classifyV4ConversationEngineRecoveryResult.id = 'd74a0001-0000-4000-8000-000000000117'; classifyV4ConversationEngineRecoveryResult.position = [70400, 49904]; classifyV4ConversationEngineRecoveryResult.parameters.jsCode = classifyV4ConversationEngineRecoveryResult.parameters.jsCode.replace("return [{ json: { result_kind: 'ticket85_recovery_candidate' } }];", "return [{ json: { result_kind: 'unrecoverable_failure' } }];");
 const failV4ConversationEngineResult = { name: 'Fail Closed V4 Conversation Engine Result', id: 'd74a0001-0000-4000-8000-000000000118', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69376, 50160], parameters: { jsCode: "throw new Error('CONVERSATION_V4_UNRECOVERABLE_RESULT');" }, notes: 'V4 never retries malformed output, reservation failures, or arbitrary infrastructure failures.' };
-workflow.nodes.push(getV4ConversationContext, buildV4ConversationRequest, callV4ConversationEngine, classifyV4ConversationEngineResult, routeV4ConversationEngineResult, validateV4ConversationEngineResponse, prepareV4WhatsAppMessageParts, reserveV4ReplyWithMemory, loopV4WhatsAppParts, respondToV4Chat, updateV4ReplyDelivery, assertV4ReplyAccepted, authorizeV4ConversationEngineRecovery, routeV4ConversationEngineRecoveryAuthorization, waitBeforeV4ConversationEngineRecovery, callV4ConversationEngineRecovery, classifyV4ConversationEngineRecoveryResult, failV4ConversationEngineResult);
+workflow.nodes.push(getV4ConversationContext, buildV4ConversationRequest, callV4ConversationEngine, classifyV4ConversationEngineResult, routeV4ConversationEngineResult, validateV4ConversationEngineResponse, prepareV4WhatsAppMessageParts, reserveV4ReplyWithMemory, loopV4WhatsAppParts, respondToV4Chat, updateV4ReplyDelivery, assertV4ReplyAccepted, reconcileV4OutboundReservation, routeV4OutboundReconciliation, respondToReconciledV4Reservation, updateReconciledV4Reservation, assertReconciledV4Reservation, endV4ReconciliationEscalated, authorizeV4ConversationEngineRecovery, routeV4ConversationEngineRecoveryAuthorization, waitBeforeV4ConversationEngineRecovery, callV4ConversationEngineRecovery, classifyV4ConversationEngineRecoveryResult, failV4ConversationEngineResult);
 workflow.connections['Route Session Claim State'] = { main: [
   [{ node: getV4ConversationContext.name, type: 'main', index: 0 }],
   [{ node: 'Wait For Turn Quiet Period', type: 'main', index: 0 }],
   [{ node: 'End — Turn Already Owned', type: 'main', index: 0 }],
+  [{ node: reconcileV4OutboundReservation.name, type: 'main', index: 0 }],
 ] };
 workflow.connections[getV4ConversationContext.name] = { main: [[{ node: buildV4ConversationRequest.name, type: 'main', index: 0 }]] };
 workflow.connections[buildV4ConversationRequest.name] = { main: [[{ node: callV4ConversationEngine.name, type: 'main', index: 0 }]] };
@@ -2036,6 +2073,15 @@ workflow.connections[loopV4WhatsAppParts.name] = { main: [
 workflow.connections[respondToV4Chat.name] = { main: [[{ node: updateV4ReplyDelivery.name, type: 'main', index: 0 }]] };
 workflow.connections[updateV4ReplyDelivery.name] = { main: [[{ node: assertV4ReplyAccepted.name, type: 'main', index: 0 }]] };
 workflow.connections[assertV4ReplyAccepted.name] = { main: [[{ node: loopV4WhatsAppParts.name, type: 'main', index: 0 }]] };
+workflow.connections[reconcileV4OutboundReservation.name] = { main: [[{ node: routeV4OutboundReconciliation.name, type: 'main', index: 0 }]] };
+workflow.connections[routeV4OutboundReconciliation.name] = { main: [
+  [{ node: 'Mark Session Inbound Complete', type: 'main', index: 0 }],
+  [{ node: respondToReconciledV4Reservation.name, type: 'main', index: 0 }],
+  [{ node: endV4ReconciliationEscalated.name, type: 'main', index: 0 }],
+] };
+workflow.connections[respondToReconciledV4Reservation.name] = { main: [[{ node: updateReconciledV4Reservation.name, type: 'main', index: 0 }]] };
+workflow.connections[updateReconciledV4Reservation.name] = { main: [[{ node: assertReconciledV4Reservation.name, type: 'main', index: 0 }]] };
+workflow.connections[assertReconciledV4Reservation.name] = { main: [[{ node: reconcileV4OutboundReservation.name, type: 'main', index: 0 }]] };
 workflow.connections[authorizeV4ConversationEngineRecovery.name] = { main: [[{ node: routeV4ConversationEngineRecoveryAuthorization.name, type: 'main', index: 0 }]] };
 workflow.connections[routeV4ConversationEngineRecoveryAuthorization.name] = { main: [
   [{ node: waitBeforeV4ConversationEngineRecovery.name, type: 'main', index: 0 }],

@@ -5494,6 +5494,169 @@
       "notes": "Ambiguous sends are never retried blindly. The Global Error Handler alerts after the unknown/failed state is durable."
     },
     {
+      "name": "Reconcile V4 Outbound Reservation",
+      "id": "d74a0001-0000-4000-8000-000000000119",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        67392,
+        49792
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM public.claim_v4_outbound_reconciliation($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({\n    inbound_message_id: $('Claim Next Session Inbound').item.json.id,\n    session_id: $('Claim Next Session Inbound').item.json.session_id,\n    processing_owner: $execution.id\n  }) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Claims the existing FIFO-head reservation atomically. It never calls the model or inserts an outbound row: valid persisted Twilio SIDs are completed, one proven 21617 non-submission may resend its existing body, and all ambiguity escalates."
+    },
+    {
+      "name": "Route V4 Outbound Reconciliation",
+      "id": "d74a0001-0000-4000-8000-000000000120",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        67648,
+        49792
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.reconciliation_state }}",
+                    "rightValue": "accepted",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.reconciliation_state }}",
+                    "rightValue": "redispatch",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+18158698400",
+        "to": "={{ $json.session_id }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        67904,
+        49904
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000121",
+      "name": "Respond to Reconciled V4 Reservation",
+      "credentials": {
+        "twilioApi": {
+          "id": "mN6kQMStmYEFJKe1",
+          "name": "Twilio account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (SELECT $1::jsonb AS payload), classified AS (\n  SELECT\n    payload,\n    CASE\n      WHEN payload->>'error_code' = '21617'\n        OR LOWER(COALESCE(payload->>'provider_status', '')) IN ('canceled', 'failed', 'undelivered')\n        OR COALESCE(NULLIF(payload->>'status_code', '')::integer, 0) BETWEEN 400 AND 499\n        THEN 'failed'\n      WHEN payload->>'expected_status' = 'scheduled'\n        AND LOWER(COALESCE(payload->>'provider_status', '')) = 'scheduled'\n        AND payload->>'provider_message_sid' ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n        THEN 'scheduled'\n      WHEN payload->>'expected_status' = 'accepted'\n        AND payload->>'provider_message_sid' ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n        THEN 'accepted'\n      ELSE 'unknown'\n    END AS final_status\n  FROM input\n), updated AS (\n  UPDATE public.messages AS message\n  SET provider_message_sid = CASE\n        WHEN classified.payload->>'provider_message_sid' ~ '^(SM|MM)[0-9a-fA-F]{32}$'\n          THEN classified.payload->>'provider_message_sid'\n        ELSE message.provider_message_sid\n      END,\n      delivery_status = classified.final_status,\n      metadata = message.metadata || jsonb_strip_nulls(jsonb_build_object(\n        'provider_status', NULLIF(classified.payload->>'provider_status', ''),\n        'provider_error_code', NULLIF(classified.payload->>'error_code', ''),\n        'provider_error_message', LEFT(NULLIF(classified.payload->>'error_message', ''), 300),\n        'provider_acceptance_evidence', CASE\n          WHEN classified.final_status IN ('accepted', 'scheduled') THEN 'message_sid'\n          WHEN classified.final_status = 'failed' THEN 'definitive_failure'\n          ELSE 'reconciliation_required'\n        END\n      ))\n  FROM classified\n  WHERE message.idempotency_key = classified.payload->>'idempotency_key'\n    AND message.delivery_status = 'pending' AND message.metadata->>'reconciliation_redispatch_token' = classified.payload->>'redispatch_token'\n  RETURNING message.*\n)\nSELECT * FROM updated;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({\n    idempotency_key: $('Reconcile V4 Outbound Reservation').item.json.idempotency_key,\n    redispatch_token: $('Reconcile V4 Outbound Reservation').item.json.redispatch_token,\n    expected_status: 'accepted',\n    provider_message_sid: $json.sid || $json.messageSid || $json.message_sid || ($json.data && ($json.data.sid || $json.data.messageSid || $json.data.message_sid)) || '',\n    provider_status: $json.status || $json.messageStatus || $json.message_status || ($json.data && ($json.data.status || $json.data.messageStatus || $json.data.message_status)) || '',\n    status_code: $json.statusCode || $json.httpCode || $json.status_code || ($json.error && typeof $json.error === 'object' && ($json.error.statusCode || $json.error.httpCode || $json.error.status_code)) || '',\n    error_code: $json.code || $json.errorCode || $json.error_code || ($json.error && typeof $json.error === 'object' && ($json.error.code || $json.error.errorCode || $json.error.error_code)) || String($json.message || $json.errorMessage || $json.error_message || (typeof $json.error === 'string' ? $json.error : '') || '').match(/(?:^|\\D)(21617)(?:\\D|$)/)?.[1] || '',\n    error_message: $json.message || $json.errorMessage || $json.error_message || ($json.error && typeof $json.error === 'object' && ($json.error.message || $json.error.errorMessage || $json.error.error_message)) || (typeof $json.error === 'string' ? $json.error : '') || ''\n  }) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        68160,
+        49904
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000122",
+      "name": "Persist Reconciled V4 Provider Result",
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Ticket 36: a valid Message SID proves API acceptance; explicit failed/undelivered/canceled or HTTP 4xx is failed; missing acceptance evidence remains actionable unknown."
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nif (!['accepted', 'scheduled'].includes(row.delivery_status)) {\n  throw new Error('TICKET_9_TWILIO_SEND_REQUIRES_RECONCILIATION:' + row.idempotency_key + ':' + row.delivery_status);\n}\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        68416,
+        49904
+      ],
+      "id": "d74a0001-0000-4000-8000-000000000123",
+      "name": "Assert Reconciled V4 Reservation Accepted",
+      "notes": "Ambiguous sends are never retried blindly. The Global Error Handler alerts after the unknown/failed state is durable."
+    },
+    {
+      "name": "End — V4 Reconciliation Escalated",
+      "id": "d74a0001-0000-4000-8000-000000000124",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        67904,
+        50160
+      ],
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "notes": "Terminal bounded escalation. The database records operator_required; the poller excludes it until provider evidence is reconciled through an approved procedure."
+    },
+    {
       "name": "Authorize V4 Conversation Engine Recovery",
       "id": "d74a0001-0000-4000-8000-000000000113",
       "type": "n8n-nodes-base.postgres",
@@ -7638,6 +7801,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Reconcile V4 Outbound Reservation",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -8134,6 +8304,75 @@
         [
           {
             "node": "Loop V4 WhatsApp Parts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconcile V4 Outbound Reservation": {
+      "main": [
+        [
+          {
+            "node": "Route V4 Outbound Reconciliation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route V4 Outbound Reconciliation": {
+      "main": [
+        [
+          {
+            "node": "Mark Session Inbound Complete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Reconciled V4 Reservation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "End — V4 Reconciliation Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Reconciled V4 Reservation": {
+      "main": [
+        [
+          {
+            "node": "Persist Reconciled V4 Provider Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Reconciled V4 Provider Result": {
+      "main": [
+        [
+          {
+            "node": "Assert Reconciled V4 Reservation Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Reconciled V4 Reservation Accepted": {
+      "main": [
+        [
+          {
+            "node": "Reconcile V4 Outbound Reservation",
             "type": "main",
             "index": 0
           }
