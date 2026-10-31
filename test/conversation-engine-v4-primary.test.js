@@ -58,6 +58,29 @@ test('V4 primary client uses one strict structured OpenAI call and exposes contr
   await assert.rejects(() => createPrimaryConversationLlmClient({ apiKey: '', http: {} }).generate({}), error => error instanceof ConversationV4LlmError && error.code === 'llm_unavailable');
 });
 
+test('V4 provider-failure diagnostics contain only approved sanitized fields', async () => {
+  const diagnostics = [];
+  const request = buildRequest(input({ request_id: 'v4-diagnostic-correlation' }));
+  const http = { async post() {
+    const error = new Error('upstream details must not be logged');
+    error.code = 'ECONNABORTED';
+    error.response = { status: 503, data: { error: { code: 'provider_timeout', message: 'must not be logged' } } };
+    throw error;
+  } };
+  const client = createPrimaryConversationLlmClient({ apiKey: 'test-key', http, diagnosticLogger: { warn: entry => diagnostics.push(entry) } });
+  await assert.rejects(() => client.generate(request), error => error instanceof ConversationV4LlmError && error.code === 'llm_timeout');
+  assert.equal(diagnostics.length, 1);
+  assert.deepEqual(Object.keys(diagnostics[0]).sort(), ['event', 'latency_ms', 'model', 'provider_error_code', 'request_id', 'upstream_category', 'upstream_status']);
+  assert.equal(diagnostics[0].event, 'conversation_engine_v4_openai_failure');
+  assert.equal(diagnostics[0].request_id, 'v4-diagnostic-correlation');
+  assert.equal(diagnostics[0].model, 'gpt-6.1-sol');
+  assert.equal(diagnostics[0].upstream_status, 503);
+  assert.equal(diagnostics[0].upstream_category, 'timeout');
+  assert.equal(diagnostics[0].provider_error_code, 'ECONNABORTED');
+  assert.equal(Number.isInteger(diagnostics[0].latency_ms), true);
+  assert.doesNotMatch(JSON.stringify(diagnostics[0]), /upstream details|must not be logged/u);
+});
+
 test('V4 prompt states culinary freedom, commercial grounding, medical separability, and durable-memory limits', () => {
   assert.match(PRIMARY_CONVERSATION_SYSTEM_PROMPT, /not a culinary capability whitelist/u);
   assert.match(PRIMARY_CONVERSATION_SYSTEM_PROMPT, /separable food question/u);
