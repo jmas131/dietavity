@@ -16,26 +16,26 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -1840,
-        496
+        960,
+        224
       ],
-      "id": "a28ac36d-8c15-4454-a776-defba28a0010",
+      "id": "4b19404d-dacb-4299-a2b9-52f60709941f",
       "name": "Resume Verified WhatsApp Requests",
       "notes": "Wake-up only for verified WhatsApp linking and ordinary recoverable inbound work. The canonical messages ledger remains the queue; Claim Next Session Inbound alone preserves ordering, leases, reconciliation, and outbound safety."
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT DISTINCT message.session_id\nFROM public.messages AS message\nWHERE message.direction = 'inbound'\n  AND message.processing_order IS NOT NULL\n  AND message.processing_completed_at IS NULL\n  AND NOT EXISTS (\n    SELECT 1\n    FROM public.messages AS head\n    WHERE head.session_id = message.session_id\n      AND head.direction = 'inbound'\n      AND head.processing_order IS NOT NULL\n      AND head.processing_completed_at IS NULL\n      AND head.processing_order = (\n        SELECT MIN(earlier.processing_order)\n        FROM public.messages AS earlier\n        WHERE earlier.session_id = message.session_id\n          AND earlier.direction = 'inbound'\n          AND earlier.processing_order IS NOT NULL\n          AND earlier.processing_completed_at IS NULL\n      )\n      AND head.metadata->>'reconciliation_state' = 'operator_required'\n  )\n  AND (\n    message.processing_owner IS NULL\n    OR message.processing_lease_until IS NULL\n    OR message.processing_lease_until <= NOW()\n  )\nORDER BY message.session_id;",
+        "query": "SELECT head.session_id\nFROM public.messages AS head\nWHERE head.direction = 'inbound'\n  AND head.processing_order IS NOT NULL\n  AND head.processing_completed_at IS NULL\n  AND head.processing_order = (\n    SELECT MIN(earlier.processing_order)\n    FROM public.messages AS earlier\n    WHERE earlier.session_id = head.session_id\n      AND earlier.direction = 'inbound'\n      AND earlier.processing_order IS NOT NULL\n      AND earlier.processing_completed_at IS NULL\n  )\n  AND head.metadata->>'reconciliation_state' IS DISTINCT FROM 'operator_required'\n  AND (\n    head.processing_owner IS NULL\n    OR head.processing_lease_until IS NULL\n    OR head.processing_lease_until <= NOW()\n  )\nORDER BY head.session_id;",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        -1616,
-        496
+        1184,
+        224
       ],
-      "id": "a28ac36d-8c15-4454-a776-defba28a0011",
+      "id": "c2f490b8-3bc0-41c9-9c02-6242d95b352c",
       "name": "Find Verified WhatsApp Sessions",
       "credentials": {
         "postgres": {
@@ -46,24 +46,24 @@
     },
     {
       "parameters": {
-        "source": "database",
-        "workflowId": "rmQJsiYeHQ4Hc9XP",
-        "mode": "once",
+        "workflowId": "DbdFTtuPwxTZSkp3",
         "options": {
-          "waitForSubWorkflow": true
-        }
+          "waitForSubWorkflow": false
+        },
+        "mode": "each"
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
       "position": [
-        -1392,
-        496
+        1408,
+        224
       ],
-      "id": "a40ac36d-8c15-4454-a776-defba40a0001",
+      "id": "2c72da32-5765-4994-b09b-8646873549cd",
       "name": "Execute Dietavity Sales Engine",
       "notes": "Pass the complete session batch unchanged. Verify the target workflow ID after import; both workflows must have the same owner."
     }
   ],
+  "pinData": {},
   "connections": {
     "Resume Verified WhatsApp Requests": {
       "main": [
@@ -90,8 +90,18 @@
   },
   "settings": {
     "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
     "timezone": "America/Mexico_City",
     "errorWorkflow": "sa10JQEAbxNYvCGG",
-    "callerPolicy": "workflowsFromSameOwner"
-  }
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "2cca3808-de26-47fb-afb1-d2837e442386",
+  "meta": {
+    "instanceId": "2edd72e6d5781df09a60b65fd523f4841afca081863c21ef852a5bbcd21fdca1"
+  },
+  "nodeGroups": [],
+  "id": "bRwE1e4WQz17BV6S",
+  "tags": []
 }
