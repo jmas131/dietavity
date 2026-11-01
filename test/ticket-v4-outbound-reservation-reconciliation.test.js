@@ -41,8 +41,8 @@ test('reconciliation locks FIFO ownership, repairs only persisted SID evidence, 
 
 test('poller excludes an entire session behind an escalated FIFO head', () => {
   const finder = poller.nodes.find(value => value.name === 'Find Verified WhatsApp Sessions');
-  assert.match(finder.parameters.query, /NOT EXISTS \([\s\S]*FROM public\.messages AS head/);
-  assert.match(finder.parameters.query, /head\.metadata->>'reconciliation_state' = 'operator_required'/);
+  assert.match(finder.parameters.query, /^SELECT head\.session_id\nFROM public\.messages AS head/m);
+  assert.match(finder.parameters.query, /head\.metadata->>'reconciliation_state' IS DISTINCT FROM 'operator_required'/);
   assert.match(finder.parameters.query, /MIN\(earlier\.processing_order\)/);
   assert.match(migration, /processing_completed_at IS NULL/);
   assert.match(migration, /processing_outcome = 'reconciliation'/);

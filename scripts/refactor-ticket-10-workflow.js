@@ -565,34 +565,26 @@ const resumeVerifiedSchedule = {
 const findVerifiedSessions = {
   parameters: {
     operation: 'executeQuery',
-    query: `SELECT DISTINCT message.session_id
-FROM public.messages AS message
-WHERE message.direction = 'inbound'
-  AND message.processing_order IS NOT NULL
-  AND message.processing_completed_at IS NULL
-  AND NOT EXISTS (
-    SELECT 1
-    FROM public.messages AS head
-    WHERE head.session_id = message.session_id
-      AND head.direction = 'inbound'
-      AND head.processing_order IS NOT NULL
-      AND head.processing_completed_at IS NULL
-      AND head.processing_order = (
-        SELECT MIN(earlier.processing_order)
-        FROM public.messages AS earlier
-        WHERE earlier.session_id = message.session_id
-          AND earlier.direction = 'inbound'
-          AND earlier.processing_order IS NOT NULL
-          AND earlier.processing_completed_at IS NULL
-      )
-      AND head.metadata->>'reconciliation_state' = 'operator_required'
+    query: `SELECT head.session_id
+FROM public.messages AS head
+WHERE head.direction = 'inbound'
+  AND head.processing_order IS NOT NULL
+  AND head.processing_completed_at IS NULL
+  AND head.processing_order = (
+    SELECT MIN(earlier.processing_order)
+    FROM public.messages AS earlier
+    WHERE earlier.session_id = head.session_id
+      AND earlier.direction = 'inbound'
+      AND earlier.processing_order IS NOT NULL
+      AND earlier.processing_completed_at IS NULL
   )
+  AND head.metadata->>'reconciliation_state' IS DISTINCT FROM 'operator_required'
   AND (
-    message.processing_owner IS NULL
-    OR message.processing_lease_until IS NULL
-    OR message.processing_lease_until <= NOW()
+    head.processing_owner IS NULL
+    OR head.processing_lease_until IS NULL
+    OR head.processing_lease_until <= NOW()
   )
-ORDER BY message.session_id;`,
+ORDER BY head.session_id;`,
     options: {},
   },
   type: 'n8n-nodes-base.postgres', typeVersion: 2.6,
