@@ -34,3 +34,8 @@ pnpm-debug.log*
 
 # Per-incident operator material; never source-controlled.
 secure/ticket-37a-incident.json
+
+# Operational workflow backups and manual import artifacts; never source-controlled.
+n8n/Dietavity-WhatsApp-Recovery-Poller-PRODUCTION-BACKUP.json.json
+deployment/Dietavity Sales Engine (Ticket 10) - Node Cutover Import.json
+deployment/Dietavity Sales Engine (Ticket 10) - Node Cutover Import v2.json
