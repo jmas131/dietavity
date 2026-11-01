@@ -6461,7 +6461,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "// The downstream V4 path is one logical turn at a time.  A duplicate\n// claim record for the same anchor is ignored; a distinct additional acquired\n// anchor is sent only to the release branch.  Non-acquired states retain their\n// existing router behavior.\nconst pass = [];\nconst release = [];\nconst acquiredIds = new Set();\nlet primaryAcquired = false;\nfor (const item of $input.all()) {\n  const value = item.json || {};\n  if (value.claim_state !== 'acquired') {\n    pass.push(item);\n    continue;\n  }\n  const id = typeof value.id === 'string' ? value.id : '';\n  const sessionId = typeof value.session_id === 'string' ? value.session_id.trim() : '';\n  if (!id || !sessionId) throw new Error('V4_ACQUIRED_CLAIM_INVALID');\n  if (acquiredIds.has(id)) continue;\n  acquiredIds.add(id);\n  if (!primaryAcquired) {\n    primaryAcquired = true;\n    pass.push(item);\n  } else {\n    release.push(item);\n  }\n}\nreturn [pass, release];"
+        "jsCode": "// The downstream V4 path is one logical turn at a time. A duplicate\n// claim record for the same anchor is ignored; a distinct additional acquired\n// anchor is marked for the release branch. Non-acquired states retain their\n// existing router behavior. A Code v2 node has one main output, so this must\n// return one flat array of n8n items rather than output-shaped nested arrays.\nconst output = [];\nconst acquiredIds = new Set();\nlet primaryAcquired = false;\nfor (const item of $input.all()) {\n  const value = item.json || {};\n  if (value.claim_state !== 'acquired') {\n    const { _dietavity_v4_claim_route: _ignoredRouteMarker, ...json } = value;\n    output.push({ ...item, json });\n    continue;\n  }\n  const id = typeof value.id === 'string' ? value.id : '';\n  const sessionId = typeof value.session_id === 'string' ? value.session_id.trim() : '';\n  if (!id || !sessionId) throw new Error('V4_ACQUIRED_CLAIM_INVALID');\n  if (acquiredIds.has(id)) continue;\n  acquiredIds.add(id);\n  if (!primaryAcquired) {\n    primaryAcquired = true;\n    const { _dietavity_v4_claim_route: _ignoredRouteMarker, ...json } = value;\n    output.push({ ...item, json });\n  } else {\n    output.push({ ...item, json: { ...value, _dietavity_v4_claim_route: 'release' } });\n  }\n}\nreturn output;"
       }
     },
     {
@@ -6495,6 +6495,50 @@
         "mode": "runOnceForAllItems",
         "language": "javaScript",
         "jsCode": "const rows = $input.all();\nconst seen = new Set();\nfor (const item of rows) {\n  const row = item.json || {};\n  if (typeof row.released_anchor_id !== 'string' || !row.released_anchor_id ||\n      !Number.isInteger(row.released_member_count) || row.released_member_count < 1 ||\n      seen.has(row.released_anchor_id)) {\n    throw new Error('V4_ADDITIONAL_CLAIM_RELEASE_FAILED');\n  }\n  seen.add(row.released_anchor_id);\n}\nreturn [];"
+      }
+    },
+    {
+      "id": "d85m1f31-0000-4000-8000-000000000002",
+      "name": "Route V4 Serialized Claim",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        6176,
+        5712
+      ],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ticket85m-release-additional-claim",
+                    "leftValue": "={{ $json._dietavity_v4_claim_route }}",
+                    "rightValue": "release",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": false
+            }
+          ]
+        },
+        "looseTypeValidation": false,
+        "options": {
+          "fallbackOutput": "extra"
+        }
       }
     }
   ],
@@ -9155,14 +9199,7 @@
       "main": [
         [
           {
-            "node": "Route Session Claim State",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Release Additional V4 Acquired Claims",
+            "node": "Route V4 Serialized Claim",
             "type": "main",
             "index": 0
           }
@@ -9174,6 +9211,24 @@
         [
           {
             "node": "Assert Additional V4 Claims Released",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route V4 Serialized Claim": {
+      "main": [
+        [
+          {
+            "node": "Release Additional V4 Acquired Claims",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route Session Claim State",
             "type": "main",
             "index": 0
           }
