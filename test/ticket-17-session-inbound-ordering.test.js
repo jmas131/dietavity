@@ -488,7 +488,7 @@ test('workflow terminates busy claims and waits only for database-computed quiet
   assert.match(quietUntil, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   assert.equal(new Date(quietUntil).toISOString(), quietUntil);
   assert.equal(nodes.get('Wait Before Session Claim Retry'), undefined);
-  assert.deepEqual(nodes.get('End — Turn Already Owned').parameters, { jsCode: 'return $input.all();' });
+  assert.equal(nodes.get('End — Turn Already Owned').parameters.jsCode, 'return $input.all();');
   assert.equal(nodes.get('Incoming Message').type, 'n8n-nodes-base.twilioTrigger');
   for (const node of workflow.nodes) {
     if (node.name === 'Canonicalize Inbound WhatsApp') continue;

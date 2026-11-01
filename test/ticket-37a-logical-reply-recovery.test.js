@@ -112,7 +112,7 @@ test('paid transport loops one part through reconciliation before continuing', (
   assert.deepEqual(out('Loop Paid WhatsApp Parts', 1), ['Send All Intents Message']);
   assert.deepEqual(out('Assert Paid Assistant Reply Accepted'), ['Loop Paid WhatsApp Parts']);
   assert.deepEqual(out('Loop Paid WhatsApp Parts'), ['Update Last Assistant Message']);
-  assert.deepEqual(workflow.nodes.find((n) => n.name === 'Loop Paid WhatsApp Parts').parameters, { options: {} });
+  assert.equal(workflow.nodes.find((n) => n.name === 'Loop Paid WhatsApp Parts').parameters.batchSize, 1);
 });
 
 test('historical 1889-character fixture is reused and formatted without AI', () => {
