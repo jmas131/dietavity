@@ -34,6 +34,9 @@ pnpm-debug.log*
 
 # Per-incident operator material; never source-controlled.
 secure/ticket-37a-incident.json
+# Ticket 89 source exports may contain production credentials. Keep all local
+# Compose captures out of Git; the reviewed redacted template is in deployment/.
+/.ticket-89-input*/
 
 # Operational workflow backups and manual import artifacts; never source-controlled.
 n8n/Dietavity-WhatsApp-Recovery-Poller-PRODUCTION-BACKUP.json.json
