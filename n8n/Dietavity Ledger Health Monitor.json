@@ -1,0 +1,336 @@
+{
+  "name": "Dietavity Ledger Health Monitor",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "sa10JQEAbxNYvCGG"
+  },
+  "nodes": [
+    {
+      "name": "Monitor Canonical Ledger Every Five Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "88000000-0000-4000-8000-000000000001",
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "notes": "Independent Ticket 88 monitor. It does not invoke the Sales Engine or Recovery Poller."
+    },
+    {
+      "name": "Detect Ledger Health Incidents",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        256,
+        0
+      ],
+      "id": "88000000-0000-4000-8000-000000000002",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH fifo_heads AS (\n  SELECT head.id, head.processing_owner, head.processing_lease_until,\n         head.metadata, head.timestamp\n  FROM public.messages AS head\n  WHERE head.direction = 'inbound'\n    AND head.processing_order IS NOT NULL\n    AND head.processing_completed_at IS NULL\n    AND NOT EXISTS (\n      SELECT 1 FROM public.messages AS earlier\n      WHERE earlier.session_id = head.session_id\n        AND earlier.direction = 'inbound'\n        AND earlier.processing_order IS NOT NULL\n        AND earlier.processing_completed_at IS NULL\n        AND earlier.processing_order < head.processing_order\n    )\n), classified AS (\n  SELECT head.*,\n    CASE\n      WHEN head.metadata->>'reconciliation_state' = 'operator_required' THEN 'operator_required'\n      WHEN head.processing_owner IS NOT NULL\n        AND head.processing_lease_until IS NULL THEN 'missing_lease_expiration'\n      WHEN head.processing_owner IS NOT NULL\n        AND head.processing_lease_until <= NOW() - INTERVAL '5 minutes' THEN 'expired_lease'\n      WHEN head.processing_owner IS NULL\n        AND head.timestamp <= NOW() - INTERVAL '20 minutes' THEN 'stale_unclaimed_head'\n      ELSE NULL\n    END AS category\n  FROM fifo_heads AS head\n), incidents AS (\n  SELECT classified.*,\n    CASE category\n      WHEN 'expired_lease' THEN processing_lease_until\n      ELSE timestamp\n    END AS condition_started_at\n  FROM classified\n  WHERE category IS NOT NULL\n)\nSELECT incident.id AS inbound_message_id,\n       incident.category,\n       incident.timestamp AS inbound_received_at,\n       incident.processing_lease_until AS lease_until,\n       incident.condition_started_at,\n       FLOOR(EXTRACT(EPOCH FROM NOW() - incident.condition_started_at))::bigint AS condition_age_seconds,\n       1::integer AS affected_session_count,\n       (1 + (\n         SELECT COUNT(*)::integer\n         FROM public.messages AS successor\n         WHERE successor.session_id = (\n           SELECT source.session_id FROM public.messages AS source WHERE source.id = incident.id\n         )\n           AND successor.direction = 'inbound'\n           AND successor.processing_order > (\n             SELECT source.processing_order FROM public.messages AS source WHERE source.id = incident.id\n           )\n           AND successor.processing_completed_at IS NULL\n       )) AS affected_message_count\nFROM incidents AS incident\nORDER BY incident.condition_started_at, incident.id;"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "__POSTGRES_CREDENTIAL_ID__",
+          "name": "Dietavity Postgres"
+        }
+      },
+      "notes": "Read-only public.messages inspection. Active leases are excluded; expired leases receive 5 minutes of grace and unclaimed heads 20 minutes."
+    },
+    {
+      "name": "Process Ledger Health Incidents",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        512,
+        0
+      ],
+      "id": "88000000-0000-4000-8000-000000000003",
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "notes": "One incident is reserved and delivered at a time. The database reservation prevents overlapping monitor executions from duplicating an email."
+    },
+    {
+      "name": "Reserve Ledger Health Alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        768,
+        0
+      ],
+      "id": "88000000-0000-4000-8000-000000000004",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (SELECT $1::jsonb AS payload), reservation AS (\n  SELECT reserved.*\n  FROM input\n  CROSS JOIN LATERAL public.reserve_ledger_health_alert(\n    jsonb_build_object('inbound_message_id', input.payload->>'inbound_message_id', 'category', input.payload->>'category')\n  ) AS reserved\n)\nSELECT input.payload->>'inbound_message_id' AS inbound_message_id,\n       input.payload->>'category' AS category,\n       (input.payload->>'inbound_received_at')::timestamptz AS inbound_received_at,\n       NULLIF(input.payload->>'lease_until', '')::timestamptz AS lease_until,\n       (input.payload->>'condition_started_at')::timestamptz AS condition_started_at,\n       (input.payload->>'condition_age_seconds')::bigint AS condition_age_seconds,\n       (input.payload->>'affected_session_count')::integer AS affected_session_count,\n       (input.payload->>'affected_message_count')::integer AS affected_message_count,\n       reservation.alert_key,\n       reservation.reservation_token,\n       reservation.reservation_token IS NOT NULL AS should_email\nFROM input\nLEFT JOIN reservation ON TRUE;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "__POSTGRES_CREDENTIAL_ID__",
+          "name": "Dietavity Postgres"
+        }
+      },
+      "notes": "Reservation expires after 10 minutes if the email node fails or the execution is abandoned. The 60-minute deduplication interval begins only after confirmation."
+    },
+    {
+      "name": "Alert Email Reserved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1024,
+        0
+      ],
+      "id": "88000000-0000-4000-8000-000000000005",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.should_email }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Build Ledger Health Alert Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        -96
+      ],
+      "id": "88000000-0000-4000-8000-000000000006",
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nconst age = Math.max(0, Number(row.condition_age_seconds || 0));\nconst minutes = Math.floor(age / 60); const seconds = age % 60;\nconst when = value => value ? new Date(value).toISOString() : 'not applicable';\nconst category = ({ operator_required: 'operator reconciliation required', missing_lease_expiration: 'processing owner missing lease expiration', expired_lease: 'expired processing lease', stale_unclaimed_head: 'stale unclaimed FIFO head' })[row.category] || 'unknown';\nreturn [{ json: { ...row,\n  subject: 'Dietavity ledger health: ' + category,\n  html: '<p><b>Category:</b> ' + category + '</p>' +\n    '<p><b>Inbound message ID:</b> ' + row.inbound_message_id + '</p>' +\n    '<p><b>Condition age:</b> ' + minutes + 'm ' + seconds + 's</p>' +\n    '<p><b>Inbound received:</b> ' + when(row.inbound_received_at) + '</p>' +\n    '<p><b>Lease until:</b> ' + when(row.lease_until) + '</p>' +\n    '<p><b>Condition started:</b> ' + when(row.condition_started_at) + '</p>' +\n    '<p><b>Affected sessions:</b> ' + row.affected_session_count + '</p>' +\n    '<p><b>Affected inbound messages:</b> ' + row.affected_message_count + '</p>' +\n    '<p>Investigate the canonical ledger, the relevant n8n execution, and Twilio Monitor. This alert intentionally contains no phone number or message content.</p>'\n} }];"
+      },
+      "notes": "Privacy-safe operational alert: no session identifier, phone number, customer body, or conversation content."
+    },
+    {
+      "name": "Send Ledger Health Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1536,
+        -96
+      ],
+      "id": "88000000-0000-4000-8000-000000000007",
+      "parameters": {
+        "fromEmail": "error@dietavity.com",
+        "toEmail": "={{ $env.DIETAVITY_OPERATIONS_ALERT_EMAIL }}",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "notes": "A node error intentionally fails the execution: no confirmation is written, so the reservation expires and becomes retryable."
+    },
+    {
+      "name": "Assert Ledger Health Email Accepted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -96
+      ],
+      "id": "88000000-0000-4000-8000-000000000008",
+      "parameters": {
+        "jsCode": "const result = $input.first().json || {};\nif (!Array.isArray(result.accepted) || result.accepted.length < 1 || (Array.isArray(result.rejected) && result.rejected.length > 0)) {\n  throw new Error('LEDGER_HEALTH_EMAIL_NOT_ACCEPTED');\n}\nreturn $input.all();"
+      },
+      "notes": "SMTP/nodemailer acceptance evidence is required before the delivery confirmation can begin deduplication."
+    },
+    {
+      "name": "Confirm Ledger Health Alert Delivery",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2048,
+        -96
+      ],
+      "id": "88000000-0000-4000-8000-000000000009",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT public.confirm_ledger_health_alert_delivery($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ alert_key: $('Reserve Ledger Health Alert').item.json.alert_key, reservation_token: $('Reserve Ledger Health Alert').item.json.reservation_token }) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "__POSTGRES_CREDENTIAL_ID__",
+          "name": "Dietavity Postgres"
+        }
+      },
+      "notes": "Only confirmed provider acceptance reaches this node; it starts the confirmed-delivery deduplication window."
+    },
+    {
+      "name": "Continue Ledger Health Incident Batch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        80
+      ],
+      "id": "88000000-0000-4000-8000-000000000010",
+      "parameters": {
+        "jsCode": "return $input.all();"
+      }
+    }
+  ],
+  "connections": {
+    "Monitor Canonical Ledger Every Five Minutes": {
+      "main": [
+        [
+          {
+            "node": "Detect Ledger Health Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Ledger Health Incidents": {
+      "main": [
+        [
+          {
+            "node": "Process Ledger Health Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Ledger Health Incidents": {
+      "main": [
+        [
+          {
+            "node": "Reserve Ledger Health Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Reserve Ledger Health Alert": {
+      "main": [
+        [
+          {
+            "node": "Alert Email Reserved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Email Reserved": {
+      "main": [
+        [
+          {
+            "node": "Build Ledger Health Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Continue Ledger Health Incident Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Ledger Health Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Send Ledger Health Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Ledger Health Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Assert Ledger Health Email Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Ledger Health Email Accepted": {
+      "main": [
+        [
+          {
+            "node": "Confirm Ledger Health Alert Delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Ledger Health Alert Delivery": {
+      "main": [
+        [
+          {
+            "node": "Continue Ledger Health Incident Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue Ledger Health Incident Batch": {
+      "main": [
+        [
+          {
+            "node": "Process Ledger Health Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "versionId": "88000000-0000-4000-8000-000000000088",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
