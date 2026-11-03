@@ -1,6 +1,6 @@
 # Dietavity - Project Summary
 
-**Updated:** September 29, 2026  
+**Updated:** November 3, 2026
 **Current phase:** Revenue validation and direct replacement of the inadequate legacy WhatsApp response layer  
 **Production status:** Core purchase, canonical personalization, portal, WhatsApp assistance, identity linking, and monitoring are operational. The redesigned landing page is published; normal paid-message delivery and legacy subscriber continuation are production validated. The current production Sales Engine still uses its legacy intelligence/response section. Its proven transactional infrastructure remains the production foundation; its response layer is scheduled for direct replacement by the straightforward V2 described in this document. Ticket 39 is implemented and reviewed, but production deployment is not confirmed.
 
@@ -685,6 +685,34 @@ No server-side Meta Conversions API implementation was introduced. GA and browse
 
 Website files run under PM2, generated workflows are imported into n8n, and migrations change PostgreSQL. These are separate deployment surfaces. Operational credentials, private environment-file locations, token material, and host-specific secret configuration are intentionally not recorded in this summary.
 
+### Ticket 89 — Permanent Docker-to-V4 Network Stability
+
+Ticket 89 was implemented, committed, pushed, and deployed successfully on
+November 3, 2026 at commit `35ed4e25235f274b1c931726e4a133c747ac14dc`.
+The Docker Compose project `root` now makes the existing `root_default` bridge
+deterministic: subnet `172.18.0.0/16`, gateway `172.18.0.1`, dynamic allocation
+pool `172.18.128.0/25`, n8n `172.18.0.2`, and Gotenberg `172.18.0.3`.
+
+The production Compose file is `/root/docker-compose.yml`. Nginx continues to
+listen privately on `172.18.0.1:12751` and permits only `172.18.0.2` for the
+private V1/V4 endpoints. Conversation Engine V4 remains PM2-hosted on
+`127.0.0.1:3000`.
+
+Deployment preserved the original container image IDs, the external `n8n_data`
+volume, and the `/local-files` bind mount. n8n-to-V4 without credentials
+returned the expected `401`; Gotenberg-to-V4 returned the expected `403`; and
+n8n-to-Gotenberg returned `200`. The Recovery Poller was reactivated and its
+scheduled execution completed successfully; the Ledger Health Monitor remained
+active and also completed successfully. Twilio logs showed no unanswered inbound
+messages during maintenance.
+
+Preserve these static addresses and IPAM settings in future Compose deployments,
+retain the n8n volume and encryption-key configuration, and never broaden the
+Nginx allowlist. Docker IPAM changes require network recreation and controlled
+maintenance. Use
+[`deployment/TICKET-89-STATIC-IP-DEPLOYMENT.md`](../deployment/TICKET-89-STATIC-IP-DEPLOYMENT.md)
+for deployment, verification, and rollback.
+
 Both Ticket 37A recovery and historical-reopen definitions are installed in production; historical recovery was intentionally not executed or end-to-end validated. Recovery tooling requires separately configured direct PostgreSQL connectivity; application Supabase API access does not configure it automatically. Detailed tooling, incident-file locations, and execution procedures remain in runbooks.
 
 Temporary Codex/SSH access was revoked. PostgreSQL client and ACL utilities were installed during the investigation; they are operational tooling, not new application services.
@@ -727,6 +755,8 @@ Temporary Codex/SSH access was revoked. PostgreSQL client and ACL utilities were
 | Older overlapping report | Disable / confirm disabled status |
 | Automated tests | 384 passed, 0 failed, 0 skipped after Ticket 39 |
 | Commercial validation | Repeatable paid acquisition remains unproven |
+| Ticket 89 Docker-to-V4 network | Deployed with static n8n/Gotenberg addresses, narrow Nginx access, preserved image/volume identity, and healthy Poller/Monitor runs |
+| Authenticated V4 after Ticket 89 | Still requires independent confirmation from a new legitimate inbound message |
 
 ### Next controlled change: direct production V2
 
@@ -741,6 +771,13 @@ Confirm whether Ticket 39 was activated before or while preparing the direct V2 
 Do not import the Stripe sandbox for Ticket 39: it was regenerated for synchronization, contains none of the Ticket 39 functional nodes, and has no Ticket 39 functional change. No SQL migration or data rollback is required. Workflow rollback means deactivating the new version and restoring the backed-up prior version.
 
 Confirm the older overlapping weekly report is disabled, then observe real conversations for at least the next reporting cycle before expanding scope.
+
+### Ticket 89 next operational check
+
+Independently verify authenticated V4 processing when the next legitimate inbound
+message arrives. Continue normal Recovery Poller and Ledger Health Monitor
+observation; this verification must not create a separate delivery path or
+weaken the private listener controls.
 
 ## 27. Immediate Priorities
 
