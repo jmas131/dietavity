@@ -48,7 +48,7 @@ BEGIN
   target_key := target_inbound_id::text || ':' || target_category;
   INSERT INTO public.ledger_health_alerts (alert_key, inbound_message_id, category)
   VALUES (target_key, target_inbound_id, target_category)
-  ON CONFLICT (alert_key) DO NOTHING;
+  ON CONFLICT ON CONSTRAINT ledger_health_alerts_pkey DO NOTHING;
   SELECT * INTO row FROM public.ledger_health_alerts WHERE ledger_health_alerts.alert_key = target_key FOR UPDATE;
   UPDATE public.ledger_health_alerts SET last_detected_at = now() WHERE ledger_health_alerts.alert_key = target_key;
   IF (row.reservation_expires_at IS NOT NULL AND row.reservation_expires_at > now())

@@ -92,6 +92,8 @@ test('Ticket 88 persists only monitoring alert coordination and exposes query/de
     assert.match(text, /interval '60 minutes'/);
     assert.match(text, /interval '10 minutes'/);
     assert.match(text, /missing_lease_expiration/);
+    assert.match(text, /ON CONFLICT ON CONSTRAINT ledger_health_alerts_pkey DO NOTHING/);
+    assert.doesNotMatch(text, /ON CONFLICT \(alert_key\) DO NOTHING/);
   }
   assert.doesNotMatch(migration, /UPDATE public\.messages|INSERT INTO public\.messages|DELETE FROM public\.messages/i);
   assert.equal(workflow.settings.errorWorkflow, 'sa10JQEAbxNYvCGG', 'database-query or email delivery failures are not silently healthy');

@@ -9019,7 +9019,7 @@ DECLARE target_key text; target_inbound_id uuid; target_category text; row publi
 BEGIN
   IF jsonb_typeof(p) <> 'object' OR NOT (p ?& ARRAY['inbound_message_id', 'category']) OR EXISTS (SELECT 1 FROM jsonb_object_keys(p) AS supplied(key) WHERE supplied.key NOT IN ('inbound_message_id', 'category')) OR p->>'inbound_message_id' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' OR p->>'category' NOT IN ('operator_required', 'missing_lease_expiration', 'expired_lease', 'stale_unclaimed_head') THEN RAISE EXCEPTION 'LEDGER_HEALTH_ALERT_INVALID'; END IF;
   target_inbound_id := (p->>'inbound_message_id')::uuid; target_category := p->>'category'; target_key := target_inbound_id::text || ':' || target_category;
-  INSERT INTO public.ledger_health_alerts (alert_key, inbound_message_id, category) VALUES (target_key, target_inbound_id, target_category) ON CONFLICT (alert_key) DO NOTHING;
+  INSERT INTO public.ledger_health_alerts (alert_key, inbound_message_id, category) VALUES (target_key, target_inbound_id, target_category) ON CONFLICT ON CONSTRAINT ledger_health_alerts_pkey DO NOTHING;
   SELECT * INTO row FROM public.ledger_health_alerts WHERE ledger_health_alerts.alert_key = target_key FOR UPDATE;
   UPDATE public.ledger_health_alerts SET last_detected_at = now() WHERE ledger_health_alerts.alert_key = target_key;
   IF (row.reservation_expires_at IS NOT NULL AND row.reservation_expires_at > now()) OR (row.last_alerted_at IS NOT NULL AND row.last_alerted_at > now() - interval '60 minutes') THEN RETURN; END IF;
