@@ -1,940 +1,267 @@
-# Dietavity - Project Summary
+# Dietavity — Project Summary
 
-**Updated:** November 3, 2026
-**Current phase:** Revenue validation and direct replacement of the inadequate legacy WhatsApp response layer  
-**Production status:** Core purchase, canonical personalization, portal, WhatsApp assistance, identity linking, and monitoring are operational. The redesigned landing page is published; normal paid-message delivery and legacy subscriber continuation are production validated. The current production Sales Engine still uses its legacy intelligence/response section. Its proven transactional infrastructure remains the production foundation; its response layer is scheduled for direct replacement by the straightforward V2 described in this document. Ticket 39 is implemented and reviewed, but production deployment is not confirmed.
+**Updated:** 2026-11-03
+**Current phase:** WhatsApp-first market validation for a V4 food-decision assistant, initially for people using GLP-1 medication.
+**Purpose:** Authoritative handoff for a new ChatGPT/Codex session. The current-product and V4 sections override all historical material below.
 
-**Scope:** Current state through Ticket 75 and the September 29 strategic decision, based on the existing project summary and referenced project conversations. This is a documented-state summary, not a fresh production audit. Unconfirmed operational actions are explicitly marked. The synced reference summary is preserved unchanged.
+### Evidence conventions
 
-## 1. Executive Summary
+- **Production verified** means an observed live deployment, execution, or
+  customer-visible result.
+- **Repository implementation** means code, generated artifacts, or tests in
+  this repository; it is not deployment evidence.
+- **Operational assertion / requires confirmation** means a reported live
+  state that must not be treated as verified until its stated check is made.
 
-Dietavity is a personalized 28-day nutrition program designed to eliminate the daily question, “What should I eat today?” It provides breakfast, main meal, dinner, and snack recommendations using practical, familiar, healthy foods, with principles inspired by eating patterns of long-lived populations.
+## Current product — authoritative
 
-### Current Offer
+Dietavity helps a person make a safe, practical food decision in the moment. In WhatsApp, a user can report food eaten, appetite, or available ingredients; Dietavity gives concise, practical nutrition guidance.
 
-- `$149 MXN`
-- One-time payment
-- Personalized 28-day meal program
-- Portal access
-- WhatsApp assistance
+| Area | Current state |
+| --- | --- |
+| Customer interface | WhatsApp; there is no current customer portal experience. |
+| Initial audience | People using GLP-1 medication. |
+| Acquisition | Meta Click-to-WhatsApp campaigns. |
+| Trial | One week free; manually operated while usage is validated. |
+| Paid model | Three months prepaid is a future hypothesis only; no subscription or automatic renewal is implemented. |
+| Medical boundary | Nutrition support only—never prescribe, sell, supply, or modify medication, dose, or treatment. |
+| Market evidence | The campaign has resumed. Early real-user V4 conversations are behaving quite well; no metrics, retention, conversion, willingness-to-pay, or product-market-fit conclusion is established. |
 
-### Primary Acquisition Funnel
-
-```text
-Meta Ads
-↓
-28-Day Program Landing Page
-↓
-Website Checkout
-↓
-Stripe Payment
-↓
-Setup / Personalization
-↓
-Dietavity Portal
-↓
-28-Day Program
-```
-
-WhatsApp is still available through landing-page and website CTAs, organic conversations, and customer support, but is no longer required to purchase or use Dietavity.
-
-The immediate priority is revenue: improve ads, creative, positioning, landing-page conversion, and understanding actual customer behavior. The one exception is the direct V2 replacement of the inadequate WhatsApp response layer, because it is a near-term commercial learning and conversion blocker rather than infrastructure expansion for its own sake.
-
-## 2. Current Product
-
-Dietavity sells a personalized 28-day meal program that includes:
-
-- Breakfast
-- Main meal
-- Dinner
-- Snack
-- Personalized meals
-- Recipes and program access through the portal
-- WhatsApp assistance when needed
-
-**Price:** `$149 MXN`, one-time payment. This is not a subscription. Customers can select a program start date within the supported post-purchase window.
-
-## 3. Current Positioning
-
-### Previous Positioning
-
-Dietavity originally emphasized longevity-associated food traditions from Japan, Spain, Italy, and Norway.
-
-Analysis found that this positioning created complexity, unfamiliar or impractical foods, expensive ingredients, preparation friction, and a narrow audience. Examples included salmon cost, tofu and miso unfamiliarity in Mexico, lengthy legume preparation, inconvenient oven recipes, and sushi's association with restaurant delivery.
-
-### Current Positioning
-
-**Current positioning / creative platform:** “COMER MEJOR SE NOTA.”
-
-**Functional promise:** “NO PIENSES QUÉ COMER. DIETAVITY LO HACE POR TI.”
-
-The creative platform expresses the desired emotional benefit; the functional promise explains the practical service. Positioning remains under experimental validation. Neither implies guaranteed health, weight-loss, or longevity outcomes.
-
-> Dietavity elimina la pregunta diaria de qué comer con un programa personalizado de comidas fáciles, familiares y saludables, inspirado en principios de alimentación de poblaciones longevas.
-
-The hierarchy is:
+The current job is commercial and product learning, not platform expansion. Freeze discretionary engineering. Change production only for a safety issue, technical failure, material operational risk, or repeated severe defect evidenced in real use.
 
 ```text
-PRIMARY PROMISE
-Know what to eat every day
-↓
-PRACTICAL BENEFITS
-Easy meals
-Familiar ingredients
-Healthy eating
-Less meal-planning effort
-Personalization
-↓
-DESIRED OUTCOMES
-Eat healthier
-Manage weight
-Feel better
-Organize meals
-↓
-REASON TO BELIEVE
-Principles inspired by long-lived populations
+Meta Click-to-WhatsApp
+→ WhatsApp conversation
+→ useful food decision
+→ one-week manual trial / repeat use
+→ evidence of willingness to pay
+→ test the future prepaid hypothesis
 ```
 
-Longevity is supporting evidence, not the headline proposition.
+Do not represent a portal, a 28-day plan, PDFs, checkout, a subscription, a medication service, or an automated paid offer as available today.
 
-## 4. Strategic Funnel Shift
+## V4 production architecture — authoritative
 
-### Previous Model
-
-```text
-Meta Click-to-WhatsApp Ad
-↓
-WhatsApp conversation
-↓
-Sales Engine
-↓
-Qualification
-↓
-Examples / objections
-↓
-Checkout link
-↓
-Stripe
-↓
-Setup
-```
-
-This created a sophisticated conversational sales system but introduced friction before purchase.
-
-### Current Model
-
-```text
-Meta Ad
-↓
-/programa-de-28-dias
-↓
-Landing-page persuasion
-↓
-Direct checkout
-↓
-Stripe
-↓
-Setup
-↓
-Portal
-```
-
-The landing page increasingly performs the sales work previously dependent on WhatsApp. WhatsApp remains commercially useful as a secondary channel, support channel, and qualitative research source.
-
-## 5. Current Marketing Priorities
-
-Development should be subordinate to revenue learning unless a technical problem threatens the funnel.
-
-```text
-Ads
-↓
-Creative / videos / carousels
-↓
-Slogans and positioning
-↓
-Landing-page conversion
-↓
-Traffic and funnel data
-↓
-Purchases
-↓
-Iteration
-```
-
-Key questions:
-
-- Which problem gets people to click?
-- Which creative produces qualified traffic?
-- Does the landing page explain Dietavity quickly enough?
-- Which objections prevent purchase?
-- Which meals look attractive and achievable?
-- Which messages create purchase intent?
-- Where does the website funnel lose visitors?
-- What distinguishes buyers from non-buyers?
-- Can Dietavity acquire customers economically?
-
-## 6. Website and Landing Page
-
-### Production Stack
-
-- Node.js 20.x
-- Express 5.x
-- EJS
-- CSS
-- PM2
-- nginx
-- Ubuntu 24.04
-- PWA portal
-
-**Primary domain:** `dietavity.com`
-
-### Key Routes
-
-```text
-/
-/servicio
-/programa-de-28-dias
-/terminos-y-condiciones
-/aviso-de-privacidad
-/privacidad/solicitud
-/comprar
-/success
-/cancel
-/setup
-/p/:portal_token
-/recuperar-acceso
-```
-
-`/programa-de-28-dias` is the canonical campaign landing page. Its current design is the published Ticket 35 redesign, superseding the earlier Ticket 27 presentation.
-
-- Text-first, 14-section editorial narrative with oversized typography and cream, dark-green, black, and lime styling.
-- “COMER MEJOR SE NOTA.” leads; “NO PIENSES QUÉ COMER. DIETAVITY LO HACE POR TI.” explains the value.
-- Food photography has been removed. CSS product mockups illustrate Setup, the portal, meals, progress, shopping lists, and the “No me gustó” control.
-- Personalization examples reflect supported diet/preferences rather than a goal selector that Setup does not collect.
-- Direct purchase is primary; WhatsApp remains secondary, with the intentional messaging CTA “Escribe en WhatsApp.”
-- Responsive navigation, existing site/social links, keyboard focus, reduced-motion support, SEO, and Open Graph/X metadata are retained or included.
-- Checkout, Stripe redirect validation, GA events, and Meta Pixel behavior were preserved.
-
-Mockups demonstrate the product; they do not themselves submit personalization or create new backend capabilities. Extending this visual system across the whole site is deferred until commercial evidence justifies the work.
-
-## 7. Website Purchase Architecture
-
-Ticket 24 removed WhatsApp as a purchase requirement.
-
-```text
-Landing page
-↓
-Website checkout initiation
-↓
-Canonical users.id created
-↓
-Stripe Checkout
-↓
-Payment confirmation
-↓
-Purchase linked to users.id
-↓
-Setup
-↓
-Program
-```
-
-A website customer may exist as:
-
-```text
-users.id = canonical identity
-email = customer/recovery identity
-whatsapp_id = NULL
-portal_token = portal credential
-```
-
-WhatsApp is optional.
-
-## 8. Canonical Customer Identity
-
-```text
-users.id
-= canonical Dietavity customer identity
-
-email
-= recovery / ownership-verification identity
-
-whatsapp_id
-= optional linked communication identity
-
-portal_token
-= bearer-style portal access credential
-```
-
-There is no password system, no Supabase Auth customer login, and no mandatory WhatsApp account.
-
-## 9. Stripe and Payments
-
-Stripe Checkout handles payment for the 28-day, `$149 MXN`, one-time offer.
-
-Supported payment messaging includes:
-
-- Credit/debit card
-- OXXO
-- Apple Pay where available
-
-Website purchases link through canonical `users.id`, not WhatsApp. Stripe email capture is used for account recovery and identity verification.
-
-## 10. Setup and Personalization
-
-After payment, the customer completes Setup, including:
-
-- Required name
-- Program personalization
-- Dietary and preference information
-- Sensitive-data consent where applicable
-- Privacy-notice version tracking
-
-Sensitive-data consent uses fields including:
-
-```text
-sensitive_data_consent_at
-privacy_notice_version
-```
-
-`public.profiles` is the canonical personalization source. When a valid profile exists, it fully governs Week 1 and later-week generation; historical `users.preferences` does not merge into or override it. Empty canonical allergies, dislikes, and conditions remain empty. Historical cuisine is not inherited; it becomes `null` when no canonical equivalent exists. Historical preferences remain stored unchanged, and generation does not retrieve historical chat memory.
-
-Setup collects personalization and consent and initiates/prepares the program through the existing lifecycle. Start-date selection is a separate pre-start portal step after Week 1 is prepared. Program readiness is verified before normal use.
-
-`goal`, budget tiers, and a canonical ingredient catalog remain proposed future personalization work, not current Setup capabilities.
-
-## 11. Portal
-
-The portal is the source of truth for the customer's program. It provides:
-
-- Current program and week
-- Daily meals
-- Recipes and program content
-- Program progression
-- Regeneration where supported
-
-WhatsApp complements the portal rather than replacing it. The portal selects the newest program for the canonical user. A completed program remains historical; a successor starts as a separate four-week program.
-
-### Legacy subscriber continuation — production validated
-
-The one remaining legacy active subscriber can receive a successor without a new purchase when eligibility is verified: linked active subscription, current canonical profile and consent, completed latest program, no unfinished program, and no eligible unlinked one-time purchase. Conflicting subscription states fail closed; `past_due`, canceled, inactive, and trialing do not authorize this path. Ordinary one-time purchasers do not require a subscription.
-
-Ticket 38 was validated in production:
-
-- Program 1 remained completed and preserved.
-- A distinct Program 2 was created with four weeks and no linked purchase.
-- Week 1 had one seven-day meal plan and status `planned`; Weeks 2–4 remained `pending`.
-- Exactly one `program_ready` event was recorded.
-- Program 2 remained in `personalization`, with `current_week = 1` and `start_date = null`.
-- The existing portal link showed “Prepara tu primera semana,” correctly awaiting the subscriber’s start-date choice.
-
-This is an operator-initiated continuation through the existing generation webhook, not a new subscription offer or automatic renewal scheduler. No fake purchase, reopened Program 1, Week 5, or replacement portal credential is required. The temporary `profile_only` restoration design was removed and is not part of the current architecture.
-
-Sequential repeats reuse the unfinished successor, but a pre-existing simultaneous-initialization race remains because no unfinished-program uniqueness constraint exists. Serialize first-generation requests. HTTP `202` acknowledges initialization, not completed meal generation; repeating the webhook is not a general recovery mechanism for failed Week 1 generation.
-
-## 12. Meal Regeneration Security
-
-Ticket 12 hardened `/api/regenerate-meal`. The backend uses canonical server-side profile information rather than browser-supplied dietary restrictions.
-
-Canonical restrictions include:
-
-- Allergies
-- Exclusions
-- Eating style
-- Supported non-medical conditions and preferences
-
-The endpoint fails closed when required canonical profile information cannot be safely resolved.
-
-## 13. Portal and Database Connectivity Resilience
-
-A production `504` revealed that `/p/:token` could wait indefinitely for Supabase/PostgREST requests until nginx timed out.
-
-Ticket 29 introduced:
-
-```text
-GET /p/:token
-↓
-8-second total portal data-loading deadline
-↓
-Abort outstanding Supabase/PostgREST requests
-↓
-Controlled branded HTTP 503 if deadline exceeded
-```
-
-It also added privacy-safe stage diagnostics and request correlation. nginx timeouts were not increased. Production smoke testing passed.
-
-Verified WhatsApp requests have a separate existing one-minute recovery loop: `Resume Verified WhatsApp Requests` runs `Find Verified WhatsApp Sessions` before claiming or sending. If this read-only lookup fails, the inbound remains verified, unfinished, and discoverable on the next successful run. Advisory locking, leases, ordering, and unique outbound keys protect against duplicate replies.
-
-Ticket 34 diagnosed transient `EAI_AGAIN` DNS failures and Supabase pooler connection timeouts on port `6543`; these were connectivity failures, not SQL statement timeouts. It added diagnostic documentation and regression coverage, with no new runtime retry, migration, workflow regeneration, or speculative index. Blanket retries were intentionally avoided because they would also retry permanent SQL and permission errors.
-
-## 14. WhatsApp Role
-
-WhatsApp is now secondary to the landing-page funnel.
-
-### Roles
-
-- Prospect conversations from landing page, website, and organic sources
-- Customer questions about programs, recipes, access, meals, and accounts
-- Optional account linking for website customers who later contact Dietavity through WhatsApp
-
-## 15. Sales Engine
-
-The existing n8n workflow, `Dietavity Sales Engine (Ticket 10)`, is the production Sales Engine. It handles:
-
-- Inbound WhatsApp messages
-- Sales classification
-- Deterministic and AI responses
-- Checkout intent
-- Paid-customer assistance
-- Message ordering
-- Identity-verification initiation
-- Durable outbound persistence
-- Twilio delivery
-- Conversation state
-
-WhatsApp remains a supporting channel rather than the acquisition center.
-
-### Current production versus V2 replacement
-
-The durable transactional path is retained:
+V4 is the production WhatsApp Conversation Engine. It retains the transaction and delivery controls qualified in the earlier Conversation Engine/Direct RAG work, while the food-understanding and response layer is LLM-first.
 
 ```text
 WhatsApp inbound
-↓
-Inbound deduplication
-↓
-Session ordering and atomic claim
-↓
-User, customer, payment, and conversation-context retrieval
-↓
-Response generation
-↓
-Durable outbound reservation and delivery safety
-↓
-Completion
+→ durable message ledger + inbound deduplication
+→ ordered session / atomic claim / logical-turn batching
+→ bounded conversation context + authoritative policy
+→ V4 LLM reasoning + response validation
+→ durable outbound reservation + idempotent delivery + completion
 ```
 
-The **current production response section is Legacy**. It remains live only until the direct V2 workflow update is validated and activated. Legacy response quality is inadequate for the commercial questions Dietavity needs to answer; it is not the desired long-term intelligence layer.
-
-The September 29 decision is to modify the necessary nodes in the existing `Dietavity Sales Engine (Ticket 10)` workflow directly. V2 will replace the legacy reasoning/response section while preserving the proven transactional path above, including inbound deduplication, claims and ordering, payment/customer state, outbound idempotency, transport safety, and completion semantics.
-
-### Straightforward production V2: obligation-grounded RAG
-
-```text
-Incoming claimed message
-↓
-Load conversation context
-↓
-Detect what the user is asking
-→ Obligation[]
-↓
-Resolve facts + policy for each obligation
-→ ResolvedObligation[] + permitted claims
-↓
-Generate response within permitted claims
-→ Response phrasing
-↓
-Validate response against permitted claims
-→ Structural / grounding gate
-↓
-Existing WhatsApp delivery
-```
-
-This is not loose document-search RAG. It deliberately separates four responsibilities:
-
-1. **Obligation detection** identifies each question, request, or required response obligation in the claimed turn.
-2. **Authoritative resolution** maps each obligation to verified Dietavity facts, relevant customer/commercial context, and applicable policy, producing the permitted claims.
-3. **Composition** writes natural Spanish from that resolved material. The composer may not decide Dietavity facts, add unrelated claims, or invent missing capabilities.
-4. **Validation** checks that each obligation was addressed and that the proposed response introduces no unsupported Dietavity claim or policy violation. A failing response is regenerated in a controlled way or falls back safely before delivery.
-
-The knowledge base is expected to remain structured and deterministic at this stage; a vector database is not required for the small commercial knowledge surface. Candidate knowledge/policy domains include offer, pricing, payment methods, how the program works, digital location, prepared-food delivery boundaries, personalization, GLP-1 scope, medical boundaries, refunds, privacy, support, checkout, and examples. Retrieval must be narrow: a location question must not cause unrelated claims about payment, checkout, or product details.
-
-This design preserves useful commercial strategy and safety rules, but makes factual grounding explicit. For example, a location question can be resolved to the authoritative digital-service facts and a no-CTA policy; composition then phrases only those facts rather than adding an office, a city, a payment method, or an unrequested sales pitch.
-
-### Ticket 75: established findings and superseded migration path
-
-Ticket 75 established that the V2 supporting infrastructure is substantially functional: the endpoint/network path, JWT-based authentication, model client, Supabase adapters, durable replay protection, and diagnostic/shadow-routing infrastructure were proven. The remaining blocker was the integration at the claimed-turn request boundary: authentication succeeded, but request-contract validation and the shadow integration remained problematic. This was an integration-contract problem, not evidence that the underlying endpoint, model, or data infrastructure was unavailable.
-
-The former Ticket 75 plan—repair the internal claimed-turn integration, run parallel Legacy/V2 shadow turns, evaluate shadow outputs, then promote V2—has been **superseded as the immediate path**. It is not current production work. Likewise, the following are deliberately out of scope for the direct V2 launch: shadow cohorts, parallel Legacy/V2 answer generation, an internal claimed-turn HTTP boundary, a workflow-to-application token call for that boundary, shadow-specific replay machinery, six-stage/model orchestration, and a separate migration/deployment architecture.
-
-This does not discard the grounding architecture or Ticket 75’s useful infrastructure findings. It discards migration machinery whose value is currently lower than rapid learning about whether better sales conversations can convert.
-
-### Direct V2 implementation and rollback plan
-
-```text
-Back up active Sales Engine workflow JSON
-↓
-Modify the existing Ticket 10 workflow’s intelligence/response nodes
-↓
-Run structural validation
-↓
-Run 5–10 controlled conversations
-↓
-Activate V2 in production
-↓
-Resume Meta Ads and observe conversion/quality
-```
-
-Controlled conversations should cover, at minimum, location, price, how the plan is built, GLP-1 availability/scope, medical-dose questions, thanks/closing, explicit purchase intent, objections, and contextual follow-ups. The prior workflow JSON is the immediate rollback artifact: deactivate the updated workflow and restore the backed-up prior version if a material issue appears. No data rollback is implied.
-
-### Why this decision changed
-
-Dietavity is far from profitability, and Legacy response quality is already known to be inadequate. The immediate business question is whether a substantially better sales conversation can help convert paid traffic into customers. At this stage, launch learning and sales velocity outweigh elaborate shadow-first migration machinery. The direct V2 still requires production-quality grounding, validation, transactional safety, and controlled testing; it simply avoids treating co-existence with the response layer being replaced as the primary project.
-
-### Sales clarification — implemented; deployment unconfirmed
-
-Ticket 39 adds three targeted behaviors without a new funnel or intent taxonomy:
-
-| Buyer signal | Implemented behavior |
-| --- | --- |
-| What happens or what is paid after 28 days | Explain that the initial $149 MXN covers 28 days, renewal is not automatic, and the customer may choose to buy another program; do not invent its future price. |
-| Expectation of prepared-food delivery | Clarify that Dietavity supplies a digital program and recipes through the portal, with WhatsApp assistance; it does not deliver prepared meals. |
-| Repeated unresolved billing question | Answer the remaining ambiguity or ask one narrow clarification instead of repeating the same price message. |
-
-Explicit purchase/Checkout and support precedence remain intact. Broad openings, product questions, and recipe/customer-assistance paths retain their existing routing.
-
-Recent clarification context comes from `public.messages`, not a separate memory store. It requires the exact claimed inbound and normalized session, the immediately preceding canonically linked accepted sales/Checkout exchange, no intervening inbound, and a maximum age of seven days. Acceptance requires valid provider SID evidence. Context only influences repetition routing when recognized billing semantics and a current billing repetition/unresolved statement are present. Prospect isolation uses canonical session identity because a prospect may not yet have `users.id`.
-
-`Reserve Sales Reply` persists `deterministic_reason` alongside existing `strategy` and `buyer_signal` in `messages.metadata`. No schema change, migration, secret, environment variable, or Stripe behavior change is required.
-
-**Status:** Implemented, final review passed, and approved for controlled deployment. The conversation does not confirm import/activation. Generated artifacts remain inactive; passing tests do not establish production deployment.
-
-## 16. Canonical Message Ledger and Ordering
-
-`public.messages` is the canonical WhatsApp conversation ledger.
-
-Ticket 17 introduced durable per-session processing fields:
-
-```text
-processing_order
-processing_lease_until
-processing_completed_at
-```
-
-Features include atomic claims, leases, output gating, failure recovery, durable ordering, and idempotency. This addressed concurrency from overlapping Twilio/n8n executions.
-
-## 17. Secure Portal Recovery - Ticket 28
-
-Ticket 28 introduced secure email-based account recovery with:
-
-- Normalized Stripe email persistence
-- Enumeration-safe recovery responses
-- Cryptographically random recovery credentials
-- Hashed stored tokens
-- Expiration
-- Single-use redemption
-- Conflict-safe behavior
-- Paid-account eligibility checks
-- Ambiguous duplicate-email failure
-- Portal-token rotation after verified portal recovery
-
-A claimed email inside WhatsApp is never authentication.
-
-## 18. Cross-Channel Identity Linking - Ticket 28A
-
-Ticket 28A handles a website customer who later contacts Dietavity through WhatsApp for an account-specific request:
-
-```text
-Unknown WhatsApp
-↓
-Account-specific paid request detected
-↓
-Secure Dietavity verification link
-↓
-Customer supplies purchase email
-↓
-Email verification
-↓
-WhatsApp linked to canonical users.id
-↓
-Original pending message resumes automatically
-↓
-Existing paid assistant answers
-```
-
-Ordinary unknown-WhatsApp sales or generic recipe questions do not trigger verification.
-
-### Distinct Semantics
-
-```text
-recover_portal
-→ verify
-→ link if appropriate
-→ rotate portal_token
-
-link_whatsapp
-→ verify
-→ link WhatsApp
-→ preserve portal_token
-→ resume pending message
-```
-
-Ticket 28A was validated end-to-end in production; the customer did not need to resend the original question.
-
-## 19. WhatsApp Outbound Reliability and Recovery
-
-Tickets 36/37/37A addressed Twilio error `21617`, caused by a paid reply exceeding the 1,600-character body limit, and established the current paid-assistant transport protections:
-
-1. **Explicit delivery evidence.** Twilio API acceptance is distinct from handset delivery. Explicit failures override SID-based acceptance; ambiguous responses remain unresolved.
-2. **A deterministic size boundary.** Oversized replies are whitespace-compacted and split without blind truncation. Each labeled part is validated against a 1,500 UTF-16-code-unit safe limit before reservation and sending.
-3. **Durable multipart reservation.** All parts are reserved atomically with deterministic idempotency keys and metadata linking them to one logical reply.
-4. **One logical completion rule.** Normal completion, stale reconciliation, and the Global Error Handler require acceptable transport evidence for all expected parts. Failed or unknown parts preserve FIFO blocking and prevent premature completion or blind duplicate sends.
-5. **Canonical response persistence.** Paid-assistant state uses the reserved durable response. The earlier dangling workflow reference was fixed and production validated, with structural regression coverage.
-
-**Production status:** Updated workflows and both Ticket 37A recovery and historical-reopen definitions are installed in production. The ordinary one-part paid-reply canary and normal Twilio reconciliation passed.
-
-### Historical recovery: intentionally not executed
-
-Recovery tooling supports guarded atomic preparation/reopening, ordered send claims, and messaging-window checks while preserving the stored response and reservation identity. The historical recovery itself was intentionally not executed, so it was **not end-to-end validated** and the original reply remains unrecovered. Installed definitions and the successful normal-path canary do not establish successful historical recovery. Incident-specific evidence and execution procedures belong in the recovery runbooks.
-
-## 20. Validation Baseline
-
-Latest reported results after the final Ticket 39 context-scope correction:
-
-| Validation | Result |
-| --- | --- |
-| Ticket 39 focused tests | 9/9 passed |
-| Relevant Sales Engine regressions | 83/83 passed |
-| Full repository suite | **384/384 passed** |
-| Failures / skipped | **0 / 0** |
-
-Generated workflow synchronization passed. These are reported repository results, not a new test run or production certification performed for this summary. Earlier test counts are superseded.
-
-## 21. Weekly Conversation & Sales Intelligence
-
-The preferred report is `Dietavity Weekly Conversation & Sales Intelligence`, evolved from the Daily Conversation Auditor and manually validated. It should be the sole weekly conversation report. The older overlapping report should be disabled; completion of that action is not confirmed.
-
-```text
-Schedule: Monday 08:00
-Timezone: America/Mexico_City
-Window: Previous seven complete calendar days
-Source: public.messages
-```
-
-It preserves chronological reconstruction, HMAC anonymization, PII redaction, SMTP, and Global Error Handler integration.
-
-### Analytical Focus
-
-- Sales-funnel signals
-- Prospect motivations
-- Questions and objections
-- What helped or hurt sales
-- Customer language for ads, videos, landing pages, slogans, FAQs, and positioning
-- Product expectations
-- Genuine technical findings only
-
-The report separates `OBSERVED`, `INTERPRETATION`, and `RECOMMENDED ACTION`, grades evidence as strong/moderate/weak, and does not require an engineering ticket every week.
-
-Canonical product facts come from `lib/dietavity-knowledge.js`; unknown capabilities are reported as requiring verification rather than invented. Checkout intent is not proof of purchase. Test/debug traffic is excluded only when reliable metadata identifies it.
-
-The latest report comparison favored this report’s evidence discipline over the older report’s unsupported recommendations. Four-versus-five conversation counts and uncertain customer/prospect classification should be watched if they recur, not treated as proven defects from one small sample. Five conversations justify narrow clarification corrections, not new funnels, subscription machinery, or automatic sales CTAs after every recipe.
-
-## 22. Privacy and Legal Infrastructure
-
-Dietavity includes:
-
-- Privacy notice
-- ARCO request flow
-- Sensitive-data consent
-- Privacy-notice versioning
-- PII redaction in operational reports
-- Secure recovery credentials
-- Conflict-safe identity linking
-- No authentication based solely on claimed chat identity
-
-Legal text avoids inventing unresolved provider or legal details.
-
-## 23. Global Error Handling
-
-The production-tested Global Error Handler provides durable:
-
-- n8n execution/error capture
-- Database logging
-- Email notification
-
-This remains the operational-failure mechanism; the weekly report serves commercial learning. During a Supabase outage, database error logging can itself fail. Email alerting is an independent attempt, not proof that the database record was written. Multipart completion checks also apply in this handler.
-
-## 24. Infrastructure
-
-### Application
-
-- Node.js 20.x
-- Express 5.x
-- EJS
-- PM2
-- nginx
-- Ubuntu 24.04
-
-### Database
-
-- Supabase
-- PostgreSQL
-- Key tables: `users`, `profiles`, `purchases`, `programs`, `weeks`, `meal_plans`, `messages`, `onboarding_sessions`, `sales_funnel_events`; legacy subscription records support entitlement checks
-- Recovery/verification infrastructure from Tickets 28/28A
-
-### Automation and Integrations
-
-- Self-hosted n8n Community Edition; last observed production version: 2.36.8
-- Stripe Checkout
-- WhatsApp via Twilio
-- Meta Pixel
-
-No server-side Meta Conversions API implementation was introduced. GA and browser Meta Pixel events support funnel measurement; canonical payment records remain the authority for confirmed purchases.
-
-### Deployment boundary
-
-Website files run under PM2, generated workflows are imported into n8n, and migrations change PostgreSQL. These are separate deployment surfaces. Operational credentials, private environment-file locations, token material, and host-specific secret configuration are intentionally not recorded in this summary.
-
-### Ticket 89 — Permanent Docker-to-V4 Network Stability
+### V4 principles
+
+1. **Open culinary world; closed trust boundary.** The model may reason with ordinary foods, appetite, and user-provided ingredients. Product facts, medical scope, policy, turn ownership, validation, and delivery controls are authoritative and closed.
+2. **LLM-first, not deterministic food parsing.** Do not reintroduce food-entity extraction, deterministic ingredient aggregation, or legacy parsing from isolated historical observations. Rapid user fragments are already handled by logical-turn batching.
+3. **One logical turn, one controlled path.** Atomic claims, ordering, leases, reservations, outbound idempotency, and completion semantics must remain intact. Provider acceptance is not proof of handset delivery.
+4. **Human-paced batching is qualified.** Adjacent fragments become one newline-joined logical turn only after the 10-second sliding quiet window. A later, independent message remains independent.
+5. **No generic n8n HTTP retry.** It can weaken ownership and delivery guarantees and reintroduce duplicate processing. Any recovery must be specifically bounded and same-owner.
+6. **Fail closed.** Do not guess identity, ownership, security state, product facts, or medical scope.
+7. **Evidence before engineering.** A conversation, a single report recommendation, or a model interpretation does not automatically justify a ticket.
+
+### Cutover, qualification, and relevant history
+
+- V4 production cutover and qualification completed successfully. PM2/HTTP and WhatsApp food/non-food smoke tests passed under the qualified production configuration.
+- The original Node Conversation Engine implementation (WP2.6) was completed at commit `2c1e0c4a4444634a7917a1f3282744456d5d6222`. Authenticated loopback and five-turn real-model qualification passed; the endpoint is authenticated and publicly blocked.
+- Tickets 77/77A/77B qualified conversational continuity and the nutrition-only GLP-1 behavior. Tickets 80–82F established activation behavior, open culinary reasoning, and the 10-second batching invariant.
+- Ticket 82 qualification proved five human-paced fragments were persisted as one logical turn and submitted as one combined engine request. Do not change that invariant casually.
+- Tickets 83/83G addressed the historical competing-execution ownership/idempotency incident; Tickets 86/87 reconciled and qualified the active configuration. The incident is a regression reference, not an open reason to pause the campaign.
+- The V3/Direct RAG descriptions and parity evidence are retained as lineage for the transactional guarantees; they are not the current V4 response-design authority.
+- Ticket 85 is a review-only bounded Conversation Engine recovery patch and is not a substitute for generic retry or a documented production deployment.
+
+### Recovery and error handling
+
+**Repository qualification:** the Recovery Poller gap is closed and
+PostgreSQL-qualified. It remains a bounded, same-owner operational recovery
+path; it does not authorize blanket retry behavior. The Recovery Poller and
+Global Error Handler remain supported operational workflows.
+
+The historic portal-era multipart recovery was intentionally not executed end-to-end. Its definitions and normal-path canary do not prove historic recovery. Keep that limitation documented, but prioritize it only if it affects active users or safety.
+
+### Ticket 89 — permanent Docker-to-V4 network stability
 
 Ticket 89 was implemented, committed, pushed, and deployed successfully on
-November 3, 2026 at commit `35ed4e25235f274b1c931726e4a133c747ac14dc`.
-The Docker Compose project `root` now makes the existing `root_default` bridge
-deterministic: subnet `172.18.0.0/16`, gateway `172.18.0.1`, dynamic allocation
-pool `172.18.128.0/25`, n8n `172.18.0.2`, and Gotenberg `172.18.0.3`.
+2026-11-03 at commit `35ed4e25235f274b1c931726e4a133c747ac14dc`. The Compose
+project `root` now makes the existing `root_default` bridge deterministic:
 
-The production Compose file is `/root/docker-compose.yml`. Nginx continues to
-listen privately on `172.18.0.1:12751` and permits only `172.18.0.2` for the
-private V1/V4 endpoints. Conversation Engine V4 remains PM2-hosted on
-`127.0.0.1:3000`.
+- subnet `172.18.0.0/16`, gateway `172.18.0.1`, and dynamic pool `172.18.128.0/25`;
+- n8n `172.18.0.2` and Gotenberg `172.18.0.3` are static addresses;
+- the private Nginx listener remains `172.18.0.1:12751` and permits only n8n
+  (`172.18.0.2`) for the private V1/V4 routes;
+- Conversation Engine V4 remains PM2-hosted on `127.0.0.1:3000`.
 
-Deployment preserved the original container image IDs, the external `n8n_data`
-volume, and the `/local-files` bind mount. n8n-to-V4 without credentials
-returned the expected `401`; Gotenberg-to-V4 returned the expected `403`; and
-n8n-to-Gotenberg returned `200`. The Recovery Poller was reactivated and its
-scheduled execution completed successfully; the Ledger Health Monitor remained
-active and also completed successfully. Twilio logs showed no unanswered inbound
-messages during maintenance.
-
-Preserve these static addresses and IPAM settings in future Compose deployments,
-retain the n8n volume and encryption-key configuration, and never broaden the
-Nginx allowlist. Docker IPAM changes require network recreation and controlled
-maintenance. Use
+The deployed Compose file is `/root/docker-compose.yml`. Preserve the static
+addresses, IPAM settings, external `n8n_data` volume, bind mount, and n8n
+encryption-key configuration in future Compose changes. Never broaden the
+private Nginx allowlist. IPAM changes require bridge recreation during a
+controlled maintenance window; follow
 [`deployment/TICKET-89-STATIC-IP-DEPLOYMENT.md`](../deployment/TICKET-89-STATIC-IP-DEPLOYMENT.md)
 for deployment, verification, and rollback.
 
-Both Ticket 37A recovery and historical-reopen definitions are installed in production; historical recovery was intentionally not executed or end-to-end validated. Recovery tooling requires separately configured direct PostgreSQL connectivity; application Supabase API access does not configure it automatically. Detailed tooling, incident-file locations, and execution procedures remain in runbooks.
+Production verification after deployment confirmed the original container image
+IDs, `n8n_data` volume, and `/local-files` bind mount were retained. n8n reached
+V4 without credentials with the expected `401`; Gotenberg was denied with the
+expected `403`; n8n reached Gotenberg with `200`. The Recovery Poller was
+reactivated and completed its scheduled run successfully, and the Ledger Health
+Monitor remained active and completed its scheduled run successfully. Twilio
+logs showed no unanswered inbound messages during maintenance.
 
-Temporary Codex/SSH access was revoked. PostgreSQL client and ACL utilities were installed during the investigation; they are operational tooling, not new application services.
+**Production verified:** a legitimate WhatsApp inbound was processed
+successfully after migration. `Call V4 Conversation Engine` returned
+`contract_version: conversation-engine-v4-response-v1`,
+`engine_version: conversation-engine-v4-primary-v1`, and
+`generation_status: generated`; its generated response matched the reply
+received on WhatsApp. Authenticated V4 end-to-end processing is therefore
+verified.
 
-## 25. Architectural Principles Established
+## Durable data, orchestration, and safety guarantees
 
-- **Canonical identity:** `users.id`, not WhatsApp, is the customer.
-- **Portal as source of truth:** WhatsApp assists but does not own the program.
-- **WhatsApp optional:** Customers can purchase and use Dietavity without it.
-- **Email verifies ownership:** Email recovery supports secure cross-channel verification.
-- **Canonical personalization:** `public.profiles` governs generation; legacy preferences do not override it.
-- **Browser data is untrusted:** Sensitive personalization uses canonical server-side data.
-- **Messages are durable:** `public.messages` is the canonical WhatsApp ledger.
-- **Logical replies are durable:** Multipart reservation, per-part evidence, and shared completion rules protect against duplicate sends and premature completion.
-- **Acceptance is not delivery:** Provider API acceptance does not establish handset delivery.
-- **Fail closed:** Ambiguous identity and security situations are not guessed.
-- **Product facts are canonical:** AI components must not invent capabilities.
-- **Obligations before phrasing:** Detect what must be answered, resolve authoritative facts and policy, then compose only within permitted claims.
-- **Grounding gate before delivery:** A response must structurally answer its resolved obligations and remain within permitted claims before it reaches the existing delivery path.
-- **Evidence before engineering:** A conversation problem does not automatically justify a software ticket.
+### Canonical records and identity
 
-## 26. Current Status and Open Operational Actions
+- `public.messages` is the canonical WhatsApp conversation ledger.
+- `users.id` is the canonical customer identity; a WhatsApp identifier alone is not customer authentication.
+- `public.profiles` is the canonical personalization record. Browser input is untrusted for sensitive personalization.
+- Email-based recovery/ownership verification and cross-channel linking remain infrastructure. A claimed email in WhatsApp is never authentication.
+- Legacy portal access and payment records remain historical technical data, not authority for the current product promise.
 
-| Area | Current documented status |
+### Concurrency and delivery
+
+The message path preserves inbound deduplication, per-session ordering, atomic claims, leases, output gating, failure recovery, durable outbound reservations, deterministic idempotency keys, and shared completion rules. Multipart responses reserve all parts before sending; an unresolved or failed part prevents premature completion and blind duplicate sends.
+
+The key processing fields remain `processing_order`, `processing_lease_until`, and `processing_completed_at`. The response must pass the grounding/safety gate before a reservation can reach the delivery path.
+
+### Grounding and medical boundaries
+
+The predecessor engine established the useful separation that V4 must preserve:
+
+```text
+claimed user turn
+→ identify required response obligations
+→ resolve authoritative facts and safety policy
+→ compose a practical response
+→ validate grounding and scope
+→ reserve and deliver through the durable path
+```
+
+The model may not invent current offer, price, payment method, portal access, checkout, medical capability, or policy. Unknown capabilities require verification. A user seeking medication, dosing, or treatment advice must remain within the nutrition-only boundary.
+
+## Weekly Product & Conversation Intelligence
+
+**Repository implementation:** the existing workflow is named **Dietavity
+Weekly Conversation & Sales Intelligence**. Commit `691bc4a` changed its report
+framing to **Weekly Product & Conversation Intelligence** for the V4 WhatsApp
+food-decision product.
+
+### What the workflow reports
+
+| Layer | Meaning |
 | --- | --- |
-| Website funnel and one-time Stripe purchase | Production operational |
-| Campaign landing page | Ticket 35 redesign published |
-| Setup / canonical profiles | Operational; Ticket 38 production validated |
-| Portal / four-week lifecycle | Operational; bounded loading and secure access validated |
-| Email recovery / WhatsApp linking | Operational; cross-channel linking production validated |
-| Verified-request recovery | Existing one-minute loop confirmed; no blanket runtime retry added |
-| Paid WhatsApp assistance | Updated transport protections deployed; ordinary one-part production canary passed |
-| Historical failed recipe | Intentionally not recovered; historical multipart recovery remains unvalidated end to end |
-| Legacy subscriber continuation | Program 2 production validated; awaiting normal customer start-date selection at last observation |
-| Current Sales Engine | Production transactional infrastructure operational; Legacy response section remains live pending direct V2 cutover |
-| Ticket 39 sales clarification | Implemented and approved; production deployment remains unconfirmed and should be reconciled during the direct V2 update |
-| Ticket 75 shadow-first V2 | Supporting infrastructure proven, but claimed-turn request contract/shadow integration remained problematic; superseded as the immediate migration path |
-| Direct production V2 | Chosen September 29; not yet implemented, structurally validated, or production activated |
-| Weekly Sales Intelligence | Operational and preferred report |
-| Older overlapping report | Disable / confirm disabled status |
-| Automated tests | 384 passed, 0 failed, 0 skipped after Ticket 39 |
-| Commercial validation | Repeatable paid acquisition remains unproven |
-| Ticket 89 Docker-to-V4 network | Deployed with static n8n/Gotenberg addresses, narrow Nginx access, preserved image/volume identity, and healthy Poller/Monitor runs |
-| Authenticated V4 after Ticket 89 | Still requires independent confirmation from a new legitimate inbound message |
+| Deterministic ledger facts | Conversation/session and message counts; first-observed versus prior-observed sessions; repeat inbound activity; multi-day activity. |
+| LLM classifications | Activation, food-decision need, recommendation quality, explicitly supported GLP-1/appetite patterns, safety-boundary quality, friction, willingness-to-pay signals, and priorities. |
 
-### Next controlled change: direct production V2
+Activation means progressing beyond a greeting or curiosity into a genuine food-decision need and receiving substantive guidance. The workflow is session-level reporting, **not** unique-user cohorts or D1/D3/D7 retention, and it must not infer Meta advertising metrics.
 
-Before modifying production, export and preserve the currently active `Dietavity Sales Engine (Ticket 10)` workflow JSON as the rollback version. Implement the obligation-grounded RAG section in that existing workflow; do not introduce the superseded shadow-first architecture as a launch dependency. Validate the workflow structure and credentials, ensure the existing claim/order, identity, payment-state, durable outbound, and Global Error Handler paths remain connected, then run 5–10 controlled conversations that cover the defined regression set.
+The workflow retains chronological reconstruction, Mexico City weekly scheduling, email delivery, Global Error Handler integration, HMAC-anonymized conversation labels, and redaction of phone numbers, email addresses, and sensitive links. Commit `691bc4a` reported 22 focused weekly/privacy/workflow tests passing and 1,191 canonical tests passing (11 skipped). These are repository results, not production certification.
 
-When the controlled set passes, activate only one authoritative production Sales Engine and monitor workflow executions, message-ledger evidence, and provider transport evidence. If a material issue occurs, deactivate the updated version and restore the saved pre-V2 workflow JSON. Resume Meta Ads after production activation and use real conversation quality and conversion behavior as the next learning loop.
+### First manual production run — baseline only
 
-### Ticket 39 deployment reconciliation
+**Production evidence available:** the updated workflow was imported and
+manually production-tested successfully. Its first report covered
+**2026-10-18 through 2026-10-24**:
 
-Confirm whether Ticket 39 was activated before or while preparing the direct V2 update. Preserve its useful clarification behavior where it remains consistent with the resolved obligations and policy model. Validate continuation, delivery confusion, and repeated billing questions with an authorized test identity, and inspect the existing ledger metadata as appropriate. Cut over with only one production Sales Engine active, then monitor executions and transport evidence.
+| Measure | Result |
+| --- | --- |
+| Conversations | 17 |
+| Messages | 111 |
+| First-observed conversations | 15 |
+| Returning/prior-observed conversations | 2 |
+| LLM-classified activated conversations | 2 |
 
-Do not import the Stripe sandbox for Ticket 39: it was regenerated for synchronization, contains none of the Ticket 39 functional nodes, and has no Ticket 39 functional change. No SQL migration or data rollback is required. Workflow rollback means deactivating the new version and restoring the backed-up prior version.
+This is a **legacy-contaminated baseline**, not a V4 performance report: much of the window predates the V4 cutover. The report may accurately characterize historical transcripts, but recommendations to add deterministic ingredient extraction, fragment aggregation, or additional deduplication are not V4 findings and must not override V4 architecture. Likewise, a request for a “light dinner” alone is not evidence of a GLP-1/appetite pattern.
 
-Confirm the older overlapping weekly report is disabled, then observe real conversations for at least the next reporting cycle before expanding scope.
+The available project record confirms import and successful manual production
+testing. **Requires confirmation:** it does not independently establish that
+the recurring schedule is active; do not claim activation without checking the
+live n8n workflow.
 
-### Ticket 89 next operational check
+## Infrastructure and deployment boundaries
 
-Independently verify authenticated V4 processing when the next legitimate inbound
-message arrives. Continue normal Recovery Poller and Ledger Health Monitor
-observation; this verification must not create a separate delivery path or
-weaken the private listener controls.
+### Application and workflow stack
 
-## 27. Immediate Priorities
+- Node.js 20.x, Express 5.x, EJS, CSS
+- PM2, nginx, Ubuntu 24.04
+- Supabase/PostgreSQL
+- Self-hosted n8n Community Edition
+- WhatsApp transport, legacy Stripe Checkout integration, Meta Pixel, and browser analytics
 
-### Priority 1 - Replace the Legacy response layer and restart learning
+No server-side Meta Conversions API is documented. Meta/browser analytics support measurement; canonical payment records are the authority for confirmed payments.
 
-Complete the direct production V2 in the existing Sales Engine: backup, workflow modification, structural validation, 5–10 controlled conversations, activation, and Meta Ads resumption. This is the only near-term engineering initiative elevated above commercial work because inadequate Legacy responses currently impair the sales experiment itself.
+### Deployment and operational boundaries
 
-Do not restart the shadow-first migration as a prerequisite. The direct V2 must retain established transactional protections and must not let the composer invent Dietavity facts.
+Website/runtime code runs under PM2; generated workflows are imported into n8n; schema changes run against PostgreSQL. These are separate deployment surfaces. A repository test result, workflow import, manual run, workflow activation, and production rollout are separate facts and must never be conflated.
 
-### Priority 2 - Generate Revenue
+Recovery tooling needs appropriately configured direct PostgreSQL access;
+application database API access does not automatically grant that capability.
+Detailed runbooks and non-secret operational paths may be documented when
+needed for safe operation. Credentials, private customer data, and secret
+values must remain outside this summary.
 
-Determine whether the offer can acquire paying customers economically:
+The production Docker Compose file is `/root/docker-compose.yml`; it defines
+the `root` project and its `root_default` bridge. Its source configuration is
+represented by the sanitized Ticket 89 deployment templates, not copied with
+credentials into the repository.
 
-```text
-Meta traffic
-→ Landing-page engagement
-→ Checkout initiation
-→ Purchase
-```
+### Privacy and legal controls
 
-Evaluate the current headline and reduced-decision-fatigue promise against the published landing page. Historical pre-redesign traffic showed interest but no reported campaign sales; those earlier figures are not a post-redesign conversion baseline or proof that every stored purchase was organic revenue.
+Dietavity retains a privacy notice, ARCO request flow, sensitive-data consent, privacy-notice versioning, PII redaction in operational reports, conflict-safe identity linking, and enumeration-safe recovery behavior. Do not place personal names, phone numbers, personal email addresses, provider IDs, execution/request IDs, credentials, tokens, or secret values in this document. Non-secret infrastructure paths are allowed only when operationally necessary.
 
-### Priority 3 - Creative Development
+## Current status
 
-Develop and test stronger Reels, carousels, hooks, headlines, slogans, meal imagery, and problem/solution concepts. Emphasize the practical problem Dietavity solves rather than relying primarily on longevity.
+| Area | Documented state |
+| --- | --- |
+| WhatsApp product | V4 production conversation engine is active and successfully qualified. |
+| Acquisition | Meta Click-to-WhatsApp campaign resumed. |
+| Early product use | A small number of real-user V4 conversations are behaving quite well; do not invent metrics. |
+| Trial and pricing | One-week manual free trial active as a validation model; three-month prepaid is unimplemented/unvalidated. |
+| Delivery controls | Durable claims, batching, reservation, idempotency, and completion protections remain required. |
+| Recovery Poller | Gap closed and PostgreSQL-qualified; bounded recovery only. |
+| Docker-to-V4 network | **Production verified:** Ticket 89 deployed with deterministic n8n/Gotenberg addresses, narrow private Nginx access, and preserved image/volume identity. |
+| Post-migration V4 verification | **Production verified:** unauthenticated n8n, Gotenberg-denial, n8n-to-Gotenberg, authenticated legitimate inbound, Poller, Monitor, and Twilio checks passed. |
+| Global Error Handler | Supported operational workflow for execution/error capture, durable logging where available, and email notification. |
+| Weekly intelligence | Updated at `691bc4a`; imported and manually production-tested. Activation needs live confirmation. |
+| Older overlapping reporting | Should remain disabled or have its disabled state confirmed. |
+| Historical portal/checkout | Preserved technical history; not the active offer or customer journey. |
+| Dependency security | Prior runtime checks reported one high and one critical vulnerability; investigate in a controlled task, never with blind automated fixes. |
 
-### Priority 4 - Measure the Landing-Page Funnel
+## Current priorities
 
-```text
-Ad impressions
-→ Clicks
-→ Landing-page visits
-→ CTA interaction
-→ Checkout
-→ Purchase
-```
+1. **Validate real product usefulness.** Observe safety, practicality, recommendation quality, first useful food decisions, repeat usage, and recurring failure patterns in the resumed campaign.
+2. **Validate the business.** Learn whether the one-week trial creates sustained value and willingness to pay before implementing or presenting the prepaid hypothesis as an offer.
+3. **Use post-cutover evidence.** Let V4 data accumulate and always distinguish deterministic ledger facts, LLM classifications, and recommended actions.
+4. **Measure the funnel honestly.** Keep acquisition, conversation start, first useful decision, repeat use, trial completion, paid intent, and confirmed payment separate.
+5. **Protect qualified behavior.** Investigate duplicate engine processing, weakened ownership, reservation bypass, or transport anomalies immediately. Preserve the 10-second batching semantics.
+6. **Observe the qualified post-migration path.** Continue normal ledger, Recovery Poller, and Ledger Health Monitor observation; investigate any recurrence of V4 transport or ownership failures.
+7. **Build only for learning, revenue, reliability, or safety.** Examples: a measured conversion blocker, a material measurement gap, a production defect, meaningful operational risk, or an essential experiment. Architectural polish alone is insufficient.
 
-This separates advertising, audience, positioning, landing-page, offer, checkout, and trust constraints.
+## Open risks
 
-### Priority 5 - Learn from Buyers and Prospects
+1. **Product-market fit is unproven.** Positive early conversations do not establish repeat behavior, retention, payment, or sustainable acquisition cost.
+2. **Safety and user expectations.** Users may seek medication, dose, or clinical advice. Maintain the nutrition-only boundary and avoid implied clinical treatment.
+3. **Small-sample overinterpretation.** Low volume and LLM classifications can create false trends; do not infer retention, cohorts, unique users, or advertising performance without the right data.
+4. **Recommendation quality.** V4 must earn trust through familiar, affordable, appetizing, culturally practical food guidance, including the constraints common in GLP-1 use.
+5. **Operational regression.** Generic retries, duplicate engine execution, relaxed claims, or bypassed reservations can create duplicate or incorrect replies.
+6. **Founder-focus risk.** Legacy portal work, historic recovery, and dependency cleanup can consume attention without improving the active validation loop.
 
-Use Meta performance, landing-page behavior, purchases, WhatsApp conversations, and weekly Sales Intelligence together. WhatsApp is particularly valuable as qualitative research alongside quantitative funnel data.
+## Historical context — explicitly non-authoritative
 
-Watch whether clear continuation answers reduce hesitation, how often digital meal plans are confused with prepared-food delivery, and whether useful immediate recipe interactions precede purchase. Preserve helpful recipe conversations without forcing a sales CTA into every answer. Do not infer broad patterns from five conversations.
+The former $149 MXN 28-day program, web portal/PWA, PDFs, website checkout, setup flow, subscription concepts, prepared-meal expectations, and longevity-led meal-program positioning are legacy experiments and technical context only. They are not the current product, price, promise, acquisition funnel, or customer journey.
 
-### Priority 6 - Engineering Only Where It Unlocks Revenue
+The legacy website, payment, identity, recovery, and program tables remain relevant where they support data integrity, ownership verification, or technical operations. Their presence must never cause V4 to claim a portal, plan, PDF, checkout, subscription, or medication service is available.
 
-New technical work should remove a conversion blocker, improve measurement, fix a production defect, reduce meaningful operational risk, or enable an important experiment. “Could be architecturally nicer” is not sufficient by itself.
+## Maintenance rule
 
-### Deferred Product Direction
-
-Deeper personalization and a more practical shopping list are potential differentiators after revenue evidence. Proposed work includes meaningful goals, budget tiers, ingredient normalization, and a canonical personalized ingredient set shared by meal planning, shopping lists, and WhatsApp assistance. Regional/seasonal availability would be an estimate, not live supermarket inventory. These are backlog concepts, not delivered capabilities. A whole-site visual redesign is likewise deferred.
-
-## 28. Open Risks
-
-1. **Product-market fit remains unproven.** The largest risk is commercial: whether enough people will pay at an economically sustainable acquisition cost.
-2. **Landing-page conversion is critical.** Direct selling means the page must answer questions and build trust without a long WhatsApp interaction.
-3. **Creative/message fit needs validation.** Longevity-heavy advertising underperformed; practical positioning still needs empirical evidence.
-4. **Meal perception matters.** Meals must feel achievable, familiar, affordable, appetizing, healthy, and relevant to Mexican/Latin American users.
-5. **Health-condition expectations.** Prospects may expect support for diabetes, prediabetes, or hypertension; Dietavity must not imply clinical treatment.
-6. **Low data volume.** Small numbers of purchases or conversations can mislead conclusions.
-7. **V2 cutover risk.** Direct production V2 has not yet been implemented or controlled-tested. The response layer must preserve existing claims, ordering, and outbound protections while improving grounding and relevance.
-8. **Known operational limits.** Ticket 39 deployment and older-report deactivation remain unconfirmed; historical multipart recovery was not completed; simultaneous program initialization can still create duplicates.
-9. **Infrastructure can consume founder attention.** The foundation is mature enough for commercial validation, so each new engineering request should be evaluated for immediate customer impact.
-
-## 29. Current Strategic Thesis
-
-Dietavity has transitioned from primarily a sophisticated WhatsApp nutrition assistant into a digital product with a clear acquisition, fulfillment, support, and feedback architecture:
-
-```text
-ACQUISITION
-Meta Ads
-↓
-Landing Page
-↓
-Direct Checkout
-↓
-Stripe Payment
-
-PRODUCT
-Setup
-↓
-Personalization
-↓
-28-Day Program
-↓
-Portal
-
-SUPPORT / LEARNING
-WhatsApp
-↓
-Sales questions
-Customer assistance
-Secure account linking
-Qualitative market intelligence
-
-FEEDBACK LOOP
-Meta data + funnel data + purchases + WhatsApp conversations
-↓
-Weekly sales intelligence
-↓
-Ads / creative / positioning / landing page
-↓
-More experiments
-↓
-Revenue
-```
-
-The technical foundation is no longer Dietavity's primary constraint. The next phase is discovering a repeatable commercial engine: find the message that makes the right people click, the offer and landing page that make them buy, and the product experience that makes the purchase feel worthwhile. That should drive the roadmap.
-
-The direct V2 is a focused exception: it replaces a known-quality constraint in the WhatsApp sales experience without reopening a broad infrastructure program. Its success criterion is not architectural sophistication; it is grounded, relevant customer answers and faster learning about sales conversion.
-
-## 30. Source and Maintenance Boundary
-
-This revision preserves the architecture and strategy from the August 29 summary and incorporates the later implementation reports, operator outputs, production confirmations, and decisions in [Dietavity project - 11 (We need money!)](chatgpt-conversation://6a832411-7198-83e8-b12c-7ced277f2438) and [Dietavity project - 13 (We need money!)](chatgpt-conversation://6ab9c3ca-d554-83e8-b49e-3f70fac0b5e4). Later corrections and observed outcomes take precedence over earlier proposals. Proposed work is not treated as deployed functionality.
-
-Update the operational status when the direct V2 workflow is implemented, controlled-tested, activated, rolled back, or superseded; also update Ticket 39 activation, report deactivation, and subsequent production checks when confirmed. Do not overwrite historical incident evidence or equate repository test success with a production rollout.
-
-## 31. WP2.6 Final Production Cutover — October 13, 2026
-
-**Status: production-qualified and active.** This record supersedes earlier WP2.6 planning, paused-cutover, and legacy-selected status statements in this summary.
-
-```text
-Twilio WhatsApp
-→ n8n inbound persistence / ordering / claim
-→ Node Conversation Engine
-→ n8n persistence / outbound reservation / Twilio delivery
-→ WhatsApp
-```
-
-n8n remains responsible for orchestration and durable delivery semantics. Node owns conversational intelligence: semantic extraction, authority, ephemeral food state, obligation interpretation/reconciliation, V1.3 recommendation selection, safety boundaries, composition, and the final delivery decision.
-
-### Cutover and boundary
-
-The Node-selected Ticket 10 workflow was imported and activated manually through the n8n UI. `Select Direct RAG Backend` selects Node. The legacy Direct RAG intelligence branch remains present but unselected as a temporary manual rollback option; it is not a launch prerequisite to delete it.
-
-The first real Node-selected execution exposed one handoff mismatch: the real n8n/Postgres claim path supplied `processing_order` as a numeric string such as `"474"`, while the request builder had required a JavaScript integer. The boundary now accepts only canonical positive decimal strings, normalizes them to `Number`, validates the normalized positive safe integer, and emits the numeric value. Empty, whitespace-padded, leading-zero, exponent, fractional, unsafe, zero, negative, and other noncanonical representations fail closed. No database, schema, or upstream claim change was required.
-
-### Production qualification
-
-The real WhatsApp production path passed this sequence through WhatsApp → n8n → Node Conversation Engine → n8n persistence/delivery → WhatsApp:
-
-1. `Tengo pollo. ¿Qué me recomiendas?` returned a useful chicken recommendation.
-2. `También tengo tortillas, aguacate y jitomate.` preserved conversational food continuity.
-3. `Ya comí pollo. ¿Qué puedo comer ahora?` no longer treated chicken as currently available.
-4. `Tengo poca hambre.` returned bounded low-appetite nutrition guidance without medical overreach.
-5. A medication dose-change question refused dose-change guidance and referred the person to the prescribing professional.
-
-One duplicate response occurred because the previously failed inbound turn was processed after the handoff fix. Treat it as a historical incident, not an active defect, unless it recurs.
-
-### Current decision and priority
-
-WP2.6 is complete enough for commercial launch. Explicitly defer deletion of the legacy intelligence branch, additional Conversation Engine refinements, low-appetite optimization, investigation of the one-time duplicate, infrastructure cleanup, additional observability/hardening, and broad backend work unless real production evidence shows a concrete blocker or materially commercial defect.
-
-Immediate priority is revenue validation:
-
-1. Verify the website purchase funnel once end to end.
-2. Review and finalize the commercial landing page.
-3. Restart Meta traffic.
-4. Diagnose the first commercial bottleneck from observed behavior: impressions without clicks indicate creative; clicks without Checkout indicate landing-page or offer issues; Checkout without purchase indicates trust, price, or payment friction; purchases shift focus to traffic and economics optimization.
+Update this summary when the live product/offer, production architecture, verified qualification evidence, recovery posture, workflow activation, or validated market evidence materially changes. Preserve the distinction between planned work, repository evidence, imported workflow state, manual tests, activated workflows, and verified production behavior.
