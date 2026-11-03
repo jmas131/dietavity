@@ -146,14 +146,19 @@
       "id": "88000000-0000-4000-8000-000000000007",
       "parameters": {
         "fromEmail": "error@dietavity.com",
-        "toEmail": "={{ $env.DIETAVITY_OPERATIONS_ALERT_EMAIL }}",
+        "toEmail": "juan@autorintelectual.com",
         "subject": "={{ $json.subject }}",
         "html": "={{ $json.html }}",
         "options": {
           "appendAttribution": false
         }
       },
-      "notes": "A node error intentionally fails the execution: no confirmation is written, so the reservation expires and becomes retryable."
+      "credentials": {
+        "smtp": {
+          "name": "Error"
+        }
+      },
+      "notes": "Production uses the existing SMTP credential named Error. A node error intentionally fails the execution: no confirmation is written, so the reservation expires and becomes retryable."
     },
     {
       "name": "Assert Ledger Health Email Accepted",

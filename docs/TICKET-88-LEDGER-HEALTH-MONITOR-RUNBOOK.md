@@ -38,7 +38,7 @@ An email is reserved for ten minutes before sending. The 60-minute deduplication
 
 1. Apply `database/migrations/20261102_ticket_88_ledger_health_monitor.sql` through the normal controlled migration process and verify the schema snapshot matches the deployed schema.
 2. Import `n8n/Dietavity Ledger Health Monitor.json`; keep it inactive until configuration review is complete.
-3. Bind its placeholder `Dietavity Postgres` credential to the existing backend Postgres credential, verify the existing SMTP/email setup used by `Global Error Handler`, and set `DIETAVITY_OPERATIONS_ALERT_EMAIL` to the approved operations recipient.
+3. Bind its placeholder `Dietavity Postgres` credential to the existing backend Postgres credential. The monitor uses the same fixed operations recipient as `Global Error Handler` and production's SMTP credential named `Error`. The canonical Global Error Handler currently serializes a different SMTP credential (`SMTP Hostinger`), so its `Error` credential ID cannot be established from the repository; verify and bind `Error` by name during controlled import.
 4. Confirm the workflow error workflow points to `Global Error Handler`; then activate only this new monitor.
 5. In a non-production environment, create a controlled stale FIFO head and confirm one privacy-safe email, an entry in `ledger_health_alerts`, no writes to `public.messages`, and no Sales Engine/Recovery Poller invocation. Confirm repeated monitor executions do not email again for 60 minutes.
 

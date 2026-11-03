@@ -6,7 +6,17 @@ const monitor = require('../lib/ledger-health-monitor');
 
 const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'n8n', 'Dietavity Ledger Health Monitor.json');
+const globalErrorHandler = JSON.parse(fs.readFileSync(path.join(root, 'n8n', 'Global Error Handler.json'), 'utf8'));
 const errorWorkflowId = 'sa10JQEAbxNYvCGG';
+const globalErrorEmailNode = globalErrorHandler.nodes.find(node => node.name === 'Send Error Notification');
+const operationsRecipient = globalErrorEmailNode?.parameters?.toEmail;
+if (typeof operationsRecipient !== 'string' || !operationsRecipient.trim()) {
+  throw new Error('Global Error Handler fixed email recipient is required');
+}
+// Production uses the existing SMTP credential named Error. The canonical
+// Global Error Handler serializes a different credential name/ID, so no Error
+// credential ID is available to safely include in this import-ready artifact.
+const productionSmtpCredential = { name: 'Error' };
 
 const detectionSql = `WITH fifo_heads AS (
   SELECT head.id, head.processing_owner, head.processing_lease_until,
@@ -115,7 +125,7 @@ return [{ json: { ...row,
     '<p><b>Affected inbound messages:</b> ' + row.affected_message_count + '</p>' +
     '<p>Investigate the canonical ledger, the relevant n8n execution, and Twilio Monitor. This alert intentionally contains no phone number or message content.</p>'
 } }];` }, notes: 'Privacy-safe operational alert: no session identifier, phone number, customer body, or conversation content.' },
-    { name: 'Send Ledger Health Alert Email', type: 'n8n-nodes-base.emailSend', typeVersion: 2.1, position: [1536, -96], id: '88000000-0000-4000-8000-000000000007', parameters: { fromEmail: 'error@dietavity.com', toEmail: '={{ $env.DIETAVITY_OPERATIONS_ALERT_EMAIL }}', subject: '={{ $json.subject }}', html: '={{ $json.html }}', options: { appendAttribution: false } }, notes: 'A node error intentionally fails the execution: no confirmation is written, so the reservation expires and becomes retryable.' },
+    { name: 'Send Ledger Health Alert Email', type: 'n8n-nodes-base.emailSend', typeVersion: 2.1, position: [1536, -96], id: '88000000-0000-4000-8000-000000000007', parameters: { fromEmail: 'error@dietavity.com', toEmail: operationsRecipient, subject: '={{ $json.subject }}', html: '={{ $json.html }}', options: { appendAttribution: false } }, credentials: { smtp: productionSmtpCredential }, notes: 'Production uses the existing SMTP credential named Error. A node error intentionally fails the execution: no confirmation is written, so the reservation expires and becomes retryable.' },
     { name: 'Assert Ledger Health Email Accepted', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1792, -96], id: '88000000-0000-4000-8000-000000000008', parameters: { jsCode: `const result = $input.first().json || {};
 if (!Array.isArray(result.accepted) || result.accepted.length < 1 || (Array.isArray(result.rejected) && result.rejected.length > 0)) {
   throw new Error('LEDGER_HEALTH_EMAIL_NOT_ACCEPTED');

@@ -9,9 +9,11 @@ const monitor = require('../lib/ledger-health-monitor');
 
 const root = path.resolve(__dirname, '..');
 const workflow = require('../n8n/Dietavity Ledger Health Monitor.json');
+const globalErrorHandler = require('../n8n/Global Error Handler.json');
 const migration = fs.readFileSync(path.join(root, 'database/migrations/20261102_ticket_88_ledger_health_monitor.sql'), 'utf8');
 const schema = fs.readFileSync(path.join(root, 'database/schema.sql'), 'utf8');
 const node = name => workflow.nodes.find(value => value.name === name);
+const globalNode = name => globalErrorHandler.nodes.find(value => value.name === name);
 const outputs = (name, index = 0) => (workflow.connections[name]?.main?.[index] || []).map(edge => edge.node);
 const now = Date.parse('2026-11-02T12:00:00.000Z');
 const minutesAgo = minutes => new Date(now - minutes * 60_000).toISOString();
@@ -78,6 +80,16 @@ test('Ticket 88 holds overlapping executions to one reservation and starts suppr
   assert.match(migration, /reservation_expires_at = now\(\) \+ interval '10 minutes'/);
   assert.match(migration, /last_alerted_at = now\(\)/);
   assert.match(migration, /reservation_token = NULL/);
+});
+
+test('Ticket 88 derives the fixed recipient from Global Error Handler and references production SMTP Error without inventing an ID', () => {
+  const globalEmail = globalNode('Send Error Notification');
+  const alertEmail = node('Send Ledger Health Alert Email');
+  assert.ok(globalEmail);
+  assert.equal(alertEmail.parameters.toEmail, globalEmail.parameters.toEmail);
+  assert.doesNotMatch(alertEmail.parameters.toEmail, /\$env/);
+  assert.deepEqual(alertEmail.credentials.smtp, { name: 'Error' });
+  assert.equal(Object.hasOwn(alertEmail.credentials.smtp, 'id'), false);
 });
 
 test('Ticket 88 persists only monitoring alert coordination and exposes query/delivery failures to the global error workflow', () => {
