@@ -1,9 +1,14 @@
 # Ticket 90E — Controlled Production Enablement Checklist
 
 This is an operator checklist, not authorization to alter production. Ticket
-90D is commit `d3afa987808f7a7bcb351dc889189f44e4f982aa`. Do not run the
-production-changing section until the named approvers authorize it. Do not run
-the reconciliation CLI until the post-migration verification section passes.
+90D's original direct-PostgreSQL implementation is commit
+`d3afa987808f7a7bcb351dc889189f44e4f982aa`. Its original production attempt
+rolled back and must not be applied. The Supabase-compatible replacement
+migration is commit `b4c56c8cb1045ba8fcca1872642ef1b7cea8c6fa`; use that
+revision of `20261111_ticket_90d_direct_postgres_audit_access.sql` for any
+future authorized attempt. Do not run the production-changing section until
+the named approvers authorize it. Do not run the reconciliation CLI until the
+post-migration verification section passes.
 
 The CLI is diagnostic only: Twilio `GET`, PostgreSQL `SELECT`, private JSON
 report. It has no send, replay, recovery, n8n, or database mutation path.
