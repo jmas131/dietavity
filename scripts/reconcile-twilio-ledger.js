@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { classify } = require('../lib/twilio-ledger-reconciliation');
-const { createSupabaseLedgerReader, createTwilioReader } = require('../lib/twilio-ledger-audit-clients');
+const { createPostgresLedgerReader, createTwilioReader } = require('../lib/twilio-ledger-audit-clients');
 
 const REPORT_PREFIX = 'twilio-ledger-audit-';
 function fail(message) { throw new Error(message); }
@@ -18,7 +18,7 @@ function parseArgs(argv) {
   }
   return values;
 }
-function help() { return `Usage: node scripts/reconcile-twilio-ledger.js [--from ISO --to ISO] [--lookback-days N] --report-dir DIR --retention-days N\n\nRead-only audit only. Credentials are read from dedicated TWILIO_AUDIT_* and SUPABASE_AUDIT_* environment variables; it never reads production application credentials.`; }
+function help() { return `Usage: node scripts/reconcile-twilio-ledger.js [--from ISO --to ISO] [--lookback-days N] --report-dir DIR --retention-days N\n\nRead-only audit only. Credentials are read from dedicated TWILIO_AUDIT_* and SUPABASE_AUDIT_DATABASE_* environment variables; it never reads production application credentials.`; }
 function utcWindow(args, now = new Date()) {
   if (args.from || args.to) { if (!args.from || !args.to || !Number.isFinite(Date.parse(args.from)) || !Number.isFinite(Date.parse(args.to)) || Date.parse(args.from) >= Date.parse(args.to)) fail('UTC_RANGE_INVALID'); return { from: new Date(args.from).toISOString(), to: new Date(args.to).toISOString() }; }
   const days = Number(args['lookback-days'] || 7); if (!Number.isInteger(days) || days < 1 || days > 365) fail('LOOKBACK_DAYS_INVALID');
@@ -53,7 +53,7 @@ async function run(args, dependencies = {}) {
   const sender = requireEnv('TWILIO_AUDIT_WHATSAPP_SENDER');
   const hmacSecret = requireEnv('TWILIO_LEDGER_AUDIT_HMAC_SECRET');
   const twilio = (dependencies.createTwilioReader || createTwilioReader)({ accountSid: requireEnv('TWILIO_AUDIT_ACCOUNT_SID'), apiKeySid: requireEnv('TWILIO_AUDIT_API_KEY_SID'), apiKeySecret: requireEnv('TWILIO_AUDIT_API_KEY_SECRET'), fetchFn: dependencies.fetchFn });
-  const ledger = (dependencies.createSupabaseLedgerReader || createSupabaseLedgerReader)({ url: requireEnv('SUPABASE_AUDIT_URL'), readOnlyKey: requireEnv('SUPABASE_AUDIT_READ_ONLY_KEY') });
+  const ledger = (dependencies.createPostgresLedgerReader || createPostgresLedgerReader)({ connectionString: requireEnv('SUPABASE_AUDIT_DATABASE_URL'), sslRootCertPath: requireEnv('SUPABASE_AUDIT_SSL_ROOT_CERT') });
   // Query a one-day overlap so replies/turn members crossing a requested UTC boundary remain observable.
   const overlap = { from: new Date(Date.parse(window.from) - 86400000).toISOString(), to: new Date(Date.parse(window.to) + 86400000).toISOString() };
   const [twilioResult, ledgerResult] = await Promise.all([twilio.list(overlap), ledger.list(overlap)]);
