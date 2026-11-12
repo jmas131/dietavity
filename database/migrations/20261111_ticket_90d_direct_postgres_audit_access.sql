@@ -15,9 +15,6 @@ BEGIN
 END
 $$;
 
-ALTER ROLE twilio_ledger_audit_view_owner NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-ALTER ROLE twilio_ledger_auditor LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 1;
-
 -- PostgreSQL has no per-role DENY: a privilege granted to PUBLIC is effective
 -- for every role. Do not silently revoke existing PUBLIC grants here. Instead,
 -- fail closed until a separate review removes each accessible SECURITY DEFINER
@@ -57,6 +54,25 @@ DROP POLICY IF EXISTS twilio_ledger_audit_view_owner_select ON public.messages;
 CREATE POLICY twilio_ledger_audit_view_owner_select ON public.messages
   FOR SELECT TO twilio_ledger_audit_view_owner USING (true);
 
+-- Supabase's postgres administrator is not a true superuser. The safe
+-- attributes are already set by CREATE ROLE above, so never normalize them
+-- with ALTER ROLE. It receives a temporary SET-only membership strictly for
+-- the fresh ownership transfer and for a re-run to replace its existing view.
+GRANT CREATE ON SCHEMA twilio_audit TO twilio_ledger_audit_view_owner;
+GRANT twilio_ledger_audit_view_owner TO postgres
+  WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+
+-- On a re-run the existing view is owned by the restricted owner, so replace
+-- it while temporarily set to that role. The first run remains postgres-owned
+-- until its ACL/comment are complete and ownership is transferred below.
+DO $$
+BEGIN
+  IF to_regclass('twilio_audit.twilio_ledger_audit_rows') IS NOT NULL THEN
+    EXECUTE 'SET LOCAL ROLE twilio_ledger_audit_view_owner';
+  END IF;
+END
+$$;
+
 CREATE OR REPLACE VIEW twilio_audit.twilio_ledger_audit_rows
 WITH (security_barrier = true, security_invoker = false) AS
 SELECT
@@ -88,16 +104,36 @@ SELECT
 FROM public.messages AS message
 WHERE message.provider = 'twilio';
 
--- PostgreSQL requires CREATE on the target schema to transfer ownership. This
--- non-login role receives it only within this transaction, then loses it.
-GRANT CREATE ON SCHEMA twilio_audit TO twilio_ledger_audit_view_owner;
-ALTER VIEW twilio_audit.twilio_ledger_audit_rows OWNER TO twilio_ledger_audit_view_owner;
-REVOKE CREATE ON SCHEMA twilio_audit FROM twilio_ledger_audit_view_owner;
 REVOKE ALL ON TABLE twilio_audit.twilio_ledger_audit_rows FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON TABLE twilio_audit.twilio_ledger_audit_rows TO twilio_ledger_auditor;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM twilio_ledger_auditor;
-
 COMMENT ON VIEW twilio_audit.twilio_ledger_audit_rows IS
   'Ticket 90D content-free Twilio ledger projection for the direct PostgreSQL audit role only.';
+
+-- A fresh view was configured while postgres owned it. PostgreSQL requires
+-- the temporary SET membership above to transfer ownership. A re-run already
+-- runs as this owner and skips the transfer.
+DO $$
+BEGIN
+  IF current_user = 'postgres' THEN
+    EXECUTE 'ALTER VIEW twilio_audit.twilio_ledger_audit_rows OWNER TO twilio_ledger_audit_view_owner';
+  END IF;
+END
+$$;
+
+-- Leave no executor membership or owner CREATE privilege after this
+-- transaction. SET LOCAL keeps a re-run's role switch transaction-scoped.
+SET LOCAL ROLE NONE;
+REVOKE twilio_ledger_audit_view_owner FROM postgres;
+REVOKE CREATE ON SCHEMA twilio_audit FROM twilio_ledger_audit_view_owner;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM twilio_ledger_auditor;
+
+DO $$
+BEGIN
+  IF pg_has_role('postgres', 'twilio_ledger_audit_view_owner', 'SET')
+     OR has_schema_privilege('twilio_ledger_audit_view_owner', 'twilio_audit', 'CREATE') THEN
+    RAISE EXCEPTION 'TICKET_90D_TEMPORARY_OWNERSHIP_PRIVILEGE_RETAINED';
+  END IF;
+END
+$$;
 
 COMMIT;

@@ -9077,7 +9077,16 @@ END
 $$;
 GRANT SELECT (id, "timestamp", direction, session_id, provider, provider_message_sid, idempotency_key, in_reply_to_id, delivery_status, metadata, processing_order, processing_lease_until, processing_completed_at, processing_outcome) ON public.messages TO twilio_ledger_audit_view_owner;
 CREATE POLICY twilio_ledger_audit_view_owner_select ON public.messages FOR SELECT TO twilio_ledger_audit_view_owner USING (true);
-CREATE VIEW twilio_audit.twilio_ledger_audit_rows WITH (security_barrier = true, security_invoker = false) AS
+GRANT CREATE ON SCHEMA twilio_audit TO twilio_ledger_audit_view_owner;
+GRANT twilio_ledger_audit_view_owner TO postgres WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+DO $$
+BEGIN
+  IF to_regclass('twilio_audit.twilio_ledger_audit_rows') IS NOT NULL THEN
+    EXECUTE 'SET ROLE twilio_ledger_audit_view_owner';
+  END IF;
+END
+$$;
+CREATE OR REPLACE VIEW twilio_audit.twilio_ledger_audit_rows WITH (security_barrier = true, security_invoker = false) AS
 SELECT message.id AS ledger_id, message."timestamp" AS recorded_at, message.direction, message.provider_message_sid, message.idempotency_key, message.in_reply_to_id, message.delivery_status,
   NULLIF(message.metadata->>'provider_status', '') AS provider_status, NULLIF(message.metadata->>'provider_error_code', '') AS provider_error_code,
   message.processing_order, message.processing_lease_until, message.processing_completed_at, message.processing_outcome,
@@ -9093,13 +9102,28 @@ SELECT message.id AS ledger_id, message."timestamp" AS recorded_at, message.dire
   CASE WHEN message.metadata ? 'part_index' AND message.metadata->>'part_index' ~ '^[1-9][0-9]{0,8}$' THEN (message.metadata->>'part_index')::integer ELSE 1 END AS part_index,
   CASE WHEN message.metadata ? 'part_count' AND message.metadata->>'part_count' ~ '^[1-9][0-9]{0,8}$' THEN (message.metadata->>'part_count')::integer ELSE 1 END AS part_count
 FROM public.messages AS message WHERE message.provider = 'twilio';
-GRANT CREATE ON SCHEMA twilio_audit TO twilio_ledger_audit_view_owner;
-ALTER VIEW twilio_audit.twilio_ledger_audit_rows OWNER TO twilio_ledger_audit_view_owner;
-REVOKE CREATE ON SCHEMA twilio_audit FROM twilio_ledger_audit_view_owner;
 REVOKE ALL ON TABLE twilio_audit.twilio_ledger_audit_rows FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON TABLE twilio_audit.twilio_ledger_audit_rows TO twilio_ledger_auditor;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM twilio_ledger_auditor;
 COMMENT ON VIEW twilio_audit.twilio_ledger_audit_rows IS 'Ticket 90D content-free Twilio ledger projection for the direct PostgreSQL audit role only.';
+DO $$
+BEGIN
+  IF current_user = 'postgres' THEN
+    EXECUTE 'ALTER VIEW twilio_audit.twilio_ledger_audit_rows OWNER TO twilio_ledger_audit_view_owner';
+  END IF;
+END
+$$;
+RESET ROLE;
+REVOKE twilio_ledger_audit_view_owner FROM postgres;
+REVOKE CREATE ON SCHEMA twilio_audit FROM twilio_ledger_audit_view_owner;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM twilio_ledger_auditor;
+DO $$
+BEGIN
+  IF pg_has_role('postgres', 'twilio_ledger_audit_view_owner', 'SET')
+     OR has_schema_privilege('twilio_ledger_audit_view_owner', 'twilio_audit', 'CREATE') THEN
+    RAISE EXCEPTION 'TICKET_90D_TEMPORARY_OWNERSHIP_PRIVILEGE_RETAINED';
+  END IF;
+END
+$$;
 
 -- PostgreSQL database dump complete
 --

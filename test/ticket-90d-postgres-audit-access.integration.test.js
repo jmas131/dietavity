@@ -27,6 +27,8 @@ test('Ticket 90D disposable PostgreSQL role can read only the content-free audit
   try {
     const schema = await admin.query("SELECT to_regclass('twilio_audit.twilio_ledger_audit_rows') AS view_name");
     assert.equal(schema.rows[0].view_name, 'twilio_audit.twilio_ledger_audit_rows', 'apply the Ticket 90D migration to the disposable database first');
+    const temporaryPrivileges = await admin.query("SELECT pg_has_role('postgres', 'twilio_ledger_audit_view_owner', 'SET') AS executor_can_set_owner, has_schema_privilege('twilio_ledger_audit_view_owner', 'twilio_audit', 'CREATE') AS owner_can_create_audit_objects");
+    assert.deepEqual(temporaryPrivileges.rows[0], { executor_can_set_owner: false, owner_can_create_audit_objects: false });
     auditor = new Pool({ connectionString: auditorUrl, max: 1 });
     const client = await auditor.connect();
     try {

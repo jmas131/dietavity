@@ -112,7 +112,11 @@ test('Ticket 90D migration confines the audit role to the content-free view and 
   const migration = fs.readFileSync(path.join(__dirname, '../database/migrations/20261111_ticket_90d_direct_postgres_audit_access.sql'), 'utf8');
   assert.match(migration, /CREATE ROLE twilio_ledger_auditor LOGIN NOINHERIT .*NOBYPASSRLS/);
   assert.match(migration, /FOR SELECT TO twilio_ledger_audit_view_owner USING \(true\)/);
-  assert.match(migration, /GRANT CREATE ON SCHEMA twilio_audit TO twilio_ledger_audit_view_owner[\s\S]*REVOKE CREATE ON SCHEMA twilio_audit FROM twilio_ledger_audit_view_owner/);
+  assert.match(migration, /GRANT twilio_ledger_audit_view_owner TO postgres\s+WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;/);
+  assert.match(migration, /to_regclass\('twilio_audit\.twilio_ledger_audit_rows'\)[\s\S]*SET LOCAL ROLE twilio_ledger_audit_view_owner/);
+  assert.match(migration, /REVOKE ALL ON TABLE twilio_audit\.twilio_ledger_audit_rows[\s\S]*GRANT SELECT ON TABLE twilio_audit\.twilio_ledger_audit_rows[\s\S]*ALTER VIEW twilio_audit\.twilio_ledger_audit_rows OWNER TO twilio_ledger_audit_view_owner[\s\S]*SET LOCAL ROLE NONE;[\s\S]*REVOKE twilio_ledger_audit_view_owner FROM postgres[\s\S]*REVOKE CREATE ON SCHEMA twilio_audit FROM twilio_ledger_audit_view_owner/);
+  assert.match(migration, /TICKET_90D_TEMPORARY_OWNERSHIP_PRIVILEGE_RETAINED/);
+  assert.doesNotMatch(migration, /^ALTER ROLE twilio_ledger_/m);
   assert.match(migration, /GRANT SELECT ON TABLE twilio_audit\.twilio_ledger_audit_rows TO twilio_ledger_auditor/);
   assert.match(migration, /has_function_privilege\('twilio_ledger_auditor', procedure\.oid, 'EXECUTE'\)/);
   assert.doesNotMatch(migration, /GRANT\s+(?:ALL|SELECT)\s+ON TABLE public\.messages TO twilio_ledger_auditor/);
