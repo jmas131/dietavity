@@ -1,0 +1,21 @@
+{
+  "report_version": "ticket-90b-v1",
+  "window": { "from": "2026-11-01T00:00:00.000Z", "to": "2026-11-08T00:00:00.000Z" },
+  "coverage": { "twilio_complete": true, "ledger_complete": true, "status": "complete" },
+  "metrics": {
+    "inbound": { "twilio_records": 12, "eligible_ledger_records": 12 },
+    "outbound": {
+      "twilio_records": 11,
+      "eligible_ledger_records": 11,
+      "acceptance": { "accepted_or_later": 11, "unresolved": 0 },
+      "provider_delivery": { "delivered_or_read": 11, "terminal_failure": 0, "nonterminal": 0 }
+    },
+    "processing_latency_ms": {
+      "receipt_to_first_reservation": { "count": 9, "p50": 14600, "p95": 31900, "max": 31900 },
+      "receipt_to_completion": { "count": 9, "p50": 16000, "p95": 34000, "max": 34000 }
+    },
+    "technical_delivery_only": true
+  },
+  "discrepancies": { "confirmed": [], "inconclusive": [], "coverage_incomplete": [], "excluded": [] },
+  "summary": { "confirmed_count": 0, "inconclusive_count": 0, "coverage_incomplete_count": 0, "excluded_count": 0, "conversational_response_quality_evaluated": false }
+}
