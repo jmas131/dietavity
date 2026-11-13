@@ -244,8 +244,10 @@ production.
 
 ## E. Baseline audit readiness and manual run
 
-1. Inject values only at execution time from the secret manager. Required names
-   (not values) are:
+1. The interactive launcher obtains values only at execution time from the
+   approved secret manager. It keeps them in memory, passes them to the child
+   CLI only through its process environment, and never accepts them as command
+   arguments. It prompts for the following names (not values):
 
    ```text
    TWILIO_AUDIT_ACCOUNT_SID
@@ -268,21 +270,27 @@ production.
    the selected half-open interval. If executed later, recalculate as the
    midnight UTC before the run minus seven days through that midnight; never
    include the current partial UTC day.
-3. After sections A–D and credential approval, manually run:
+3. After sections A–D and credential approval, on the controlled operator
+   host, run the launcher from a trusted interactive terminal:
 
    ```bash
-   node scripts/reconcile-twilio-ledger.js \
-     --from 2026-11-05T00:00:00Z \
-     --to 2026-11-12T00:00:00Z \
-     --report-dir /approved/private/twilio-ledger-audits \
-     --retention-days 30
+   node scripts/launch-twilio-ledger-audit.js
    ```
 
-   The CLI creates a private 0600 JSON report and retains only its own report
-   filenames for 30 days in that 0700 directory. Do not copy it into tickets,
-   logs, source control, chat, or shared storage. Record only aggregate counts,
-   coverage state, redaction-rotation label, UTC window, and report filename in
-   the operational record.
+   Enter the secret-manager values only at their prompts. The PostgreSQL URL
+   must use the dedicated audit role and include `sslmode=verify-full`; provide
+   the reviewed Supabase CA path when prompted. The launcher first performs a
+   Twilio Message list request and an individual Message fetch using GET only.
+   It will not start the audit unless both succeed, and it requires the literal
+   `RUN` confirmation for the fixed window. Ctrl-C or any other response
+   cancels without starting the child process. The child invokes the existing
+   CLI with `[2026-11-05T00:00:00Z, 2026-11-12T00:00:00Z)`, the private
+   `~/Documents/dietavity/audits` report directory, and 30-day retention.
+
+   The CLI creates a private 0600 JSON report and ensures the report directory
+   is 0700. Do not copy it into tickets, logs, source control, chat, or shared
+   storage. Record only aggregate counts, coverage state, redaction-rotation
+   label, UTC window, and report filename in the operational record.
 4. Acceptance: both Twilio and ledger coverage are complete; no confirmed
    inbound ingestion gap, duplicate SID, terminal provider failure, or missing
    outbound acceptance requires incident review. `inconclusive` findings are
