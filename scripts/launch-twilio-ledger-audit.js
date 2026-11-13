@@ -41,14 +41,26 @@ function buildEnvironment(values, inherited = {}) {
   return base;
 }
 function auditArgs(reportDir = REPORT_DIR) { return ['scripts/reconcile-twilio-ledger.js', '--from', WINDOW.from, '--to', WINDOW.to, '--report-dir', reportDir, '--retention-days', '30']; }
+function twilioPreflightError(phase, error) {
+  const status = Number(error?.status || String(error?.message || '').match(/^TWILIO_AUDIT_HTTP_(401|403|404|429)$/)?.[1]);
+  if ([401, 403, 404, 429].includes(status)) return `TWILIO_AUDIT_${phase}_HTTP_${status}`;
+  if (error?.message === 'TWILIO_AUDIT_RESPONSE_INVALID') return `TWILIO_AUDIT_${phase}_MALFORMED_RESPONSE`;
+  return `TWILIO_AUDIT_${phase}_NETWORK_FAILURE`;
+}
 async function validateTwilio(values, factory = createTwilioReader) {
+  let listError;
+  let reader; let listed;
   try {
-    const reader = factory({ accountSid: values.TWILIO_AUDIT_ACCOUNT_SID, apiKeySid: values.TWILIO_AUDIT_API_KEY_SID, apiKeySecret: values.TWILIO_AUDIT_API_KEY_SECRET });
-    const listed = await reader.list({ ...WINDOW, pageSize: 1 });
-    if (!listed.complete) throw new Error('TWILIO_AUDIT_LIST_INCOMPLETE');
-    if (listed.messages[0]?.sid) await reader.fetchMessage(listed.messages[0].sid);
-    return { list: true, fetch: Boolean(listed.messages[0]?.sid) };
-  } catch { throw new Error('TWILIO_AUDIT_READ_ACCESS_FAILED'); }
+    reader = factory({ accountSid: values.TWILIO_AUDIT_ACCOUNT_SID, apiKeySid: values.TWILIO_AUDIT_API_KEY_SID, apiKeySecret: values.TWILIO_AUDIT_API_KEY_SECRET });
+    listed = await reader.list({ ...WINDOW, pageSize: 1, followPages: false, onPageError: error => { listError = error; } });
+  } catch (error) { throw new Error(twilioPreflightError('LIST', error)); }
+  if (!listed || typeof listed.complete !== 'boolean' || !Array.isArray(listed.messages)) throw new Error('TWILIO_AUDIT_LIST_MALFORMED_RESPONSE');
+  if (!listed.complete) throw new Error(twilioPreflightError('LIST', listError));
+  if (listed.messages[0]?.sid) {
+    try { await reader.fetchMessage(listed.messages[0].sid); }
+    catch (error) { throw new Error(twilioPreflightError('FETCH', error)); }
+  }
+  return { list: true, fetch: Boolean(listed.messages[0]?.sid) };
 }
 function spawnAudit({ values, reportDir = REPORT_DIR, spawnFn = spawn, inherited = process.env }) {
   return spawnFn(process.execPath, auditArgs(reportDir), { env: buildEnvironment(values, inherited), stdio: 'inherit' });
@@ -138,4 +150,4 @@ async function runInteractive({ prompt = terminalPrompt(), twilioFactory = creat
   finally { prompt.close?.(); }
 }
 if (require.main === module) { if (process.argv.includes('--help')) process.stdout.write(`${help()}\n`); else runInteractive().then(result => { if (result.status === 'started') return; process.stdout.write(`Twilio ledger audit launcher: ${result.status}${result.errorCode ? ` (${result.errorCode})` : ''}\n`); process.exitCode = result.status === 'failed' ? 1 : 0; }); }
-module.exports = { REQUIRED, REPORT_DIR, WINDOW, askHidden, auditArgs, buildEnvironment, collectValues, completeDatabaseUrl, help, runInteractive, spawnAudit, validateDatabaseInput, validateTwilio };
+module.exports = { REQUIRED, REPORT_DIR, WINDOW, askHidden, auditArgs, buildEnvironment, collectValues, completeDatabaseUrl, help, runInteractive, spawnAudit, twilioPreflightError, validateDatabaseInput, validateTwilio };
