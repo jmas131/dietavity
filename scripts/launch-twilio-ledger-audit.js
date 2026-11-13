@@ -22,6 +22,16 @@ function validateDatabaseInput(url, certPath) {
   if (!/^twilio_ledger_auditor(?:\.[a-z0-9]+)?$/i.test(decodeURIComponent(parsed.username))) throw new Error('SUPABASE_AUDIT_DATABASE_ROLE_INVALID');
   if (!fs.existsSync(certPath)) throw new Error('SUPABASE_AUDIT_TLS_CERT_REQUIRED');
 }
+function completeDatabaseUrl(url, password) {
+  let parsed;
+  try { parsed = new URL(url); } catch { throw new Error('SUPABASE_AUDIT_DATABASE_URL_INVALID'); }
+  if (parsed.password) throw new Error('SUPABASE_AUDIT_DATABASE_URL_PASSWORD_FORBIDDEN');
+  if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || parsed.searchParams.get('sslmode') !== 'verify-full' || !/^twilio_ledger_auditor(?:\.[a-z0-9]+)?$/i.test(decodeURIComponent(parsed.username))) throw new Error('SUPABASE_AUDIT_DATABASE_URL_INVALID');
+  // URL.password preserves a literal percent sign as-is, so encode once before
+  // assignment; URL then retains the remaining userinfo escaping correctly.
+  parsed.password = encodeURIComponent(requireValue(password, 'SUPABASE_AUDIT_DATABASE_PASSWORD'));
+  return parsed.toString();
+}
 function buildEnvironment(values, inherited = {}) {
   for (const name of REQUIRED) requireValue(values[name], name);
   validateDatabaseInput(values.SUPABASE_AUDIT_DATABASE_URL, values.SUPABASE_AUDIT_SSL_ROOT_CERT);
@@ -101,7 +111,8 @@ async function collectValues(prompt) {
   const apiKeySid = await ask('Twilio restricted API Key SID');
   const apiKeySecret = await ask('Twilio restricted API Key secret', true);
   const sender = await ask('WhatsApp sender', true);
-  const databaseUrl = await ask('PostgreSQL audit connection URL', true);
+  const databaseUrl = await ask('PostgreSQL audit connection URL (without password)');
+  const databasePassword = await ask('PostgreSQL audit password', true);
   const certificatePath = await ask('Supabase CA certificate path');
   const hmacSecret = await ask('Report HMAC secret', true);
   const hmacRotation = await prompt.ask('HMAC rotation label [v1]: ');
@@ -109,7 +120,7 @@ async function collectValues(prompt) {
   return {
     TWILIO_AUDIT_ACCOUNT_SID: accountSid, TWILIO_AUDIT_API_KEY_SID: apiKeySid,
     TWILIO_AUDIT_API_KEY_SECRET: apiKeySecret, TWILIO_AUDIT_WHATSAPP_SENDER: sender,
-    SUPABASE_AUDIT_DATABASE_URL: databaseUrl, SUPABASE_AUDIT_SSL_ROOT_CERT: certificatePath,
+    SUPABASE_AUDIT_DATABASE_URL: completeDatabaseUrl(databaseUrl, databasePassword), SUPABASE_AUDIT_SSL_ROOT_CERT: certificatePath,
     TWILIO_LEDGER_AUDIT_HMAC_SECRET: hmacSecret, TWILIO_LEDGER_AUDIT_HMAC_ROTATION: String(hmacRotation).trim() || 'v1',
   };
 }
@@ -127,4 +138,4 @@ async function runInteractive({ prompt = terminalPrompt(), twilioFactory = creat
   finally { prompt.close?.(); }
 }
 if (require.main === module) { if (process.argv.includes('--help')) process.stdout.write(`${help()}\n`); else runInteractive().then(result => { if (result.status === 'started') return; process.stdout.write(`Twilio ledger audit launcher: ${result.status}${result.errorCode ? ` (${result.errorCode})` : ''}\n`); process.exitCode = result.status === 'failed' ? 1 : 0; }); }
-module.exports = { REQUIRED, REPORT_DIR, WINDOW, askHidden, auditArgs, buildEnvironment, collectValues, help, runInteractive, spawnAudit, validateDatabaseInput, validateTwilio };
+module.exports = { REQUIRED, REPORT_DIR, WINDOW, askHidden, auditArgs, buildEnvironment, collectValues, completeDatabaseUrl, help, runInteractive, spawnAudit, validateDatabaseInput, validateTwilio };
