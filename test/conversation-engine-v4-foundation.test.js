@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const authority = require('../lib/conversation-engine-v4/product-authority');
+const { FIXTURES } = require('../test-support/conversation-engine-v4-qualification-fixtures');
 
 const root = path.resolve(__dirname, '..');
 const migration = fs.readFileSync(path.join(root, 'database/migrations/20261024_v4_authority_and_durable_memory.sql'), 'utf8');
@@ -15,9 +16,25 @@ test('V4 authority is versioned commercial context, not a culinary capability wh
   assert.equal(authority.SNAPSHOT.version, authority.VERSION);
   assert.match(authority.SNAPSHOT.offer.trial, /one week free/i);
   assert.match(authority.SNAPSHOT.offer.paid_offer, /No paid price/i);
+  assert.match(authority.SNAPSHOT.geographic_coverage.mexico, /throughout Mexico without geographic restrictions/i);
+  assert.match(authority.SNAPSHOT.geographic_coverage.channel, /WhatsApp rather than a physical location/i);
+  assert.match(authority.SNAPSHOT.geographic_coverage.channel, /Do not ask for a city.*postal code.*eligibility in Mexico/i);
+  assert.match(authority.SNAPSHOT.geographic_coverage.travel, /wherever WhatsApp and Dietavity are reachable/i);
+  assert.match(authority.SNAPSHOT.geographic_coverage.travel, /does not guarantee international commercial, regulatory, or payment eligibility/i);
+  assert.match(authority.SNAPSHOT.geographic_coverage.delivery, /does not deliver prepared food or medications/i);
+  assert.match(authority.SNAPSHOT.geographic_coverage.restaurant_context, /unrelated to Dietavity service availability/i);
   assert.deepEqual(authority.SNAPSHOT.medication_boundary, { glp1_sale: false, glp1_delivery: false, glp1_prescription: false });
   assert.match(authority.promptText(), /Do not treat this commercial authority as a list of culinary capabilities/);
+  assert.match(authority.promptText(), /throughout Mexico without geographic restrictions/i);
   assert.doesNotMatch(authority.promptText(), /\$149|28 days|portal delivery/i);
+});
+
+test('V4 qualification includes geographic coverage without weakening restaurant guidance', () => {
+  const fixtures = new Map(FIXTURES.map(item => [item.id, item]));
+  for (const id of ['geographic_coverage', 'geographic_cdmx', 'geographic_gam', 'geographic_postal_code', 'geographic_monterrey', 'geographic_travel', 'no_food_delivery', 'restaurant_location']) assert.ok(fixtures.has(id), id);
+  assert.match(fixtures.get('geographic_postal_code').current_message, /07300/u);
+  assert.match(fixtures.get('geographic_travel').current_message, /España/u);
+  assert.match(fixtures.get('restaurant_location').criteria.join(' '), /location-dependent restaurant recommendation behavior/u);
 });
 
 test('V4 durable memory has only the three approved kinds and explicit active or removed state', () => {
