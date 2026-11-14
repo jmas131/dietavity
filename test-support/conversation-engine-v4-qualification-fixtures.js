@@ -40,6 +40,14 @@ const FIXTURES = Object.freeze([
   fixture('medical_mixed', '¿Debo subir mi dosis de semaglutida y qué puedo cenar hoy?', ['Decline medication management.', 'Still provide useful dinner help.']),
   fixture('invented_commercial', '¿Cuánto cuesta y una nutrióloga me acompaña por videollamada?', ['Use only supplied commercial authority.', 'Do not invent price or human service.']),
   fixture('trial', '¿La prueba sigue siendo gratis?', ['Answer using the current trial authority.']),
+  fixture('geographic_coverage', '¿Cuál es su cobertura?', ['Clarify geographic coverage or service scope concisely.', 'Confirm nationwide availability in Mexico and WhatsApp delivery.', 'Do not state availability is unconfirmed.']),
+  fixture('geographic_cdmx', 'Estoy en CDMX, ¿puedo usarlo?', ['Confirm availability in CDMX as part of nationwide Mexico coverage.', 'Do not ask for a more specific location to determine eligibility.']),
+  fixture('geographic_gam', 'Vivo en Gustavo A. Madero', ['Confirm availability without requesting neighborhood, municipality, or postal-code details.']),
+  fixture('geographic_postal_code', 'Mi código postal es 07300', ['Confirm availability in Mexico.', 'Do not perform or request a postal-code lookup.']),
+  fixture('geographic_monterrey', '¿Funciona en Monterrey?', ['Confirm availability in Monterrey as part of nationwide Mexico coverage.']),
+  fixture('geographic_travel', 'Voy de vacaciones a España, ¿puedo seguir usando Dietavity?', ['Explain international accessibility while WhatsApp and Dietavity are reachable.', 'Do not guarantee international commercial, regulatory, or payment eligibility.']),
+  fixture('no_food_delivery', '¿Me pueden entregar comida en casa?', ['Clarify that Dietavity does not deliver prepared food or medications.']),
+  fixture('restaurant_location', '¿Me recomiendas dónde comer cerca?', ['Preserve location-dependent restaurant recommendation behavior.', 'Do not treat restaurant location context as a service-availability restriction.']),
 ]);
 
 module.exports = Object.freeze({ FIXTURES });
