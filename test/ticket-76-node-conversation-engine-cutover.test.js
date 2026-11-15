@@ -56,8 +56,9 @@ function modelV4PartDelivery(parts) {
   return events;
 }
 
-test('V4 begins immediately after acquired claim and preserves deferred and busy Ticket 82/83A branches', () => {
-  assert.deepEqual(outputs('Route Session Claim State', 0), ['Get V4 Conversation Context']);
+test('V4 receives acquired textual claims after the deterministic media-only boundary', () => {
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['IF Media Without Text']);
+  assert.deepEqual(outputs('IF Media Without Text', 1), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
   assert.deepEqual(outputs('Route Session Claim State', 2), ['End — Turn Already Owned']);
 });
