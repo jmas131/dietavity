@@ -1341,6 +1341,21 @@ for (const nodeName of inboundOutboundReservations) {
   );
 }
 
+// The V4 acquired-claim path bypasses legacy user normalization. Media-only
+// turns reuse the deterministic reservation/send tail, so optional identity
+// must come from the canonical claimed inbound rather than an unrun node.
+const prepareMediaClarificationLog = byName('Prepare Log Data Message Without Text');
+for (const assignment of prepareMediaClarificationLog.parameters.assignments.assignments) {
+  if (assignment.name === 'user_id' || assignment.name === '=user_id') {
+    assignment.value = "={{ $('Claim Next Session Inbound').item.json.user_id || null }}";
+  }
+}
+const reserveMediaClarification = byName('Reserve Media Clarification');
+reserveMediaClarification.parameters.options.queryReplacement = reserveMediaClarification.parameters.options.queryReplacement.replace(
+  "user_id: ($('Get User from Supabase').item.json.id || null)",
+  "user_id: ($('Claim Next Session Inbound').item.json.user_id || null)",
+);
+
 // Ticket 36: n8n 2.36.8 returns Twilio's response object directly on success
 // and { error: string } when the node continues after an error. Preserve the
 // latter diagnostic, accept a valid created Message SID without requiring a
@@ -2041,10 +2056,16 @@ const classifyV4ConversationEngineRecoveryResult = cloneWorkflowNode(classifyV4C
 const failV4ConversationEngineResult = { name: 'Fail Closed V4 Conversation Engine Result', id: 'd74a0001-0000-4000-8000-000000000118', type: 'n8n-nodes-base.code', typeVersion: 2, position: [69376, 50160], parameters: { jsCode: "throw new Error('CONVERSATION_V4_UNRECOVERABLE_RESULT');" }, notes: 'V4 never retries malformed output, reservation failures, or arbitrary infrastructure failures.' };
 workflow.nodes.push(getV4ConversationContext, buildV4ConversationRequest, callV4ConversationEngine, classifyV4ConversationEngineResult, routeV4ConversationEngineResult, validateV4ConversationEngineResponse, prepareV4WhatsAppMessageParts, reserveV4ReplyWithMemory, loopV4WhatsAppParts, respondToV4Chat, updateV4ReplyDelivery, assertV4ReplyAccepted, reconcileV4OutboundReservation, routeV4OutboundReconciliation, respondToReconciledV4Reservation, updateReconciledV4Reservation, assertReconciledV4Reservation, endV4ReconciliationEscalated, authorizeV4ConversationEngineRecovery, routeV4ConversationEngineRecoveryAuthorization, waitBeforeV4ConversationEngineRecovery, callV4ConversationEngineRecovery, classifyV4ConversationEngineRecoveryResult, failV4ConversationEngineResult);
 workflow.connections['Route Session Claim State'] = { main: [
-  [{ node: getV4ConversationContext.name, type: 'main', index: 0 }],
+  [{ node: 'IF Media Without Text', type: 'main', index: 0 }],
   [{ node: 'Wait For Turn Quiet Period', type: 'main', index: 0 }],
   [{ node: 'End — Turn Already Owned', type: 'main', index: 0 }],
   [{ node: reconcileV4OutboundReservation.name, type: 'main', index: 0 }],
+] };
+// V4 accepts text only. The deterministic branch handles media-only turns;
+// all nonempty textual turns retain the existing V4 context and engine path.
+workflow.connections['IF Media Without Text'] = { main: [
+  [{ node: 'Prepare Log Data Message Without Text', type: 'main', index: 0 }],
+  [{ node: getV4ConversationContext.name, type: 'main', index: 0 }],
 ] };
 workflow.connections[getV4ConversationContext.name] = { main: [[{ node: buildV4ConversationRequest.name, type: 'main', index: 0 }]] };
 workflow.connections[buildV4ConversationRequest.name] = { main: [[{ node: callV4ConversationEngine.name, type: 'main', index: 0 }]] };
