@@ -1,0 +1,70 @@
+# Sanitized representation of the verified production Compose baseline.
+#
+# Source: the production root Compose project, captured locally for Ticket 89.
+# The production project uses `root_default`; Ticket 89 makes that implicit
+# bridge configuration explicit so service source addresses survive recreation.
+#
+# Set these values in an untracked deployment environment file or the deploy
+# shell. Do not put production values in this template.
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    restart: always
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: ${N8N_PORT}
+      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      NODE_ENV: ${NODE_ENV}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: ${N8N_BLOCK_ENV_ACCESS_IN_NODE}
+      DAILY_AUDITOR_HMAC_SECRET: ${DAILY_AUDITOR_HMAC_SECRET}
+      NODE_FUNCTION_ALLOW_BUILTIN: ${NODE_FUNCTION_ALLOW_BUILTIN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      PORTAL_REQUEST_TIMEOUT_MS: ${PORTAL_REQUEST_TIMEOUT_MS}
+      SUPABASE_ANONYMOUS_KEY: ${SUPABASE_ANONYMOUS_KEY}
+      STRIPE_API_KEY: ${STRIPE_API_KEY}
+      STRIPE_TEST_API_KEY: ${STRIPE_TEST_API_KEY}
+      META_PIXEL_ID: ${META_PIXEL_ID}
+      EXECUTIONS_DATA_PRUNE: ${EXECUTIONS_DATA_PRUNE}
+      EXECUTIONS_DATA_MAX_AGE: ${EXECUTIONS_DATA_MAX_AGE}
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: ${EXECUTIONS_DATA_PRUNE_MAX_COUNT}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - /local-files:/files
+    networks:
+      default:
+        ipv4_address: 172.18.0.2
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: always
+    ports:
+      - "3001:3000"
+    networks:
+      default:
+        ipv4_address: 172.18.0.3
+
+volumes:
+  n8n_data:
+    external: true
+    # With `external: true`, Compose resolves this exact existing volume name;
+    # it must be inspected before deployment and must never be recreated here.
+    name: n8n_data
+
+networks:
+  default:
+    # This is the existing project-default bridge name, made explicit rather
+    # than replaced with a new network.
+    name: root_default
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+          gateway: 172.18.0.1
+          # Only unassigned services use this pool. It is disjoint from the
+          # static n8n/Gotenberg addresses below.
+          ip_range: 172.18.128.0/25

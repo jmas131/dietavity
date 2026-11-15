@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "change": "V4 WhatsApp-parts loop reset",
+  "workflow": {
+    "id": "DbdFTtuPwxTZSkp3",
+    "name": "Dietavity Sales Engine (Ticket 10)"
+  },
+  "private_production_backup_sha256": "83ac363e4221df50391226ba1a12216cdd3f42afeef900aac8010781dd4a2109",
+  "private_validated_import_artifact_sha256": "3ca4f27556bfad68579e95d606b01b89bff00270664a0af69687e2de56c2f8f1",
+  "approved_changes": {
+    "add_node": "Initialize V4 WhatsApp Parts Loop",
+    "reset_expression": "={{ $json._dietavity_v4_parts_loop_reset === true }}",
+    "rewire": [
+      "Reserve V4 Reply With Memory -> Initialize V4 WhatsApp Parts Loop",
+      "Initialize V4 WhatsApp Parts Loop -> Loop V4 WhatsApp Parts"
+    ]
+  },
+  "security": {
+    "contains_credentials": false,
+    "contains_execution_payloads": false,
+    "contains_production_workflow_export": false
+  }
+}

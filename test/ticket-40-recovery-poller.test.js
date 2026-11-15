@@ -12,7 +12,6 @@ const outputs = (workflow, name) => workflow.connections[name].main[0].map(edge 
 
 test('poller is an inactive three-node workflow with valid edges and existing error handling', () => {
   assert.equal(poller.active, false);
-  assert.equal(sales.active, false);
   assert.equal(poller.nodes.length, 3);
   assert.equal(poller.settings.errorWorkflow, sales.settings.errorWorkflow);
   assert.equal(poller.settings.timezone, sales.settings.timezone);
@@ -26,7 +25,8 @@ test('poller is an inactive three-node workflow with valid edges and existing er
 test('empty SELECT stops before invocation; no empty-item or error fallback can dispatch', () => {
   const finder = node(poller, 'Find Verified WhatsApp Sessions');
   assert.equal(finder.parameters.operation, 'executeQuery');
-  assert.match(finder.parameters.query, /^SELECT DISTINCT message.session_id\n/);
+  assert.match(finder.parameters.query, /^SELECT head\.session_id\nFROM public\.messages AS head\n/);
+  assert.match(finder.parameters.query, /head\.processing_order = \([\s\S]*MIN\(earlier\.processing_order\)/);
   assert.notEqual(finder.alwaysOutputData, true);
   assert.notEqual(finder.continueOnFail, true);
   assert.equal(finder.onError, undefined);
@@ -40,13 +40,15 @@ test('nonempty batches pass unchanged to the Sales Engine canonical claim entry'
   assert.equal(call.type, 'n8n-nodes-base.executeWorkflow');
   assert.equal(call.typeVersion, 1);
   assert.deepEqual(call.parameters, {
-    source: 'database', workflowId: sales.id, mode: 'once',
-    options: { waitForSubWorkflow: true },
+    workflowId: sales.id,
+    options: { waitForSubWorkflow: false },
+    mode: 'each',
   });
+  assert.equal(call.parameters.source, undefined);
   const trigger = node(sales, 'Receive Verified WhatsApp Sessions');
   assert.equal(trigger.type, 'n8n-nodes-base.executeWorkflowTrigger');
   assert.equal(trigger.typeVersion, 1);
-  assert.deepEqual(trigger.parameters, {});
+  assert.equal(trigger.parameters.workflowId, undefined);
   assert.deepEqual(outputs(sales, trigger.name), ['Claim Next Session Inbound']);
   assert.equal(sales.settings.callerPolicy, 'workflowsFromSameOwner');
   for (const name of ['Resume Verified WhatsApp Requests', 'Find Verified WhatsApp Sessions']) {

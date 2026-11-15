@@ -1,0 +1,100 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { EventEmitter } = require('node:events');
+const path = require('node:path');
+const { askHidden, auditArgs, buildEnvironment, completeDatabaseUrl, runInteractive, validateTwilio } = require('../scripts/launch-twilio-ledger-audit');
+const { createTwilioReader } = require('../lib/twilio-ledger-audit-clients');
+const databaseUrlWithoutPassword = 'postgresql://twilio_ledger_auditor@db.example.test/postgres?sslmode=verify-full';
+const databasePassword = 'synthetic-password';
+const values = { TWILIO_AUDIT_ACCOUNT_SID: `AC${'a'.repeat(32)}`, TWILIO_AUDIT_API_KEY_SID: `SK${'b'.repeat(32)}`, TWILIO_AUDIT_API_KEY_SECRET: 'synthetic-secret', TWILIO_AUDIT_WHATSAPP_SENDER: 'whatsapp:+15550000000', SUPABASE_AUDIT_DATABASE_URL: completeDatabaseUrl(databaseUrlWithoutPassword, databasePassword), SUPABASE_AUDIT_SSL_ROOT_CERT: __filename, TWILIO_LEDGER_AUDIT_HMAC_SECRET: 'synthetic-hmac-secret', TWILIO_LEDGER_AUDIT_HMAC_ROTATION: 'test' };
+function prompts(items) { return { ask: async () => items.shift(), secret: async () => items.shift(), close() {} }; }
+function promptValues(...tail) { return [values.TWILIO_AUDIT_ACCOUNT_SID, values.TWILIO_AUDIT_API_KEY_SID, values.TWILIO_AUDIT_API_KEY_SECRET, values.TWILIO_AUDIT_WHATSAPP_SENDER, databaseUrlWithoutPassword, databasePassword, values.SUPABASE_AUDIT_SSL_ROOT_CERT, values.TWILIO_LEDGER_AUDIT_HMAC_SECRET, 'v1', ...tail]; }
+function hiddenTerminal() {
+  const input = new EventEmitter(); input.isTTY = true; input.isRaw = false; input.rawCalls = []; input.setRawMode = value => { input.isRaw = value; input.rawCalls.push(value); }; input.resume = () => { input.resumed = true; }; input.pause = () => { input.paused = true; };
+  const output = { text: '', write(value) { this.text += value; } };
+  return { input, output };
+}
+test('Ticket 90F passes credentials only in a minimal child environment', () => {
+  const env = buildEnvironment(values, { PATH: '/bin', HOME: '/tmp', UNRELATED_SECRET: 'must-not-pass' });
+  assert.equal(env.UNRELATED_SECRET, undefined); assert.equal(env.TWILIO_AUDIT_API_KEY_SECRET, 'synthetic-secret');
+  const args = auditArgs('/private/audits'); assert.ok(args.every(arg => !arg.includes('synthetic'))); assert.deepEqual(args.slice(1, 5), ['--from', '2026-11-05T00:00:00Z', '--to', '2026-11-12T00:00:00Z']);
+});
+test('Ticket 90F encodes a separately entered PostgreSQL password in memory', () => {
+  const special = '@#!%/?';
+  const completed = completeDatabaseUrl(databaseUrlWithoutPassword, special);
+  const parsed = new URL(completed);
+  assert.equal(decodeURIComponent(parsed.password), special);
+  assert.equal(parsed.searchParams.get('sslmode'), 'verify-full');
+  assert.equal(decodeURIComponent(parsed.username), 'twilio_ledger_auditor');
+  assert.throws(() => completeDatabaseUrl('postgresql://twilio_ledger_auditor:existing@db.example.test/postgres?sslmode=verify-full', special), /SUPABASE_AUDIT_DATABASE_URL_PASSWORD_FORBIDDEN/);
+});
+test('Ticket 90F cancellation never validates or spawns a child', async () => {
+  const result = await runInteractive({ prompt: prompts(promptValues('n')), twilioFactory: () => { throw new Error('must not validate'); }, spawnFn: () => { throw new Error('must not spawn'); } });
+  assert.deepEqual(result, { status: 'cancelled' });
+});
+test('Ticket 90F Ctrl-C-style confirmation cancellation never validates or spawns a child', async () => {
+  const result = await runInteractive({ prompt: prompts(promptValues(null)), twilioFactory: () => { throw new Error('must not validate'); }, spawnFn: () => { throw new Error('must not spawn'); } });
+  assert.deepEqual(result, { status: 'cancelled' });
+});
+test('Ticket 90F Ctrl-C-style secret cancellation never spawns a child', async () => {
+  const result = await runInteractive({ prompt: prompts([null]), spawnFn: () => { throw new Error('must not spawn'); } });
+  assert.deepEqual(result, { status: 'cancelled' });
+});
+test('Ticket 90F PostgreSQL password cancellation never validates or spawns a child', async () => {
+  const result = await runInteractive({ prompt: prompts([values.TWILIO_AUDIT_ACCOUNT_SID, values.TWILIO_AUDIT_API_KEY_SID, values.TWILIO_AUDIT_API_KEY_SECRET, values.TWILIO_AUDIT_WHATSAPP_SENDER, databaseUrlWithoutPassword, null]), twilioFactory: () => { throw new Error('must not validate'); }, spawnFn: () => { throw new Error('must not spawn'); } });
+  assert.deepEqual(result, { status: 'cancelled' });
+});
+test('Ticket 90F rejects a password-bearing URL without exposing its credential', async () => {
+  const unsafeUrl = 'postgresql://twilio_ledger_auditor:do-not-log@db.example.test/postgres?sslmode=verify-full';
+  const result = await runInteractive({ prompt: prompts([values.TWILIO_AUDIT_ACCOUNT_SID, values.TWILIO_AUDIT_API_KEY_SID, values.TWILIO_AUDIT_API_KEY_SECRET, values.TWILIO_AUDIT_WHATSAPP_SENDER, unsafeUrl, databasePassword, values.SUPABASE_AUDIT_SSL_ROOT_CERT, values.TWILIO_LEDGER_AUDIT_HMAC_SECRET, 'v1']), output: () => {} });
+  assert.deepEqual(result, { status: 'failed', errorCode: 'SUPABASE_AUDIT_DATABASE_URL_PASSWORD_FORBIDDEN' });
+  assert.doesNotMatch(JSON.stringify(result), /do-not-log/);
+});
+test('Ticket 90F hidden input never echoes and always restores terminal mode', async () => {
+  const { input, output } = hiddenTerminal();
+  const result = askHidden('Secret: ', input, output);
+  input.emit('data', Buffer.from('abc\r'));
+  assert.equal(await result, 'abc');
+  assert.equal(output.text, 'Secret: \n');
+  assert.deepEqual(input.rawCalls, [true, false]);
+  assert.equal(input.paused, true);
+});
+test('Ticket 90F restores terminal mode after Ctrl-C and input errors', async () => {
+  const cancelled = hiddenTerminal(); const cancellation = askHidden('Secret: ', cancelled.input, cancelled.output);
+  cancelled.input.emit('data', Buffer.from('\u0003'));
+  assert.equal(await cancellation, null); assert.deepEqual(cancelled.input.rawCalls, [true, false]);
+  const failed = hiddenTerminal(); const failure = askHidden('Secret: ', failed.input, failed.output);
+  failed.input.emit('error', new Error('synthetic terminal failure'));
+  await assert.rejects(failure, /synthetic terminal failure/); assert.deepEqual(failed.input.rawCalls, [true, false]);
+});
+test('Ticket 90F validates with read-only list/fetch then spawns without credential argv', async () => {
+  let listed = 0; let fetched = 0; let call;
+  const result = await runInteractive({ prompt: prompts(promptValues('y', 'RUN')), twilioFactory: () => ({ list: async () => { listed++; return { complete: true, messages: [{ sid: `SM${'1'.repeat(32)}` }] }; }, fetchMessage: async () => { fetched++; return {}; } }), spawnFn: (file, args, options) => { call = { file, args, options }; return {}; }, output: () => {} });
+  assert.equal(result.status, 'started'); assert.equal(listed, 1); assert.equal(fetched, 1); assert.ok(call.args.every(arg => !arg.includes('synthetic'))); assert.equal(call.options.env.TWILIO_AUDIT_API_KEY_SECRET, 'synthetic-secret'); assert.match(call.options.env.SUPABASE_AUDIT_DATABASE_URL, /synthetic-password/); assert.doesNotMatch(JSON.stringify({ args: call.args }), /synthetic-password/);
+});
+test('Ticket 90F preflight reads one list page and one individual message only', async () => {
+  const account = values.TWILIO_AUDIT_ACCOUNT_SID; let calls = 0;
+  const reader = createTwilioReader({ accountSid: account, apiKeySid: values.TWILIO_AUDIT_API_KEY_SID, apiKeySecret: values.TWILIO_AUDIT_API_KEY_SECRET, fetchFn: async () => ({ ok: true, headers: { get: () => null }, json: async () => { calls++; return calls === 1 ? { messages: [{ sid: `SM${'1'.repeat(32)}` }], next_page_uri: `/2010-04-01/Accounts/${account}/Messages.json?PageToken=next` } : { sid: `SM${'1'.repeat(32)}` }; } }) });
+  const result = await validateTwilio(values, () => reader);
+  assert.deepEqual(result, { list: true, fetch: true }); assert.equal(calls, 2);
+});
+test('Ticket 90F reports only safe list and fetch failure categories', async () => {
+  for (const [status, expected] of [[401, 'TWILIO_AUDIT_LIST_HTTP_401'], [403, 'TWILIO_AUDIT_LIST_HTTP_403'], [404, 'TWILIO_AUDIT_LIST_HTTP_404'], [429, 'TWILIO_AUDIT_LIST_HTTP_429']]) {
+    await assert.rejects(() => validateTwilio(values, () => ({ list: async options => { options.onPageError(Object.assign(new Error('unsafe https://secret@example.test'), { status })); return { complete: false, messages: [] }; } })), new RegExp(expected));
+  }
+  await assert.rejects(() => validateTwilio(values, () => ({ list: async options => { options.onPageError(new Error('TWILIO_AUDIT_RESPONSE_INVALID')); return { complete: false, messages: [] }; } })), /TWILIO_AUDIT_LIST_MALFORMED_RESPONSE/);
+  await assert.rejects(() => validateTwilio(values, () => ({ list: async () => ({ complete: true, messages: null }) })), /TWILIO_AUDIT_LIST_MALFORMED_RESPONSE/);
+  await assert.rejects(() => validateTwilio(values, () => ({ list: async () => { throw new Error('https://key:secret@example.test'); } })), /TWILIO_AUDIT_LIST_NETWORK_FAILURE/);
+  await assert.rejects(() => validateTwilio(values, () => ({ list: async () => ({ complete: true, messages: [{ sid: `SM${'1'.repeat(32)}` }] }), fetchMessage: async () => { throw Object.assign(new Error('unsafe'), { status: 403 }); } })), /TWILIO_AUDIT_FETCH_HTTP_403/);
+});
+test('Ticket 90F refuses a full audit when fetch access cannot be validated', async () => {
+  const result = await runInteractive({ prompt: prompts(promptValues('y')), twilioFactory: () => ({ list: async () => ({ complete: true, messages: [] }) }), spawnFn: () => { throw new Error('must not spawn'); }, output: () => {} });
+  assert.deepEqual(result, { status: 'failed', errorCode: 'TWILIO_AUDIT_FETCH_UNVERIFIED', validation: { list: true, fetch: false } });
+});
+test('Ticket 90F keeps secret input in memory and adds no delivery or mutation path', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../scripts/launch-twilio-ledger-audit.js'), 'utf8');
+  assert.match(source, /setRawMode\(true\)/);
+  assert.doesNotMatch(source, /(?:writeFile|appendFile|mkdirSync|unlinkSync|n8n|Recovery Poller|\b(?:INSERT|UPDATE|DELETE)\b|method:\s*['"]POST)/i);
+});
