@@ -1926,8 +1926,11 @@ const getV4ConversationContext = {
   SELECT 'customer'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_customer_turns
   UNION ALL
   SELECT 'assistant'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_assistant_turns
-), bounded_history AS (
+), nonempty_history AS (
   SELECT * FROM chronological_history
+  WHERE text !~ '^[[:space:]]*$'
+), bounded_history AS (
+  SELECT * FROM nonempty_history
   ORDER BY source_processing_order DESC, role_sort DESC, timestamp DESC, id DESC
   LIMIT 30
 ), active_memory AS (
