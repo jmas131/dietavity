@@ -100,7 +100,8 @@ test('V4 uses the authenticated V4 route, structural validation, and atomic rese
   assert.deepEqual(outputs('Route V4 Conversation Engine Result', 0), ['Validate V4 Conversation Engine Response']);
   assert.deepEqual(outputs('Validate V4 Conversation Engine Response'), ['Prepare V4 WhatsApp Message Parts']);
   assert.deepEqual(outputs('Prepare V4 WhatsApp Message Parts'), ['Reserve V4 Reply With Memory']);
-  assert.deepEqual(outputs('Reserve V4 Reply With Memory'), ['Loop V4 WhatsApp Parts']);
+  assert.deepEqual(outputs('Reserve V4 Reply With Memory'), ['Initialize V4 WhatsApp Parts Loop']);
+  assert.deepEqual(outputs('Initialize V4 WhatsApp Parts Loop'), ['Loop V4 WhatsApp Parts']);
   assert.match(node('Reserve V4 Reply With Memory').parameters.query, /reserve_conversation_v4_reply_with_memory/);
   const reservationReplacement = node('Reserve V4 Reply With Memory').parameters.options.queryReplacement;
   assert.match(reservationReplacement, /^=\{\{ JSON\.stringify\(\{/);
