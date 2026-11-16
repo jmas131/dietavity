@@ -63,7 +63,10 @@ test('every current transport completion path embeds the exact canonical predica
   const error = JSON.parse(fs.readFileSync(path.join(root, 'n8n/Global Error Handler.json')));
   assert.equal(error.nodes.find((n) => n.name === 'Insert Error Log (Error Handler)').parameters.query, ERROR_HANDLER_SQL);
   const found = [];
-  for (const file of fs.readdirSync(path.join(root, 'n8n')).filter((f) => f.endsWith('.json'))) {
+  // The Ticket 82 delivery-suppressed derivative deliberately has a separate,
+  // namespace-limited completion condition and is covered by its own tests.
+  // This audit remains for current production transport implementations.
+  for (const file of fs.readdirSync(path.join(root, 'n8n')).filter((f) => f.endsWith('.json') && f !== 'Dietavity Sales Engine (Ticket 82 Delivery Suppressed).json')) {
     const w = JSON.parse(fs.readFileSync(path.join(root, 'n8n', file)));
     for (const n of w.nodes || []) {
       const sql = n.parameters?.query || '';
@@ -106,13 +109,14 @@ test('normal new multipart reservation is atomic and refuses existing siblings',
   assert.match(ordering.RESERVE_MULTIPART_OUTBOUND_SQL, /ORDER BY \(metadata->>'part_index'\)::integer/);
 });
 
-test('paid transport loops one part through reconciliation before continuing', () => {
+test('paid transport remains serialized one part at a time before continuing', () => {
   const out = (name, branch = 0) => workflow.connections[name].main[branch].map((e) => e.node);
   assert.deepEqual(out('Reserve Paid Assistant Reply'), ['Loop Paid WhatsApp Parts']);
   assert.deepEqual(out('Loop Paid WhatsApp Parts', 1), ['Send All Intents Message']);
   assert.deepEqual(out('Assert Paid Assistant Reply Accepted'), ['Loop Paid WhatsApp Parts']);
   assert.deepEqual(out('Loop Paid WhatsApp Parts'), ['Update Last Assistant Message']);
-  assert.equal(workflow.nodes.find((n) => n.name === 'Loop Paid WhatsApp Parts').parameters.batchSize, 1);
+  // Split In Batches v3 uses its default batch size of one when omitted.
+  assert.equal(workflow.nodes.find((n) => n.name === 'Loop Paid WhatsApp Parts').parameters.batchSize ?? 1, 1);
 });
 
 test('historical 1889-character fixture is reused and formatted without AI', () => {

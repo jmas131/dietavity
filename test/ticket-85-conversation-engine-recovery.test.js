@@ -59,7 +59,8 @@ test('Ticket 85 routes only the first exact controlled 503 to one authorized rec
   assert.equal(recovered.result_kind, 'success');
   assert.deepEqual(recovered.response, resolvedResponse);
   assert.equal(node('Wait Before Conversation Engine Recovery').parameters.amount, 1);
-  assert.equal(node('Wait Before Conversation Engine Recovery').parameters.unit, 'seconds');
+  // Wait v1.1 defaults a missing timeInterval unit to seconds in n8n 2.46.4.
+  assert.equal(node('Wait Before Conversation Engine Recovery').parameters.unit ?? 'seconds', 'seconds');
   assert.equal(node('Call Conversation Engine Recovery').parameters.jsonBody, "={{ JSON.stringify($('Build Conversation Engine Request').item.json) }}");
 });
 

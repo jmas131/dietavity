@@ -61,7 +61,7 @@ test('ordinary assistant messages never enter legacy recovery for unknown or kno
 
   assert.deepEqual(workflow.connections['If Portal Recovery Requested'].main[1]
     .map(connection => connection.node), ['Normalize User Data']);
-  assert.equal(reaches('Normalize User Data', 'Get Direct RAG Conversation History'), true);
+  assert.equal(reaches('Normalize User Data', 'Get V4 Conversation Context'), true);
 });
 
 test('Ticket 28 tables are generalized instead of creating a second token system', () => {
@@ -90,11 +90,12 @@ test('ordinary linking preserves the portal credential and recovery still rotate
 test('historical pending WhatsApp links remain resumable through Ticket 17 ordering', () => {
   const finder = pollerNodes.get('Find Verified WhatsApp Sessions').parameters.query;
   assert.match(finder, /public\.messages/);
-  assert.match(finder, /message\.direction = 'inbound'/);
-  assert.match(finder, /processing_order IS NOT NULL/);
-  assert.match(finder, /processing_completed_at IS NULL/);
-  assert.match(finder, /processing_owner IS NULL/);
-  assert.match(finder, /processing_lease_until <= NOW\(\)/);
+  assert.match(finder, /head\.direction = 'inbound'/);
+  assert.match(finder, /head\.processing_order IS NOT NULL/);
+  assert.match(finder, /head\.processing_completed_at IS NULL/);
+  assert.match(finder, /head\.processing_owner IS NULL/);
+  assert.match(finder, /head\.processing_lease_until IS NULL/);
+  assert.match(finder, /head\.processing_lease_until <= NOW\(\)/);
   assert.deepEqual(workflow.connections['Receive Verified WhatsApp Sessions'].main[0]
     .map(connection => connection.node), ['Claim Next Session Inbound']);
   assert.match(nodes.get('Claim Next Session Inbound').parameters.query,

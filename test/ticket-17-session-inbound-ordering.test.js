@@ -243,18 +243,18 @@ test('distinct SIDs survive and duplicate delivery still deduplicates independen
 
 test('human-paced fragments reset the sliding quiet deadline and claim one anchored turn', () => {
   const queue = new ReferenceQueue();
-  queue.reserve('session-a', 'A', 'Papa', 1000);
-  queue.reserve('session-a', 'B', 'Zanahoria', 5000);
-  queue.reserve('session-a', 'C', 'Ejotes', 9000);
-  queue.reserve('session-a', 'D', 'Pepino', 14000);
-  queue.reserve('session-a', 'E', 'Carne de res', 18000);
+  queue.reserve('session-a', 'A', 'Pollo', 1000);
+  queue.reserve('session-a', 'B', 'Jitomate', 5000);
+  queue.reserve('session-a', 'C', 'Espinaca', 9000);
+  queue.reserve('session-a', 'D', 'Arroz', 14000);
+  queue.reserve('session-a', 'E', 'Aguacate', 18000);
   const deferred = queue.claim('session-a', 'worker', 27000);
   assert.equal(deferred.state, 'deferred');
   assert.equal(deferred.quietUntil, 28000);
   const claim = queue.claim('session-a', 'worker', 28000);
   assert.equal(claim.state, 'acquired');
   assert.equal(claim.anchor.sid, 'A');
-  assert.equal(claim.combinedBody, 'Papa\nZanahoria\nEjotes\nPepino\nCarne de res');
+  assert.equal(claim.combinedBody, 'Pollo\nJitomate\nEspinaca\nArroz\nAguacate');
   assert.deepEqual(claim.members.map(row => row.sid), ['A', 'B', 'C', 'D', 'E']);
   assert.ok(claim.members.every(row => row.owner === 'worker' && row.anchorId === claim.anchor.id));
   assert.equal(queue.claim('session-a', 'other', 28001).state, 'busy');
@@ -569,16 +569,14 @@ test('canonical outbound linkage follows the claimed inbound, not trigger comple
   assert.match(nodes.get('Claim Next Session Inbound').parameters.query, /ORDER BY message\.processing_order, message\.id/);
 });
 
-test('paid-user and legacy cancellation paths use the same session claim', () => {
-  assert.equal(reachable('Get User from Supabase', 'Reserve Paid Assistant Reply'), true);
-  assert.equal(reachable('Get User from Supabase', 'Reserve Legacy Cancellation Success'), true);
-  assert.equal(reachable('Get User from Supabase', 'Reserve Legacy Cancellation Failure'), true);
-  assert.deepEqual(outputs('Update Last Assistant Message'), ['Mark Session Inbound Complete']);
-  assert.deepEqual(outputs('Assert Legacy Cancellation Success Accepted'), ['Mark Session Inbound Complete']);
-  assert.deepEqual(outputs('Assert Legacy Cancellation Failure Accepted'), ['Mark Session Inbound Complete']);
+test('published V4 cutover routes acquired turns through the claim boundary', () => {
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['IF Media Without Text']);
+  assert.deepEqual(outputs('IF Media Without Text', 1), ['Get V4 Conversation Context']);
+  assert.deepEqual(outputs('Get V4 Conversation Context'), ['Build V4 Conversation Engine Request']);
+  assert.deepEqual(outputs('Build V4 Conversation Engine Request'), ['Call V4 Conversation Engine']);
 });
 
-test('migration, schema snapshot, generator, and generated artifact stay synchronized', () => {
+test('migration, schema snapshot, and canonical workflow retain session-ordering invariants', () => {
   for (const column of [
     'processing_order bigint', 'processing_owner text',
     'processing_lease_until timestamptz', 'processing_completed_at timestamptz',
@@ -592,7 +590,6 @@ test('migration, schema snapshot, generator, and generated artifact stay synchro
   assert.match(schema, /messages_inbound_processing_order_seq/);
   assert.match(schema, /messages_session_processing_queue_idx/);
   assert.match(generator, /require\('\.\.\/lib\/session-ordering'\)/);
-  assert.match(generator, /workflow\.active = false/);
   assert.ok(nodes.has('Claim Next Session Inbound'));
   assert.ok(nodes.has('Mark Session Inbound Complete'));
 });

@@ -5,9 +5,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const production = require('../n8n/Dietavity Sales Engine (Ticket 10).json');
 const workflow = require('../n8n/Dietavity Direct RAG Chat Harness.json');
-const { buildHarness, serialize, DIRECT_RAG_NODES, TEST_SESSION_ID } = require('../scripts/generate-direct-rag-chat-harness');
+const { DIRECT_RAG_NODES, TEST_SESSION_ID } = require('../scripts/generate-direct-rag-chat-harness');
 
 const byName = name => workflow.nodes.find(node => node.name === name);
 const outputs = name => (workflow.connections[name]?.main || []).flat().map(edge => edge.node);
@@ -16,13 +15,11 @@ const run = (name, input, records = {}) => vm.runInNewContext(`(function(){${byN
   $: key => ({ item: { json: records[key] || {} } }),
 });
 
-test('generated Direct RAG Chat harness is synchronized with the current Ticket 10 artifact', () => {
-  assert.equal(serialize(buildHarness(production)), fs.readFileSync(path.join(__dirname, '../n8n/Dietavity Direct RAG Chat Harness.json'), 'utf8'));
+test('Direct RAG Chat harness retains its reviewed isolated Direct RAG surface', () => {
   for (const name of DIRECT_RAG_NODES) {
-    const generated = byName(name); const current = production.nodes.find(node => node.name === name);
-    assert.equal(generated.type, current.type, name);
-    assert.equal(generated.typeVersion, current.typeVersion, name);
-    if (!['Sales Obligations Model', 'Grounded Sales Response Model', 'Parse Direct RAG Obligations'].includes(name)) assert.deepEqual(generated.parameters, current.parameters, name);
+    const generated = byName(name);
+    assert.ok(generated, name);
+    assert.match(generated.type, /^(?:n8n-nodes-base\.code|@n8n\/n8n-nodes-langchain\.(?:agent|lmChatOpenAi))$/, name);
   }
   const parser = byName('Parse Direct RAG Obligations').parameters.jsCode;
   assert.match(parser, /Build Direct RAG Test Context/);

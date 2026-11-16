@@ -469,7 +469,8 @@ test('website fulfillment never reserves a WhatsApp message or calls Twilio', ()
   assert.deepEqual(outputs('If Customer Has WhatsApp')[0].map(item => item.node), [
     'Reserve Setup Link',
   ]);
-  assert.deepEqual(outputs('If Customer Has WhatsApp')[1], []);
+  // n8n omits an unconnected output branch from exported JSON.
+  assert.deepEqual(outputs('If Customer Has WhatsApp')[1] || [], []);
   assert.deepEqual(outputs('If New Purchase Inserted')[1].map(item => item.node), [
     'Log Duplicate Stripe Checkout',
   ]);

@@ -54,15 +54,15 @@ test('WhatsApp recovery is a one-minute scheduled ledger wake-up', () => {
 test('the read-only wake-up lookup selects only unfinished work without a live lease', () => {
   const sql = pollerNodes.get('Find Verified WhatsApp Sessions').parameters.query;
 
-  assert.match(sql, /^SELECT DISTINCT message\.session_id/m);
-  assert.match(sql, /FROM public\.messages AS message/);
+  assert.match(sql, /^SELECT head\.session_id/m);
+  assert.match(sql, /FROM public\.messages AS head/);
   assert.doesNotMatch(sql, /JOIN public\.users AS app_user/);
-  assert.match(sql, /message\.direction = 'inbound'/);
-  assert.match(sql, /message\.processing_order IS NOT NULL/);
-  assert.match(sql, /message\.processing_completed_at IS NULL/);
-  assert.match(sql, /message\.processing_owner IS NULL/);
-  assert.match(sql, /message\.processing_lease_until IS NULL/);
-  assert.match(sql, /message\.processing_lease_until <= NOW\(\)/);
+  assert.match(sql, /head\.direction = 'inbound'/);
+  assert.match(sql, /head\.processing_order IS NOT NULL/);
+  assert.match(sql, /head\.processing_completed_at IS NULL/);
+  assert.match(sql, /head\.processing_owner IS NULL/);
+  assert.match(sql, /head\.processing_lease_until IS NULL/);
+  assert.match(sql, /head\.processing_lease_until <= NOW\(\)/);
   assert.doesNotMatch(sql, /\b(?:INSERT|UPDATE|DELETE|CALL)\b/i);
 
   const now = Date.now();
