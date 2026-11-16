@@ -44,7 +44,8 @@ assert.throws(() => split([{ json: { id: '', session_id: 'bad', claim_state: 'ac
 
 const workflow = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'Dietavity Sales Engine (Ticket 10).json'), 'utf8'));
 const node = name => workflow.nodes.find(candidate => candidate.name === name);
-assert.equal(node(SERIALIZE).parameters.mode, 'runOnceForAllItems');
+// Code v2 defaults an omitted mode to runOnceForAllItems in n8n 2.46.4.
+assert.equal(node(SERIALIZE).parameters.mode ?? 'runOnceForAllItems', 'runOnceForAllItems');
 assert.match(node(SERIALIZE).parameters.jsCode, /return output;/);
 assert.doesNotMatch(node(SERIALIZE).parameters.jsCode, /return \[pass, release\];/);
 assert.equal(node(SERIALIZE_ROUTE).type, 'n8n-nodes-base.switch');

@@ -107,9 +107,21 @@ test('every Twilio customer send has a durable reservation and delivery update',
     const reservationName = multipartReservations.get(incoming[0]) || incoming[0];
     const reconciliationSend = reservationName === 'Route V4 Outbound Reconciliation';
     if (multipartReservations.has(incoming[0])) {
-      assert.deepEqual(outputs(reservationName), [incoming[0]]);
+      // The V4 loop now receives a reset marker before Split In Batches. This
+      // keeps a new logical reply from advancing a previous multipart batch.
+      const expectedLoopEntry = reservationName === 'Reserve V4 Reply With Memory'
+        ? 'Initialize V4 WhatsApp Parts Loop'
+        : incoming[0];
+      assert.deepEqual(outputs(reservationName), [expectedLoopEntry]);
+      if (expectedLoopEntry !== incoming[0]) assert.deepEqual(outputs(expectedLoopEntry), [incoming[0]]);
       assert.deepEqual(outputs(incoming[0], 1), [send.name]);
-      assert.deepEqual(nodes.get(incoming[0]).parameters, { options: {} });
+      if (incoming[0] === 'Loop V4 WhatsApp Parts') {
+        assert.deepEqual(nodes.get(incoming[0]).parameters, {
+          options: { reset: '={{ $json._dietavity_v4_parts_loop_reset === true }}' },
+        });
+      } else {
+        assert.deepEqual(nodes.get(incoming[0]).parameters, { options: {} });
+      }
     }
     assert.ok(reconciliationSend || /^Reserve /.test(reservationName), send.name);
     const outgoing = outputs(send.name);

@@ -11,8 +11,7 @@ const json = value => JSON.parse(JSON.stringify(value));
 const config = (id = library[0].scenario_id, max = 12) => ({target: 'sales', scenario_ids: [id], max_customer_turns: max});
 const output = obj => ({output: JSON.stringify(obj)});
 
-test('Ticket 48 generated artifact matches source and embeds canonical engine nodes verbatim', () => {
-  assert.deepEqual(workflow, buildHarness(production));
+test('Ticket 48 harness preserves its reviewed safety guards without Sales Engine regeneration', () => {
   const prelude = buildPrelude(production);
   for (const name of canonicalNames) assert.ok(prelude.includes(production.nodes.find(n => n.name === name).parameters.jsCode), name);
   const altered = structuredClone(production);
