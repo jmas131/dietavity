@@ -1,0 +1,57 @@
+# Ticket 96B sandbox only. Do not combine this file with the production
+# Compose project or its n8n_data volume.
+services:
+  n8n-sandbox:
+    # ACTIVATION BLOCKER: replace this mutable version tag with the exact
+    # digest verified for n8n 2.46.4 before starting the sandbox.
+    image: docker.n8n.io/n8nio/n8n:2.46.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5679:5678"
+    environment:
+      N8N_HOST: ${N8N_SANDBOX_HOST}
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: ${N8N_SANDBOX_WEBHOOK_URL}
+      GENERIC_TIMEZONE: America/Mexico_City
+      N8N_ENCRYPTION_KEY: ${N8N_SANDBOX_ENCRYPTION_KEY}
+      # The committed Sales Engine has the documented allowlist below. This
+      # must stay false only in this isolated sandbox, never production.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      OPENAI_API_KEY: ${SANDBOX_OPENAI_API_KEY}
+      STRIPE_API_KEY: ${SANDBOX_STRIPE_TEST_API_KEY}
+      TWILIO_ACCOUNT_SID: ${SANDBOX_TWILIO_ACCOUNT_SID}
+      TWILIO_MESSAGING_SERVICE_SID: ${SANDBOX_TWILIO_MESSAGING_SERVICE_SID}
+      TWILIO_SALES_REMINDER_CONTENT_SID: ${SANDBOX_TWILIO_SALES_REMINDER_CONTENT_SID}
+      TWILIO_SALES_REMINDER_CANONICAL_BODY: ${SANDBOX_TWILIO_SALES_REMINDER_CANONICAL_BODY}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+      EXECUTIONS_DATA_SAVE_ON_ERROR: none
+      EXECUTIONS_DATA_SAVE_ON_PROGRESS: "false"
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "false"
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "24"
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: "1000"
+      N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+    volumes:
+      - dietavity_ticket96b_n8n_data:/home/node/.n8n
+    networks:
+      sandbox:
+        ipv4_address: 172.19.0.2
+    mem_limit: 512m
+    cpus: "0.50"
+    pids_limit: 256
+
+volumes:
+  dietavity_ticket96b_n8n_data:
+    # Deliberately distinct from production's external n8n_data volume.
+    name: dietavity_ticket96b_n8n_data
+
+networks:
+  sandbox:
+    name: dietavity_ticket96b_sandbox
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.0.0/24
+          gateway: 172.19.0.1

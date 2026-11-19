@@ -1,0 +1,27 @@
+# Requires a dedicated sandbox DNS name and TLS certificate. The repository
+# proves only the Twilio Trigger webhookId, not the deployed callback path.
+# This template therefore fails closed until the operator obtains the exact
+# active callback URL from sandbox n8n and replaces the disabled location.
+server {
+    listen 443 ssl http2;
+    server_name sandbox-n8n.example.invalid;
+
+    # Operator supplies sandbox-only certificate directives here.
+    client_max_body_size 64k;
+
+    # Do not replace this prefix route with a wildcard proxy. Add exactly one
+    # `location = <verified Twilio callback path>` using the proxy directives
+    # below after sandbox n8n displays its active production callback URL.
+    # The path must belong only to the imported Incoming Message trigger
+    # (webhookId bce2dfd3-7d1c-4217-9a6c-a350858e4726).
+    # location = /webhook/REPLACE_WITH_VERIFIED_PATH {
+    #     proxy_pass http://127.0.0.1:5679;
+    #     proxy_http_version 1.1;
+    #     proxy_set_header Host $host;
+    #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #     proxy_set_header X-Forwarded-Proto https;
+    # }
+    location ^~ /webhook/ { return 404; }
+    location ^~ /webhook-test/ { return 404; }
+    location / { return 404; }
+}
