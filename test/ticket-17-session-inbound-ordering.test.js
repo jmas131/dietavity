@@ -473,7 +473,7 @@ test('workflow terminates busy claims and waits only for database-computed quiet
   assert.deepEqual(outputs('Incoming Message'), ['Canonicalize Inbound WhatsApp']);
   assert.deepEqual(outputs('Canonicalize Inbound WhatsApp'), ['Reserve Canonical Inbound Message']);
   assert.deepEqual(outputs('Reserve Canonical Inbound Message'), ['Claim Next Session Inbound']);
-  assert.deepEqual(outputs('Route Session Claim State', 0), ['IF Media Without Text']);
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['Route Media Enrichment']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
   assert.deepEqual(outputs('Wait For Turn Quiet Period'), ['Claim Next Session Inbound']);
   assert.deepEqual(outputs('Route Session Claim State', 2), ['End — Turn Already Owned']);
@@ -570,8 +570,8 @@ test('canonical outbound linkage follows the claimed inbound, not trigger comple
 });
 
 test('published V4 cutover routes acquired turns through the claim boundary', () => {
-  assert.deepEqual(outputs('Route Session Claim State', 0), ['IF Media Without Text']);
-  assert.deepEqual(outputs('IF Media Without Text', 1), ['Get V4 Conversation Context']);
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['Route Media Enrichment']);
+  assert.deepEqual(outputs('Route Media Enrichment', 1), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('Get V4 Conversation Context'), ['Build V4 Conversation Engine Request']);
   assert.deepEqual(outputs('Build V4 Conversation Engine Request'), ['Call V4 Conversation Engine']);
 });

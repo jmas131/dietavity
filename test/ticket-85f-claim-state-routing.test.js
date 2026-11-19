@@ -15,7 +15,7 @@ assert.equal(route.parameters.rules.values.length, 5);
 assert.deepEqual(route.parameters.rules.values.map((rule) => rule.conditions.conditions[0].rightValue), ['acquired', 'deferred', 'busy', 'reconciliation', 'empty']);
 assert.deepEqual(
   workflow.connections[routeName].main.map((branch) => branch[0]?.node),
-  ['IF Media Without Text', 'Wait For Turn Quiet Period', 'End — Turn Already Owned', 'Reconcile V4 Outbound Reservation', 'End — Turn Already Owned', 'Fail Closed Invalid Session Claim State'],
+  ['Route Media Enrichment', 'Wait For Turn Quiet Period', 'End — Turn Already Owned', 'Reconcile V4 Outbound Reservation', 'End — Turn Already Owned', 'Fail Closed Invalid Session Claim State'],
 );
 const reconciliation = route.parameters.rules.values[3].conditions.conditions;
 assert.equal(reconciliation.length, 3);
@@ -35,7 +35,7 @@ const destination = (input) => {
 };
 const valid = { id: 'synthetic-inbound-id', session_id: 'synthetic-session' };
 const expected = [
-  [{ claim_state: 'acquired', ...valid }, 'IF Media Without Text'],
+  [{ claim_state: 'acquired', ...valid }, 'Route Media Enrichment'],
   [{ claim_state: 'deferred', ...valid }, 'Wait For Turn Quiet Period'],
   [{ claim_state: 'busy', ...valid }, 'End — Turn Already Owned'],
   [{ claim_state: 'reconciliation', ...valid }, 'Reconcile V4 Outbound Reservation'],

@@ -22,8 +22,19 @@ function mediaOnly(claimed) {
   });
 }
 
-test('V4 acquired media-only claims take the deterministic clarification route', () => {
-  assert.deepEqual(outputs('Route Session Claim State'), ['IF Media Without Text']);
+test('V4 acquired turns enter the claim-owned media boundary before V4', () => {
+  assert.deepEqual(outputs('Route Session Claim State'), ['Route Media Enrichment']);
+  // A recovered, completed enrichment skips external work; text still stays
+  // on the unchanged V4 path; exactly one attachment is enriched.
+  assert.deepEqual(outputs('Route Media Enrichment', 0), ['Get V4 Conversation Context']);
+  assert.deepEqual(outputs('Route Media Enrichment', 1), ['Get V4 Conversation Context']);
+  assert.deepEqual(outputs('Route Media Enrichment', 2), ['Call Media Enrichment']);
+  assert.deepEqual(outputs('Route Media Enrichment', 3), ['Prepare Log Data Message Without Text']);
+  assert.deepEqual(outputs('Call Media Enrichment'), ['Classify Media Enrichment Result']);
+  assert.deepEqual(outputs('Classify Media Enrichment Result'), ['Route Media Enrichment Result']);
+  assert.deepEqual(outputs('Route Media Enrichment Result', 0), ['Persist Media Enrichment']);
+  assert.deepEqual(outputs('Route Media Enrichment Result', 1), ['Prepare Log Data Message Without Text']);
+  assert.deepEqual(outputs('Persist Media Enrichment'), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('IF Media Without Text', 0), ['Prepare Log Data Message Without Text']);
   assert.deepEqual(outputs('IF Media Without Text', 1), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('Prepare Log Data Message Without Text'), ['Reserve Media Clarification']);
@@ -35,7 +46,7 @@ test('V4 acquired media-only claims take the deterministic clarification route',
   }
 });
 
-test('textual turns, including media with text, retain V4 and media reservations are duplicate-safe', () => {
+test('textual turns retain V4 and media reservations are duplicate-safe', () => {
   assert.equal(mediaOnly({ metadata: { num_media: 0 }, body: 'Hola', combined_body: 'Hola' }), false);
   assert.equal(mediaOnly({ metadata: { num_media: 1 }, body: '¿Qué preparo?', combined_body: '¿Qué preparo?' }), false);
   assert.deepEqual(outputs('Get V4 Conversation Context'), ['Build V4 Conversation Engine Request']);
@@ -49,6 +60,12 @@ test('textual turns, including media with text, retain V4 and media reservations
   assert.match(reserve.parameters.options.queryReplacement, /:media_clarification/);
   assert.match(reserve.parameters.options.queryReplacement, /processing_owner: \$execution\.id/);
   assert.match(reserve.parameters.query, /ON CONFLICT \(idempotency_key\)[\s\S]*DO NOTHING/);
+  assert.match(reserve.parameters.options.queryReplacement, /No pude procesar el archivo en este momento/);
+  assert.doesNotMatch(reserve.parameters.options.queryReplacement, /solo puedo leer texto/);
   assert.match(node('Assert Media Clarification Accepted').parameters.jsCode,
     /TICKET_9_TWILIO_SEND_REQUIRES_RECONCILIATION/);
+  const mediaCall = node('Call Media Enrichment');
+  assert.doesNotMatch(JSON.stringify(mediaCall.parameters), /base64|mediaUrl/i);
+  assert.match(node('Classify Media Enrichment Result').parameters.jsCode, /TICKET_96B_TRANSIENT_MEDIA/);
+  assert.match(node('Persist Media Enrichment').parameters.options.queryReplacement, /enrichment: \$json\.enrichment/);
 });

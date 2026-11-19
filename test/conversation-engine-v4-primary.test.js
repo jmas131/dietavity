@@ -10,7 +10,7 @@ const { createPrimaryConversationLlmClient, ConversationV4LlmError } = require('
 const { PRIMARY_CONVERSATION_SYSTEM_PROMPT } = require('../lib/conversation-engine-v4/prompt');
 const { FIXTURES } = require('../test-support/conversation-engine-v4-qualification-fixtures');
 
-function input(overrides = {}) { return { request_id: 'v4-test', session_id: 'session-v4-test', claimed_inbound_message_id: '00000000-0000-4000-8000-000000000001', processing_order: 1, current_message: 'Tengo pollo y calabacitas, ¿cómo los preparo?', canonical_history: [{ role: 'assistant', text: '¿Qué alimentos tienes disponibles ahora?' }], durable_memory: { allergies: ['cacahuate'], dietary_restrictions: ['sin cerdo'], preferences: ['prefiere comida suave'] }, ...overrides }; }
+function input(overrides = {}) { return { request_id: 'v4-test', session_id: 'session-v4-test', claimed_inbound_message_id: '00000000-0000-4000-8000-000000000001', processing_order: 1, current_message: 'Tengo pollo y calabacitas, ¿cómo los preparo?', canonical_history: [{ role: 'assistant', text: '¿Qué alimentos tienes disponibles ahora?' }], durable_memory: { allergies: ['cacahuate'], dietary_restrictions: ['sin cerdo'], preferences: ['prefiere comida suave'] }, media_context: null, ...overrides }; }
 
 test('V4 request injects authority, medical policy, canonical history, and only approved durable memory', () => {
   const request = buildRequest(input());
@@ -22,6 +22,10 @@ test('V4 request injects authority, medical policy, canonical history, and only 
   assert.deepEqual(validateRequest(request), request);
   assert.equal(buildRequest(input({ current_message: 'Tengo pollo\ny calabacitas', canonical_history: [{ role: 'customer', text: 'Hola\nquiero cocinar' }] })).current_message, 'Tengo pollo\ny calabacitas');
   assert.throws(() => buildRequest({ ...input(), inventory: ['pollo'] }), error => error instanceof ConversationV4ContractError && error.code === 'V4_REQUEST_INVALID');
+});
+test('V4 accepts only bounded derived media context, never raw media', () => {
+  assert.deepEqual(buildRequest(input({ media_context: { kind: 'image', text: 'Se observan verduras y pollo.' } })).media_context, { kind: 'image', text: 'Se observan verduras y pollo.' });
+  assert.throws(() => buildRequest(input({ media_context: { kind: 'image', text: '', url: 'https://example.test' } })), /V4_REQUEST_INVALID/u);
 });
 
 test('V4 output validation is structural only and permits arbitrary natural food wording', () => {

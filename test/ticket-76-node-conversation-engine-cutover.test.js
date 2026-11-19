@@ -56,9 +56,9 @@ function modelV4PartDelivery(parts) {
   return events;
 }
 
-test('V4 receives acquired textual claims after the deterministic media-only boundary', () => {
-  assert.deepEqual(outputs('Route Session Claim State', 0), ['IF Media Without Text']);
-  assert.deepEqual(outputs('IF Media Without Text', 1), ['Get V4 Conversation Context']);
+test('V4 receives acquired textual claims after the durable media boundary', () => {
+  assert.deepEqual(outputs('Route Session Claim State', 0), ['Route Media Enrichment']);
+  assert.deepEqual(outputs('Route Media Enrichment', 1), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('Route Session Claim State', 1), ['Wait For Turn Quiet Period']);
   assert.deepEqual(outputs('Route Session Claim State', 2), ['End — Turn Already Owned']);
 });
@@ -73,7 +73,7 @@ test('V4 builds a technical request from only claimed logical input, canonical h
   });
   assert.deepEqual(JSON.parse(JSON.stringify(built)), {
     request_id: UUID, session_id: 'synthetic-session', claimed_inbound_message_id: UUID,
-    processing_order: 3, current_message: 'Tengo pollo\ny calabacitas', canonical_history: history, durable_memory,
+    processing_order: 3, current_message: 'Tengo pollo\ny calabacitas', canonical_history: history, durable_memory, media_context: null,
   });
   assert.throws(() => runCode('Build V4 Conversation Engine Request', { canonical_history: history, durable_memory: { ...durable_memory, inventory: ['pollo'] } }, () => claimed), /CONVERSATION_V4_REQUEST_INVALID/);
 });

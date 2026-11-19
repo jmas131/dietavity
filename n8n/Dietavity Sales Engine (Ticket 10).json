@@ -3431,7 +3431,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const trigger = $input.first().json || {};\nconst data = trigger.data || {};\nconst session_id = String(data.from || '')\n  .replace(/^whatsapp:/i, '')\n  .replace(/\\s+/g, '')\n  .trim();\nconst provider_message_sid = String(data.messageSid || data.MessageSid || data.sid || '').trim();\nif (!session_id) throw new Error('TICKET_9_MISSING_WHATSAPP_SESSION');\nif (!/^(SM|MM)[0-9a-fA-F]{32}$/.test(provider_message_sid)) {\n  throw new Error('TICKET_9_MISSING_REAL_TWILIO_MESSAGE_SID');\n}\nconst providerEventTimestampRaw = trigger.timestamp || data.dateCreated || data.date_created || '';\nconst providerEventDate = new Date(providerEventTimestampRaw);\nconst provider_event_timestamp = Number.isNaN(providerEventDate.getTime())\n  ? null\n  : providerEventDate.toISOString();\nconst rawBody = typeof data.body === 'string' ? data.body : '';\nconst body = rawBody.trim() || null;\nreturn [{ json: {\n  session_id,\n  provider: 'twilio',\n  provider_message_sid,\n  idempotency_key: 'inbound:' + provider_message_sid,\n  body,\n  message_kind: body ? 'user' : 'media_clarification',\n  num_media: Number(data.numMedia || 0),\n  workflow_execution_id: $execution.id,\n  provider_event_timestamp\n} }];"
+        "jsCode": "const trigger = $input.first().json || {};\nconst data = trigger.data || {};\nconst session_id = String(data.from || '')\n  .replace(/^whatsapp:/i, '')\n  .replace(/\\s+/g, '')\n  .trim();\nconst provider_message_sid = String(data.messageSid || data.MessageSid || data.sid || '').trim();\nif (!session_id) throw new Error('TICKET_9_MISSING_WHATSAPP_SESSION');\nif (!/^(SM|MM)[0-9a-fA-F]{32}$/.test(provider_message_sid)) {\n  throw new Error('TICKET_9_MISSING_REAL_TWILIO_MESSAGE_SID');\n}\nconst providerEventTimestampRaw = trigger.timestamp || data.dateCreated || data.date_created || '';\nconst providerEventDate = new Date(providerEventTimestampRaw);\nconst provider_event_timestamp = Number.isNaN(providerEventDate.getTime())\n  ? null\n  : providerEventDate.toISOString();\nconst rawBody = typeof data.body === 'string' ? data.body : '';\nconst body = rawBody.trim() || null;\nreturn [{ json: {\n  session_id,\n  provider: 'twilio',\n  provider_message_sid,\n  idempotency_key: 'inbound:' + provider_message_sid,\n  body,\n  message_kind: body ? 'user' : 'media_clarification',\n  num_media: Number(data.numMedia || data.NumMedia || 0),\n  attachments: Number(data.numMedia || data.NumMedia || 0) === 1 ? [{ media_path: (() => { const u=new URL(String(data.mediaUrl0 || data.MediaUrl0 || '')); if (u.protocol !== 'https:' || u.hostname !== 'api.twilio.com') throw new Error('TICKET_96B_MEDIA_URL_INVALID'); return u.pathname; })(), content_type: String(data.mediaContentType0 || data.MediaContentType0 || '').toLowerCase(), provider_message_sid, ordinal: 0 }] : [],\n  workflow_execution_id: $execution.id,\n  provider_event_timestamp\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -3446,7 +3446,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH input AS (\n  SELECT $1::jsonb AS payload\n), session_serialized AS (\n  SELECT pg_advisory_xact_lock(\n    hashtextextended(input.payload->>'session_id', 17)\n  )\n  FROM input\n), reserved AS (\n  INSERT INTO public.messages (\n    user_id, session_id, direction, body, message_kind, provider,\n    provider_message_sid, idempotency_key, delivery_status, metadata,\n    user_message, processing_order\n  )\n  SELECT\n    (SELECT app_user.id FROM public.users AS app_user\n      WHERE app_user.whatsapp_id = input.payload->>'session_id' LIMIT 1),\n    input.payload->>'session_id', 'inbound', input.payload->>'body',\n    input.payload->>'message_kind', 'twilio',\n    input.payload->>'provider_message_sid', input.payload->>'idempotency_key',\n    'received',\n    jsonb_strip_nulls(jsonb_build_object(\n      'workflow_execution_id', input.payload->>'workflow_execution_id',\n      'num_media', COALESCE((input.payload->>'num_media')::integer, 0),\n      'provider_event_timestamp', NULLIF(input.payload->>'provider_event_timestamp', ''),\n      'session_ordering_state', 'queued'\n    )),\n    COALESCE(input.payload->>'body', ''),\n    nextval('public.messages_inbound_processing_order_seq')\n  FROM input\n  CROSS JOIN session_serialized\n  ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING\n  RETURNING *\n)\nSELECT * FROM reserved;",
+        "query": "WITH input AS (\n  SELECT $1::jsonb AS payload\n), session_serialized AS (\n  SELECT pg_advisory_xact_lock(\n    hashtextextended(input.payload->>'session_id', 17)\n  )\n  FROM input\n), reserved AS (\n  INSERT INTO public.messages (\n    user_id, session_id, direction, body, message_kind, provider,\n    provider_message_sid, idempotency_key, delivery_status, metadata,\n    user_message, processing_order\n  )\n  SELECT\n    (SELECT app_user.id FROM public.users AS app_user\n      WHERE app_user.whatsapp_id = input.payload->>'session_id' LIMIT 1),\n    input.payload->>'session_id', 'inbound', input.payload->>'body',\n    input.payload->>'message_kind', 'twilio',\n    input.payload->>'provider_message_sid', input.payload->>'idempotency_key',\n    'received',\n    jsonb_strip_nulls(jsonb_build_object(\n      'workflow_execution_id', input.payload->>'workflow_execution_id',\n      'num_media', COALESCE((input.payload->>'num_media')::integer, 0),\n      'attachments', COALESCE(input.payload->'attachments', '[]'::jsonb),\n      'provider_event_timestamp', NULLIF(input.payload->>'provider_event_timestamp', ''),\n      'session_ordering_state', 'queued'\n    )),\n    COALESCE(input.payload->>'body', ''),\n    nextval('public.messages_inbound_processing_order_seq')\n  FROM input\n  CROSS JOIN session_serialized\n  ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING\n  RETURNING *\n)\nSELECT * FROM reserved;",
         "options": {
           "queryReplacement": "={{ JSON.stringify($json) }}"
         }
@@ -3658,7 +3658,7 @@
         "operation": "executeQuery",
         "query": "WITH input AS (SELECT $1::jsonb AS payload), claim_anchor AS (\n  SELECT inbound.id\n  FROM public.messages AS inbound\n  CROSS JOIN input\n  WHERE inbound.id = NULLIF(input.payload->>'in_reply_to_id', '')::uuid\n    AND inbound.direction = 'inbound'\n    AND inbound.processing_completed_at IS NULL\n    AND inbound.processing_owner = input.payload->>'processing_owner'\n), renewed_claim AS (\n  UPDATE public.messages AS member\n  SET processing_lease_until = NOW() + INTERVAL '15 minutes'\n  FROM claim_anchor\n  WHERE COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = claim_anchor.id::text\n    AND member.processing_completed_at IS NULL\n    AND member.processing_owner = (SELECT input.payload->>'processing_owner' FROM input)\n  RETURNING member.id\n), reserved AS (\n  INSERT INTO public.messages (\n    user_id, session_id, direction, body, message_kind, provider,\n    idempotency_key, in_reply_to_id, delivery_status, metadata,\n    assistant_response\n  )\n  SELECT\n    NULLIF(input.payload->>'user_id', '')::uuid,\n    input.payload->>'session_id', 'outbound', input.payload->>'body',\n    input.payload->>'message_kind', 'twilio', input.payload->>'idempotency_key',\n    NULLIF(input.payload->>'in_reply_to_id', '')::uuid, 'pending',\n    COALESCE(input.payload->'metadata', '{}'::jsonb), input.payload->>'body'\n  FROM input\n  WHERE EXISTS (SELECT 1 FROM renewed_claim)\n    AND NULLIF(input.payload->>'body', '') IS NOT NULL\n  ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING\n  RETURNING *\n)\nSELECT * FROM reserved;",
         "options": {
-          "queryReplacement": "={{ JSON.stringify({\n    session_id: $('Claim Next Session Inbound').item.json.session_id,\n    user_id: ($('Claim Next Session Inbound').item.json.user_id || null),\n    body: \"Recibí tu mensaje 😊  Por ahora solo puedo leer texto (no audio ni imágenes).  ¿Puedes escribirme lo que necesitas?\",\n    message_kind: \"media_clarification\",\n    idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':media_clarification',\n    in_reply_to_id: $('Claim Next Session Inbound').item.json.id,\n    processing_owner: $execution.id,\n    metadata: { workflow_execution_id: $execution.id }\n  }) }}"
+          "queryReplacement": "={{ JSON.stringify({\n    session_id: $('Claim Next Session Inbound').item.json.session_id,\n    user_id: ($('Claim Next Session Inbound').item.json.user_id || null),\n    body: \"No pude procesar el archivo en este momento. ¿Puedes escribirme lo que necesitas?\",\n    message_kind: \"media_clarification\",\n    idempotency_key: 'reply:' + $('Claim Next Session Inbound').item.json.provider_message_sid + ':media_clarification',\n    in_reply_to_id: $('Claim Next Session Inbound').item.json.id,\n    processing_owner: $execution.id,\n    metadata: { workflow_execution_id: $execution.id }\n  }) }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -5273,7 +5273,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH current_inbound AS (\n  SELECT id, session_id, user_id, processing_order\n  FROM public.messages\n  WHERE id = $2::uuid AND session_id = $1 AND direction = 'inbound'\n), canonical_customer_turns AS (\n  SELECT anchor.processing_order AS source_processing_order,\n    STRING_AGG(COALESCE(member.body, ''), E'\\n' ORDER BY member.processing_order, member.id) AS text,\n    MIN(member.timestamp) AS timestamp, anchor.id, 0 AS role_sort\n  FROM public.messages AS anchor\n  JOIN public.messages AS member\n    ON member.session_id = anchor.session_id\n    AND COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text\n  CROSS JOIN current_inbound\n  WHERE anchor.session_id = current_inbound.session_id\n    AND anchor.direction = 'inbound'\n    AND anchor.processing_order < current_inbound.processing_order\n    AND COALESCE(anchor.metadata->>'turn_anchor_id', anchor.id::text) = anchor.id::text\n    AND anchor.processing_outcome = 'completed'\n    AND member.direction = 'inbound'\n    AND member.processing_outcome = 'completed'\n  GROUP BY anchor.id, anchor.processing_order\n), outbound_parts AS (\n  SELECT outbound.*, replied.processing_order AS source_processing_order,\n    COALESCE(NULLIF(outbound.metadata->>'logical_reply_key', ''), outbound.idempotency_key) AS logical_key,\n    CASE WHEN outbound.metadata ? 'part_index' AND outbound.metadata->>'part_index' ~ '^[1-9][0-9]{0,2}$' THEN (outbound.metadata->>'part_index')::integer ELSE 1 END AS part_index,\n    CASE WHEN outbound.metadata ? 'part_count' AND outbound.metadata->>'part_count' ~ '^[1-9][0-9]{0,2}$' THEN (outbound.metadata->>'part_count')::integer ELSE 1 END AS part_count\n  FROM public.messages AS outbound\n  JOIN public.messages AS replied ON replied.id = outbound.in_reply_to_id\n  CROSS JOIN current_inbound\n  WHERE outbound.session_id = current_inbound.session_id\n    AND outbound.direction = 'outbound'\n    AND replied.direction = 'inbound'\n    AND replied.processing_order < current_inbound.processing_order\n    AND replied.processing_outcome = 'completed'\n), canonical_assistant_turns AS (\n  SELECT source_processing_order,\n    (ARRAY_AGG(COALESCE(NULLIF(assistant_response, ''), body) ORDER BY part_index, id))[1] AS text,\n    MIN(timestamp) AS timestamp, MIN(id::text)::uuid AS id, 1 AS role_sort\n  FROM outbound_parts\n  GROUP BY in_reply_to_id, logical_key, source_processing_order\n  HAVING COUNT(*) = MIN(part_count)\n    AND MIN(part_count) = MAX(part_count)\n    AND COUNT(DISTINCT part_index) = MIN(part_count)\n    AND MIN(part_index) = 1\n    AND MAX(part_index) = MIN(part_count)\n    AND BOOL_AND(delivery_status IN ('accepted', 'sent', 'delivered')\n      AND (provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$' OR metadata->>'provider_acceptance_evidence' = 'message_sid'))\n), chronological_history AS (\n  SELECT 'customer'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_customer_turns\n  UNION ALL\n  SELECT 'assistant'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_assistant_turns\n), nonempty_history AS (\n  SELECT * FROM chronological_history\n  WHERE text !~ '^[[:space:]]*$'\n), bounded_history AS (\n  SELECT * FROM nonempty_history\n  ORDER BY source_processing_order DESC, role_sort DESC, timestamp DESC, id DESC\n  LIMIT 30\n), active_memory AS (\n  SELECT memory.kind, memory.value\n  FROM current_inbound\n  CROSS JOIN LATERAL public.read_conversation_durable_memory(current_inbound.session_id, current_inbound.user_id) AS memory\n)\nSELECT\n  COALESCE((SELECT jsonb_agg(jsonb_build_object('role', role, 'text', text) ORDER BY source_processing_order ASC, role_sort ASC, timestamp ASC, id ASC) FROM bounded_history), '[]'::jsonb) AS canonical_history,\n  jsonb_build_object(\n    'allergies', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'allergy'), '[]'::jsonb),\n    'dietary_restrictions', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'dietary_restriction'), '[]'::jsonb),\n    'preferences', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'preference'), '[]'::jsonb)\n  ) AS durable_memory;",
+        "query": "WITH current_inbound AS (\n  SELECT id, session_id, user_id, processing_order\n  FROM public.messages\n  WHERE id = $2::uuid AND session_id = $1 AND direction = 'inbound'\n), canonical_customer_turns AS (\n  SELECT anchor.processing_order AS source_processing_order,\n    STRING_AGG(COALESCE(member.body, ''), E'\\n' ORDER BY member.processing_order, member.id) AS text,\n    MIN(member.timestamp) AS timestamp, anchor.id, 0 AS role_sort\n  FROM public.messages AS anchor\n  JOIN public.messages AS member\n    ON member.session_id = anchor.session_id\n    AND COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text\n  CROSS JOIN current_inbound\n  WHERE anchor.session_id = current_inbound.session_id\n    AND anchor.direction = 'inbound'\n    AND anchor.processing_order < current_inbound.processing_order\n    AND COALESCE(anchor.metadata->>'turn_anchor_id', anchor.id::text) = anchor.id::text\n    AND anchor.processing_outcome = 'completed'\n    AND member.direction = 'inbound'\n    AND member.processing_outcome = 'completed'\n  GROUP BY anchor.id, anchor.processing_order\n), outbound_parts AS (\n  SELECT outbound.*, replied.processing_order AS source_processing_order,\n    COALESCE(NULLIF(outbound.metadata->>'logical_reply_key', ''), outbound.idempotency_key) AS logical_key,\n    CASE WHEN outbound.metadata ? 'part_index' AND outbound.metadata->>'part_index' ~ '^[1-9][0-9]{0,2}$' THEN (outbound.metadata->>'part_index')::integer ELSE 1 END AS part_index,\n    CASE WHEN outbound.metadata ? 'part_count' AND outbound.metadata->>'part_count' ~ '^[1-9][0-9]{0,2}$' THEN (outbound.metadata->>'part_count')::integer ELSE 1 END AS part_count\n  FROM public.messages AS outbound\n  JOIN public.messages AS replied ON replied.id = outbound.in_reply_to_id\n  CROSS JOIN current_inbound\n  WHERE outbound.session_id = current_inbound.session_id\n    AND outbound.direction = 'outbound'\n    AND replied.direction = 'inbound'\n    AND replied.processing_order < current_inbound.processing_order\n    AND replied.processing_outcome = 'completed'\n), canonical_assistant_turns AS (\n  SELECT source_processing_order,\n    (ARRAY_AGG(COALESCE(NULLIF(assistant_response, ''), body) ORDER BY part_index, id))[1] AS text,\n    MIN(timestamp) AS timestamp, MIN(id::text)::uuid AS id, 1 AS role_sort\n  FROM outbound_parts\n  GROUP BY in_reply_to_id, logical_key, source_processing_order\n  HAVING COUNT(*) = MIN(part_count)\n    AND MIN(part_count) = MAX(part_count)\n    AND COUNT(DISTINCT part_index) = MIN(part_count)\n    AND MIN(part_index) = 1\n    AND MAX(part_index) = MIN(part_count)\n    AND BOOL_AND(delivery_status IN ('accepted', 'sent', 'delivered')\n      AND (provider_message_sid ~ '^(SM|MM)[0-9a-fA-F]{32}$' OR metadata->>'provider_acceptance_evidence' = 'message_sid'))\n), chronological_history AS (\n  SELECT 'customer'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_customer_turns\n  UNION ALL\n  SELECT 'assistant'::text AS role, text, source_processing_order, timestamp, id, role_sort FROM canonical_assistant_turns\n), nonempty_history AS (\n  SELECT * FROM chronological_history\n  WHERE text !~ '^[[:space:]]*$'\n), bounded_history AS (\n  SELECT * FROM nonempty_history\n  ORDER BY source_processing_order DESC, role_sort DESC, timestamp DESC, id DESC\n  LIMIT 30\n), active_memory AS (\n  SELECT memory.kind, memory.value\n  FROM current_inbound\n  CROSS JOIN LATERAL public.read_conversation_durable_memory(current_inbound.session_id, current_inbound.user_id) AS memory\n)\nSELECT\n  COALESCE((SELECT jsonb_agg(jsonb_build_object('role', role, 'text', text) ORDER BY source_processing_order ASC, role_sort ASC, timestamp ASC, id ASC) FROM bounded_history), '[]'::jsonb) AS canonical_history,\n  jsonb_build_object(\n    'allergies', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'allergy'), '[]'::jsonb),\n    'dietary_restrictions', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'dietary_restriction'), '[]'::jsonb),\n    'preferences', COALESCE((SELECT jsonb_agg(value ORDER BY value) FROM active_memory WHERE kind = 'preference'), '[]'::jsonb)\n  ) AS durable_memory,\n  (SELECT metadata->'media_enrichment' FROM public.messages WHERE id = current_inbound.id) AS media_enrichment;",
         "options": {
           "queryReplacement": "={{ [ $('Claim Next Session Inbound').item.json.session_id, $('Claim Next Session Inbound').item.json.id ] }}"
         }
@@ -5296,7 +5296,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const claimed = $('Claim Next Session Inbound').item.json;\nconst value = $input.first().json;\nconst parse = raw => { if (Array.isArray(raw) || (raw && typeof raw === 'object')) return raw; if (typeof raw !== 'string') return null; try { return JSON.parse(raw); } catch { return null; } };\nconst fail = () => { throw new Error('CONVERSATION_V4_REQUEST_INVALID'); };\nconst uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\nconst history = parse(value.canonical_history);\nconst durable_memory = parse(value.durable_memory);\nconst processing_order = typeof claimed.processing_order === 'string' && /^[1-9]\\d*$/.test(claimed.processing_order) ? Number(claimed.processing_order) : claimed.processing_order;\nconst current_message = claimed.combined_body || claimed.body;\nif (!uuid.test(String(claimed.id || '')) || typeof claimed.session_id !== 'string' || !claimed.session_id.trim() || claimed.session_id.length > 320 || !Number.isSafeInteger(processing_order) || processing_order < 1 || typeof current_message !== 'string' || !current_message.trim() || current_message.length > 6000 || !Array.isArray(history) || history.length > 30 || !durable_memory || typeof durable_memory !== 'object' || Array.isArray(durable_memory) || Object.keys(durable_memory).length !== 3) fail();\nfor (const item of history) if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).length !== 2 || !['customer', 'assistant'].includes(item.role) || typeof item.text !== 'string' || !item.text.trim() || item.text.length > 3000) fail();\nfor (const key of ['allergies', 'dietary_restrictions', 'preferences']) if (!Array.isArray(durable_memory[key]) || durable_memory[key].length > 30 || durable_memory[key].some(item => typeof item !== 'string' || !item.trim() || item.length > 160 || /[\\r\\n\\t]/.test(item))) fail();\nreturn [{ json: { request_id: claimed.id, session_id: claimed.session_id, claimed_inbound_message_id: claimed.id, processing_order, current_message, canonical_history: history, durable_memory } }];"
+        "jsCode": "const claimed = $('Claim Next Session Inbound').item.json;\nconst value = $input.first().json;\nconst parse = raw => { if (Array.isArray(raw) || (raw && typeof raw === 'object')) return raw; if (typeof raw !== 'string') return null; try { return JSON.parse(raw); } catch { return null; } };\nconst fail = () => { throw new Error('CONVERSATION_V4_REQUEST_INVALID'); };\nconst uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\nconst history = parse(value.canonical_history);\nconst durable_memory = parse(value.durable_memory);\nconst processing_order = typeof claimed.processing_order === 'string' && /^[1-9]\\d*$/.test(claimed.processing_order) ? Number(claimed.processing_order) : claimed.processing_order;\nconst enrichment = parse(value.media_enrichment);\nconst current_message = claimed.combined_body || claimed.body || enrichment?.text;\nif (!uuid.test(String(claimed.id || '')) || typeof claimed.session_id !== 'string' || !claimed.session_id.trim() || claimed.session_id.length > 320 || !Number.isSafeInteger(processing_order) || processing_order < 1 || typeof current_message !== 'string' || !current_message.trim() || current_message.length > 6000 || !Array.isArray(history) || history.length > 30 || !durable_memory || typeof durable_memory !== 'object' || Array.isArray(durable_memory) || Object.keys(durable_memory).length !== 3) fail();\nfor (const item of history) if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).length !== 2 || !['customer', 'assistant'].includes(item.role) || typeof item.text !== 'string' || !item.text.trim() || item.text.length > 3000) fail();\nfor (const key of ['allergies', 'dietary_restrictions', 'preferences']) if (!Array.isArray(durable_memory[key]) || durable_memory[key].length > 30 || durable_memory[key].some(item => typeof item !== 'string' || !item.trim() || item.length > 160 || /[\\r\\n\\t]/.test(item))) fail();\nreturn [{ json: { request_id: claimed.id, session_id: claimed.session_id, claimed_inbound_message_id: claimed.id, processing_order, current_message, canonical_history: history, durable_memory, media_context: enrichment && enrichment.status === 'complete' ? { kind: enrichment.kind, text: enrichment.text } : null } }];"
       },
       "name": "Build V4 Conversation Engine Request",
       "id": "7250e8ec-81fe-4be8-a150-0e991db1078c",
@@ -5963,6 +5963,198 @@
         -11408,
         -1280
       ]
+    },
+    {
+      "name": "Route Media Enrichment",
+      "id": "96b-route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -7520,
+        -576
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.metadata.media_enrichment && $json.metadata.media_enrichment.status }}",
+                    "rightValue": "complete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ Number($json.metadata.num_media || 0) }}",
+                    "rightValue": 0,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ Number($json.metadata.num_media || 0) }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "notes": "Ticket 96B: only one attachment reaches private enrichment; text-only remains V4."
+    },
+    {
+      "name": "Call Media Enrichment",
+      "id": "96b-call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -7440,
+        -448
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:12751/internal/media-enrichment/v1/resolve",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Claim Next Session Inbound').item.json.metadata.attachments[0]) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ACM2VyFV3gksFRqK",
+          "name": "Dietavity Conversation Engine Internal Header Auth"
+        }
+      },
+      "continueOnFail": true,
+      "onError": "continueRegularOutput",
+      "notes": "No binary enters n8n; only durable descriptor is sent."
+    },
+    {
+      "name": "Persist Media Enrichment",
+      "id": "96b-persist",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -7200,
+        -448
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT public.persist_media_enrichment($1::jsonb) AS media_enrichment;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ inbound_message_id: $('Claim Next Session Inbound').item.json.id, processing_owner: $execution.id, enrichment: $json.enrichment }) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Persists only bounded derived text; no URL, binary, or Base64."
+    },
+    {
+      "name": "Classify Media Enrichment Result",
+      "id": "96b-classify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -7280,
+        -448
+      ],
+      "parameters": {
+        "jsCode": "const v=$input.first().json||{}; const code=String(v.code||v.error||''); if (v.outcome === 'fallback') return [{json:{route:'fallback', code}}]; if (!code && v.kind && v.text) return [{json:{route:'success', enrichment:v}}]; if (['media_unavailable','enrichment_unavailable'].includes(code)) throw new Error('TICKET_96B_TRANSIENT_MEDIA:'+code); throw new Error('TICKET_96B_MEDIA_RESPONSE_INVALID');"
+      },
+      "notes": "Transient provider failures throw to existing Error Handler/recovery. Permanent/disabled media gets deterministic clarification."
+    },
+    {
+      "name": "Route Media Enrichment Result",
+      "id": "96b-result-route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -7120,
+        -448
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "success",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
     }
   ],
   "connections": {
@@ -7935,7 +8127,7 @@
       "main": [
         [
           {
-            "node": "IF Media Without Text",
+            "node": "Route Media Enrichment",
             "type": "main",
             "index": 0
           }
@@ -8652,6 +8844,89 @@
         [
           {
             "node": "Route Session Claim State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Media Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Get V4 Conversation Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get V4 Conversation Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Media Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Log Data Message Without Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Media Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Classify Media Enrichment Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Media Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Get V4 Conversation Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Media Enrichment Result": {
+      "main": [
+        [
+          {
+            "node": "Route Media Enrichment Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Media Enrichment Result": {
+      "main": [
+        [
+          {
+            "node": "Persist Media Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Log Data Message Without Text",
             "type": "main",
             "index": 0
           }

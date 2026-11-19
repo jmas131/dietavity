@@ -95,8 +95,8 @@ test('poller delegates durable-outbound reconciliation, concurrent ownership, an
   assert.match(claim.parameters.query, /outbound\.in_reply_to_id = candidate\.id/);
   assert.match(claim.parameters.query, /'reconciliation'::text AS claim_state/);
   assert.match(claim.parameters.query, /NOT EXISTS \(\s*SELECT 1\s*FROM public\.messages AS outbound[\s\S]*outbound\.in_reply_to_id = turn\.anchor_id/);
-  assert.deepEqual(outputs('Route Session Claim State'), ['IF Media Without Text']);
-  assert.deepEqual(outputs('IF Media Without Text', 1), [v4Context.name]);
+  assert.deepEqual(outputs('Route Session Claim State'), ['Route Media Enrichment']);
+  assert.deepEqual(outputs('Route Media Enrichment', 1), [v4Context.name]);
   assert.deepEqual(outputs(v4Context.name), ['Build V4 Conversation Engine Request']);
   assert.doesNotMatch(JSON.stringify(poller), /Reserve V4 Reply With Memory|Respond to V4 Chat|twilio/i);
 });

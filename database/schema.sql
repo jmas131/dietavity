@@ -867,6 +867,7 @@ CREATE TABLE public.messages (
     CONSTRAINT messages_direction_check CHECK ((direction = ANY (ARRAY['inbound'::text, 'outbound'::text]))),
     CONSTRAINT messages_message_kind_check CHECK (((message_kind IS NULL) OR (message_kind = ANY (ARRAY['user'::text, 'sales_ai'::text, 'sales_deterministic'::text, 'checkout'::text, 'paid_ai'::text, 'paid_deterministic'::text, 'fallback'::text, 'customer_error'::text, 'setup_link'::text, 'welcome'::text, 'reminder_confirmation'::text, 'reminder_scheduled'::text, 'media_clarification'::text, 'legacy_cancellation'::text, 'portal_recovery'::text, 'identity_verification'::text])))),
     CONSTRAINT messages_metadata_object_check CHECK ((jsonb_typeof(metadata) = 'object'::text)),
+    CONSTRAINT messages_media_metadata_shape_check CHECK (((NOT (metadata ? 'media_enrichment'::text)) OR (jsonb_typeof((metadata -> 'media_enrichment'::text)) = 'object'::text))),
     CONSTRAINT messages_processing_lease_check CHECK ((((processing_owner IS NULL) AND (processing_lease_until IS NULL)) OR ((processing_owner IS NOT NULL) AND (processing_lease_until IS NOT NULL)))),
     CONSTRAINT messages_processing_outcome_check CHECK (((processing_outcome IS NULL) OR (processing_outcome = ANY (ARRAY['historical_completed'::text, 'completed'::text, 'reconciliation'::text, 'superseded'::text])))),
     CONSTRAINT messages_processing_shape_check CHECK (((processing_order IS NULL) OR ((direction = 'inbound'::text) AND (session_id IS NOT NULL) AND (provider = 'twilio'::text) AND (provider_message_sid IS NOT NULL)))),
@@ -9116,6 +9117,41 @@ RESET ROLE;
 REVOKE twilio_ledger_audit_view_owner FROM postgres;
 REVOKE CREATE ON SCHEMA twilio_audit FROM twilio_ledger_audit_view_owner;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM twilio_ledger_auditor;
+
+-- Ticket 96B: atomically retains a bounded derived observation for a claimed
+-- canonical inbound message. Raw media is intentionally never database data.
+CREATE OR REPLACE FUNCTION public.persist_media_enrichment(p jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE result jsonb;
+BEGIN
+  IF jsonb_typeof(p) <> 'object'
+    OR p->>'inbound_message_id' !~ '^[0-9a-fA-F-]{36}$'
+    OR length(COALESCE(p->>'processing_owner','')) > 160
+    OR jsonb_typeof(p->'enrichment') <> 'object'
+    OR p->'enrichment' ?| ARRAY['url','base64','bytes']
+    OR p->'enrichment'->>'kind' NOT IN ('image','audio')
+    OR length(trim(COALESCE(p->'enrichment'->>'text',''))) NOT BETWEEN 1 AND 1200
+  THEN RAISE EXCEPTION 'TICKET_96B_ENRICHMENT_INVALID'; END IF;
+  SELECT m.metadata->'media_enrichment' INTO result FROM public.messages m
+  WHERE m.id = (p->>'inbound_message_id')::uuid FOR UPDATE;
+  IF result IS NOT NULL AND result->>'status' = 'complete'
+    AND result->>'kind' IN ('image','audio')
+    AND length(trim(COALESCE(result->>'text',''))) BETWEEN 1 AND 1200
+  THEN RETURN result; END IF;
+  IF result IS NOT NULL THEN RAISE EXCEPTION 'TICKET_96B_ENRICHMENT_CONFLICT'; END IF;
+  UPDATE public.messages AS m SET metadata = m.metadata || jsonb_build_object(
+    'media_enrichment', jsonb_build_object('status','complete','kind',p->'enrichment'->>'kind','text',p->'enrichment'->>'text','completed_at',now())
+  ) WHERE m.id = (p->>'inbound_message_id')::uuid AND m.direction = 'inbound'
+    AND m.processing_owner = p->>'processing_owner' AND m.processing_completed_at IS NULL
+    AND m.processing_lease_until > now()
+    AND jsonb_array_length(COALESCE(m.metadata->'attachments','[]'::jsonb)) = 1
+    AND (m.metadata->'attachments'->0->>'content_type') LIKE CASE WHEN p->'enrichment'->>'kind' = 'image' THEN 'image/%' ELSE 'audio/%' END;
+  IF NOT FOUND THEN RAISE EXCEPTION 'TICKET_96B_ENRICHMENT_STALE_OR_CONFLICT'; END IF;
+  SELECT metadata->'media_enrichment' INTO result FROM public.messages WHERE id = (p->>'inbound_message_id')::uuid;
+  RETURN result;
+END $$;
+REVOKE ALL ON FUNCTION public.persist_media_enrichment(jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.persist_media_enrichment(jsonb) TO service_role;
 DO $$
 BEGIN
   IF pg_has_role('postgres', 'twilio_ledger_audit_view_owner', 'SET')
