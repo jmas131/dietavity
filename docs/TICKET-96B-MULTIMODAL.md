@@ -12,6 +12,16 @@ Set no feature flag in production until the activation checks below are complete
 
 Keep both media flags unset or `false` for rollback. Pruning does not make execution history safe by itself: n8n receives only the four-field attachment descriptor and bounded derived text, never raw binary or Base64.
 
+## Confirmed provider smoke result
+
+Ticket 96H's controlled OpenAI-only smoke test passed for a synthetic food
+image through `gpt-4.1-mini` and a synthetic Spanish Ogg/Opus recording through
+`gpt-4o-mini-transcribe`. It confirms authenticated API processing and bounded,
+nonempty outputs through the production enrichment contract. It does not prove
+semantic accuracy, Twilio Media API retrieval or redirects, webhook signature
+validation, n8n routing, Supabase persistence, FIFO recovery, or WhatsApp
+delivery.
+
 ## Migration and sandbox order
 
 1. Back up the sandbox database and apply `20261118_ticket_96b_media_enrichment.sql`.
@@ -28,6 +38,10 @@ Keep both media flags unset or `false` for rollback. Pruning does not make execu
 - n8n execution-data access, pruning, and binary-data configuration reviewed; operators with execution-history access accept the retained bounded transcript/observation risk.
 - Approved privacy notice/consent wording covering images, recordings, transcripts, derived observations, OpenAI processing, retention, and instructions not to send medical/identity documents.
 - Current OpenAI model availability, account access, retention terms, and cost limits verified by the operator.
+- A sandbox end-to-end run for text-only, image-only, captioned image,
+  voice-only, captioned voice, unsupported media, expired media, transient
+  retrieval recovery, and duplicate inbound delivery, with canonical-ledger
+  and exactly-one-outbound evidence.
 
 ## Rollback
 

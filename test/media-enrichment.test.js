@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { descriptor, magic, detectedType, matchesDeclaredType, imageDimensions, oggDurationSeconds, createMediaEnricher, MediaEnrichmentError } = require('../lib/media-enrichment');
+const { descriptor, magic, detectedType, matchesDeclaredType, imageDimensions, oggDurationSeconds, createMediaEnricher, MediaEnrichmentError, openAiFailure } = require('../lib/media-enrichment');
 const sid = 'SM' + 'a'.repeat(32); const path = `/2010-04-01/Accounts/AC${'b'.repeat(32)}/Messages/${sid}/Media/ME${'c'.repeat(32)}`;
 function opusOgg(seconds = 1, { eos = true, opusHead = true } = {}) {
   const head = Buffer.alloc(19); head.write(opusHead ? 'OpusHead' : 'BadHead!'); head[8] = 1; head[9] = 1; head.writeUInt16LE(312, 10);
@@ -90,3 +90,25 @@ test('rejects a MIME/signature mismatch before any OpenAI request', async () => 
   finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
 });
 test('feature flags fail closed before a download', async () => { const enricher=createMediaEnricher({ twilioKey:'x',twilioSecret:'y',http:{get(){throw new Error('must not download');}}}); await assert.rejects(enricher.enrich({media_path:path,content_type:'image/jpeg',provider_message_sid:sid,ordinal:0}), error => error.code === 'image_disabled'); });
+test('classifies OpenAI HTTP, network, timeout, and response-contract failures without retaining provider bodies', async () => {
+  assert.deepEqual(openAiFailure(httpFailure(400)), { code: 'enrichment_invalid_request', transient: false, diagnostic: 'openai_http_400' });
+  assert.deepEqual(openAiFailure(httpFailure(401)), { code: 'enrichment_authorization_failed', transient: false, diagnostic: 'openai_http_401' });
+  assert.deepEqual(openAiFailure(httpFailure(403)), { code: 'enrichment_authorization_failed', transient: false, diagnostic: 'openai_http_403' });
+  assert.deepEqual(openAiFailure(httpFailure(404)), { code: 'enrichment_model_unavailable', transient: false, diagnostic: 'openai_http_404' });
+  assert.deepEqual(openAiFailure(httpFailure(429)), { code: 'enrichment_rate_limited', transient: true, diagnostic: 'openai_http_429' });
+  assert.deepEqual(openAiFailure(httpFailure(503)), { code: 'enrichment_provider_unavailable', transient: true, diagnostic: 'openai_http_5xx' });
+  assert.deepEqual(openAiFailure(Object.assign(new Error('request timeout'), { code: 'ECONNABORTED' })), { code: 'enrichment_timeout', transient: true, diagnostic: 'openai_timeout' });
+  assert.deepEqual(openAiFailure(Object.assign(new Error('connection failed'), { code: 'ENOTFOUND' })), { code: 'enrichment_network_unavailable', transient: true, diagnostic: 'openai_network_failure' });
+});
+test('surfaces sanitized OpenAI diagnostics and rejects an empty response contract', async () => {
+  const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
+  const events = [];
+  const item = { media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 };
+  try {
+    const providerFailure = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', diagnosticLogger: { warn: event => events.push(event) }, http: { async get() { return { data: png(1, 1) }; }, async post() { throw httpFailure(429); } } });
+    await assert.rejects(providerFailure.enrich(item), failure => failure.code === 'enrichment_rate_limited' && failure.transient && failure.diagnostic === 'openai_http_429');
+    assert.deepEqual(events, [{ event: 'openai_media_enrichment_failed', diagnostic: 'openai_http_429' }]);
+    const invalidResponse = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { return { data: png(1, 1) }; }, async post() { return { data: { choices: [] } }; } } });
+    await assert.rejects(invalidResponse.enrich(item), failure => failure.code === 'enrichment_response_invalid' && !failure.transient && failure.diagnostic === 'openai_response_contract');
+  } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
+});
