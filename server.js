@@ -19,7 +19,7 @@ const { createConversationEngineHandler, secretMatches } = require('./lib/conver
 const { createConversationEngineV4 } = require('./lib/conversation-engine-v4/service');
 const { createPrimaryConversationLlmClient } = require('./lib/conversation-engine-v4/llm-client');
 const { createConversationEngineV4Handler } = require('./lib/conversation-engine-v4/internal-route');
-const { createMediaEnricher, MediaEnrichmentError } = require('./lib/media-enrichment');
+const { createMediaEnricher, MediaEnrichmentError, mediaTestAllowlist, mediaEnrichmentRequest } = require('./lib/media-enrichment');
 
 const app = express();
 
@@ -49,15 +49,26 @@ const conversationEngineV4 = createConversationEngineV4({
 });
 app.post('/internal/conversation-engine/v4/resolve', createConversationEngineV4Handler({ engine: conversationEngineV4 }));
 const mediaEnricher = createMediaEnricher();
-function createMediaEnrichmentHandler({ enricher = mediaEnricher, secret = process.env.DIETAVITY_CONVERSATION_ENGINE_SECRET } = {}) {
+const mediaOperatorIncidentCodes = new Set([
+  'media_retrieval_authorization_failed',
+  'enrichment_authorization_failed',
+  'enrichment_model_unavailable',
+]);
+function createMediaEnrichmentHandler({ enricher = mediaEnricher, secret = process.env.DIETAVITY_CONVERSATION_ENGINE_SECRET, allowlistProvider = mediaTestAllowlist } = {}) {
   return async (req, res) => {
-  if (!secretMatches(req.get('x-dietavity-conversation-engine-secret'), secret)) return res.status(401).json({ error: 'unauthorized' });
-  try { return res.status(200).json(await enricher.enrich(req.body)); }
-  catch (error) {
-    // Twilio credential/authorization failures are an operator incident, not
-    // a statement about the customer's attachment. The canonical workflow
+    if (!secretMatches(req.get('x-dietavity-conversation-engine-secret'), secret)) return res.status(401).json({ error: 'unauthorized' });
+    const request = mediaEnrichmentRequest(req.body);
+    // A missing, malformed, or empty allowlist is deliberately equivalent to
+    // a denied sender. Do not expose configuration or identity information.
+    if (!request || !allowlistProvider()?.has(request.sender)) {
+      return res.status(200).json({ outcome: 'fallback', code: 'media_not_authorized' });
+    }
+    try { return res.status(200).json(await enricher.enrich(request.attachment)); }
+    catch (error) {
+    // Provider credential and configured-model failures are operator incidents,
+    // not statements about the customer's attachment. The canonical workflow
     // persists a terminal reconciliation record and invokes its error path.
-    if (error instanceof MediaEnrichmentError && error.code === 'media_retrieval_authorization_failed') {
+    if (error instanceof MediaEnrichmentError && mediaOperatorIncidentCodes.has(error.code)) {
       return res.status(200).json({ outcome: 'operator_required', code: error.code });
     }
     // Other permanent attachment failures get the deterministic clarification.
@@ -66,7 +77,7 @@ function createMediaEnrichmentHandler({ enricher = mediaEnricher, secret = proce
       return res.status(200).json({ outcome: 'fallback', code: error.code });
     }
     return res.status(503).json({ error: error instanceof MediaEnrichmentError ? error.code : 'media_unavailable' });
-  }
+    }
   };
 }
 app.post('/internal/media-enrichment/v1/resolve', createMediaEnrichmentHandler());

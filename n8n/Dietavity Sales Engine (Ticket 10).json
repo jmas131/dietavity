@@ -6077,7 +6077,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Claim Next Session Inbound').item.json.metadata.attachments[0]) }}",
+        "jsonBody": "={{ JSON.stringify({ attachment: $('Claim Next Session Inbound').item.json.metadata.attachments[0], sender: $('Claim Next Session Inbound').item.json.session_id }) }}",
         "options": {
           "timeout": 30000
         }
@@ -6090,7 +6090,7 @@
       },
       "continueOnFail": true,
       "onError": "continueRegularOutput",
-      "notes": "No binary enters n8n; only durable descriptor is sent."
+      "notes": "No binary enters n8n. The private request carries only the durable descriptor and canonical sender identity; the protected Express allowlist is never present in workflow data."
     },
     {
       "name": "Persist Media Enrichment",
@@ -6126,9 +6126,9 @@
         -448
       ],
       "parameters": {
-        "jsCode": "const v=$input.first().json||{}; const code=String(v.code||v.error||''); if (v.outcome === 'operator_required' && code === 'media_retrieval_authorization_failed') return [{json:{route:'operator_required', code}}]; if (v.outcome === 'fallback') return [{json:{route:'fallback', code}}]; if (!code && v.kind && v.text) return [{json:{route:'success', enrichment:v}}]; if (['media_unavailable','enrichment_unavailable'].includes(code)) throw new Error('TICKET_96B_TRANSIENT_MEDIA:'+code); throw new Error('TICKET_96B_MEDIA_RESPONSE_INVALID');"
+        "jsCode": "const v=$input.first().json||{}; const code=String(v.code||v.error||''); const operatorCodes=new Set(['media_retrieval_authorization_failed','enrichment_authorization_failed','enrichment_model_unavailable']); if (v.outcome === 'operator_required' && operatorCodes.has(code)) return [{json:{route:'operator_required', code}}]; if (v.outcome === 'fallback') return [{json:{route:'fallback', code}}]; if (!code && v.kind && v.text) return [{json:{route:'success', enrichment:v}}]; if (['media_unavailable','enrichment_unavailable'].includes(code)) throw new Error('TICKET_96B_TRANSIENT_MEDIA:'+code); throw new Error('TICKET_96B_MEDIA_RESPONSE_INVALID');"
       },
-      "notes": "Transient provider failures throw to existing Error Handler/recovery. Attachment failures get deterministic clarification. Twilio credential failures use a terminal operator-required route."
+      "notes": "Transient provider failures throw to existing Error Handler/recovery. Attachment failures get deterministic clarification. Twilio/OpenAI credential and configured-model failures use a terminal operator-required route."
     },
     {
       "name": "Route Media Enrichment Result",
@@ -6202,9 +6202,9 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH input AS (SELECT $1::jsonb AS payload), anchor AS (\n  SELECT inbound.id\n  FROM public.messages AS inbound\n  CROSS JOIN input\n  WHERE inbound.id = NULLIF(input.payload->>'inbound_message_id', '')::uuid\n    AND inbound.direction = 'inbound'\n    AND inbound.processing_completed_at IS NULL\n    AND inbound.processing_owner = input.payload->>'processing_owner'\n    AND inbound.processing_lease_until > NOW()\n  FOR UPDATE OF inbound\n), terminal AS (\n  UPDATE public.messages AS member\n  SET processing_owner = NULL,\n      processing_lease_until = NULL,\n      processing_completed_at = NOW(),\n      processing_outcome = 'reconciliation',\n      metadata = member.metadata || jsonb_build_object(\n        'session_ordering_state', 'operator_required',\n        'reconciliation_state', 'operator_required',\n        'media_enrichment_state', 'authorization_failed',\n        'media_enrichment_error', 'media_retrieval_authorization_failed',\n        'media_enrichment_escalated_at', NOW()\n      )\n  FROM input\n  CROSS JOIN anchor\n  WHERE COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text\n    AND member.direction = 'inbound'\n    AND member.processing_completed_at IS NULL\n    AND member.processing_owner = input.payload->>'processing_owner'\n    AND member.processing_lease_until > NOW()\n  RETURNING member.id\n)\nSELECT COUNT(*)::integer AS terminal_member_count FROM terminal;",
+        "query": "WITH input AS (SELECT $1::jsonb AS payload), anchor AS (\n  SELECT inbound.id\n  FROM public.messages AS inbound\n  CROSS JOIN input\n  WHERE inbound.id = NULLIF(input.payload->>'inbound_message_id', '')::uuid\n    AND inbound.direction = 'inbound'\n    AND inbound.processing_completed_at IS NULL\n    AND inbound.processing_owner = input.payload->>'processing_owner'\n    AND inbound.processing_lease_until > NOW()\n    AND input.payload->>'error_code' IN ('media_retrieval_authorization_failed', 'enrichment_authorization_failed', 'enrichment_model_unavailable')\n  FOR UPDATE OF inbound\n), terminal AS (\n  UPDATE public.messages AS member\n  SET processing_owner = NULL,\n      processing_lease_until = NULL,\n      processing_completed_at = NOW(),\n      processing_outcome = 'reconciliation',\n      metadata = member.metadata || jsonb_build_object(\n        'session_ordering_state', 'operator_required',\n        'reconciliation_state', 'operator_required',\n        'media_enrichment_state', 'operator_required',\n        'media_enrichment_error', (SELECT payload->>'error_code' FROM input),\n        'media_enrichment_escalated_at', NOW()\n      )\n  FROM input\n  CROSS JOIN anchor\n  WHERE COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text\n    AND member.direction = 'inbound'\n    AND member.processing_completed_at IS NULL\n    AND member.processing_owner = input.payload->>'processing_owner'\n    AND member.processing_lease_until > NOW()\n  RETURNING member.id\n)\nSELECT COUNT(*)::integer AS terminal_member_count, (SELECT payload->>'error_code' FROM input) AS operator_incident_code FROM terminal;",
         "options": {
-          "queryReplacement": "={{ JSON.stringify({ inbound_message_id: $('Claim Next Session Inbound').item.json.id, processing_owner: $execution.id }) }}"
+          "queryReplacement": "={{ JSON.stringify({ inbound_message_id: $('Claim Next Session Inbound').item.json.id, processing_owner: $execution.id, error_code: $json.code }) }}"
         }
       },
       "credentials": {
@@ -6225,7 +6225,7 @@
         -352
       ],
       "parameters": {
-        "jsCode": "if (Number($input.first().json?.terminal_member_count || 0) < 1) throw new Error('TICKET_96B_MEDIA_AUTHORIZATION_STALE');\nthrow new Error('TICKET_96B_MEDIA_RETRIEVAL_AUTHORIZATION_REQUIRED');"
+        "jsCode": "const value=$input.first().json||{}; const code=String(value.operator_incident_code||''); if (Number(value.terminal_member_count||0)<1 || !['media_retrieval_authorization_failed','enrichment_authorization_failed','enrichment_model_unavailable'].includes(code)) throw new Error('TICKET_96B_MEDIA_AUTHORIZATION_STALE');\nthrow new Error('TICKET_96B_MEDIA_OPERATOR_REQUIRED:'+code);"
       },
       "notes": "Routes a durable credential incident through the existing Global Error Handler. It intentionally does not send a customer-facing clarification or leave retryable media work."
     }

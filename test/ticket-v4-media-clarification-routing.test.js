@@ -72,6 +72,7 @@ test('textual turns retain V4 and media reservations are duplicate-safe', () => 
   assert.match(node('Classify Media Enrichment Result').parameters.jsCode, /media_retrieval_authorization_failed/);
   assert.match(node('Record Media Retrieval Authorization Incident').parameters.query, /processing_outcome = 'reconciliation'/);
   assert.match(node('Record Media Retrieval Authorization Incident').parameters.query, /reconciliation_state', 'operator_required'/);
-  assert.match(node('Fail Closed Media Retrieval Authorization').parameters.jsCode, /TICKET_96B_MEDIA_RETRIEVAL_AUTHORIZATION_REQUIRED/);
+  assert.match(node('Record Media Retrieval Authorization Incident').parameters.query, /enrichment_model_unavailable/);
+  assert.match(node('Fail Closed Media Retrieval Authorization').parameters.jsCode, /TICKET_96B_MEDIA_OPERATOR_REQUIRED/);
   assert.match(node('Persist Media Enrichment').parameters.options.queryReplacement, /enrichment: \$json\.enrichment/);
 });
