@@ -79,7 +79,8 @@ test('a real Twilio SID is mandatory and n8n execution identity is metadata only
 });
 
 test('inbound reservation is the shared concurrency gate before routing or side effects', () => {
-  assert.deepEqual(outputs('Incoming Message'), ['Canonicalize Inbound WhatsApp']);
+  assert.deepEqual(outputs('Incoming Message'), ['Authorize Production WhatsApp Recipient']);
+  assert.deepEqual(outputs('Authorize Production WhatsApp Recipient'), ['Canonicalize Inbound WhatsApp']);
   assert.deepEqual(outputs('Canonicalize Inbound WhatsApp'), ['Reserve Canonical Inbound Message']);
   assert.deepEqual(outputs('Reserve Canonical Inbound Message'), ['Claim Next Session Inbound']);
   assert.deepEqual(outputs('Route Session Claim State', 0), ['Route Media Enrichment']);

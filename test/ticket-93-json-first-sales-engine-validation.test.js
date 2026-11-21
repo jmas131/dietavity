@@ -14,7 +14,7 @@ function credential(node, type) { const value = node.credentials?.[type]; assert
 test('Ticket 93 canonical Sales Engine is structurally valid and explicitly inactive', () => {
   assert.equal(workflow.name, 'Dietavity Sales Engine (Ticket 10)');
   assert.equal(workflow.active, false);
-  assert.equal(workflow.nodes.length, 243);
+  assert.equal(workflow.nodes.length, 246);
   assert.equal(new Set(workflow.nodes.map(node => node.id)).size, workflow.nodes.length, 'node IDs must be unique');
   assert.equal(nodes.size, workflow.nodes.length, 'node names must be unique');
   for (const source of Object.keys(workflow.connections)) assert.ok(nodes.has(source), `unknown connection source: ${source}`);
@@ -36,7 +36,9 @@ test('Ticket 93 retains recovery routing and both V4 incident hotfixes', () => {
   assert.deepEqual(outputs('Route Media Enrichment', 0), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('Route Media Enrichment', 2), ['Call Media Enrichment']);
   assert.deepEqual(outputs('Route Media Enrichment', 3), ['Prepare Log Data Message Without Text']);
-  assert.deepEqual(outputs('Route Media Enrichment Result', 1), ['Prepare Log Data Message Without Text']);
+  assert.deepEqual(outputs('Route Media Enrichment Result', 1), ['Record Media Retrieval Authorization Incident']);
+  assert.deepEqual(outputs('Route Media Enrichment Result', 2), ['Prepare Log Data Message Without Text']);
+  assert.deepEqual(outputs('Record Media Retrieval Authorization Incident'), ['Fail Closed Media Retrieval Authorization']);
   assert.deepEqual(outputs('Route V4 Conversation Engine Recovery Authorization', 0), ['Wait Before V4 Conversation Engine Recovery']);
   assert.deepEqual(outputs('Route V4 Conversation Engine Recovery Authorization', 1), ['Fail Closed V4 Conversation Engine Result']);
   const media = nodes.get('Route Media Enrichment').parameters.rules.values[2].conditions.conditions[0].leftValue;

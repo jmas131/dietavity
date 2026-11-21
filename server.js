@@ -49,19 +49,27 @@ const conversationEngineV4 = createConversationEngineV4({
 });
 app.post('/internal/conversation-engine/v4/resolve', createConversationEngineV4Handler({ engine: conversationEngineV4 }));
 const mediaEnricher = createMediaEnricher();
-app.post('/internal/media-enrichment/v1/resolve', async (req, res) => {
-  const secret = process.env.DIETAVITY_CONVERSATION_ENGINE_SECRET;
+function createMediaEnrichmentHandler({ enricher = mediaEnricher, secret = process.env.DIETAVITY_CONVERSATION_ENGINE_SECRET } = {}) {
+  return async (req, res) => {
   if (!secretMatches(req.get('x-dietavity-conversation-engine-secret'), secret)) return res.status(401).json({ error: 'unauthorized' });
-  try { return res.status(200).json(await mediaEnricher.enrich(req.body)); }
+  try { return res.status(200).json(await enricher.enrich(req.body)); }
   catch (error) {
-    // Permanent attachment failures are a completed request with a
-    // deterministic fallback. Transport/provider failures stay retryable.
+    // Twilio credential/authorization failures are an operator incident, not
+    // a statement about the customer's attachment. The canonical workflow
+    // persists a terminal reconciliation record and invokes its error path.
+    if (error instanceof MediaEnrichmentError && error.code === 'media_retrieval_authorization_failed') {
+      return res.status(200).json({ outcome: 'operator_required', code: error.code });
+    }
+    // Other permanent attachment failures get the deterministic clarification.
+    // Transport/provider failures remain retryable.
     if (error instanceof MediaEnrichmentError && !error.transient) {
       return res.status(200).json({ outcome: 'fallback', code: error.code });
     }
     return res.status(503).json({ error: error instanceof MediaEnrichmentError ? error.code : 'media_unavailable' });
   }
-});
+  };
+}
+app.post('/internal/media-enrichment/v1/resolve', createMediaEnrichmentHandler());
 
 app.set('view engine', 'ejs');
 
@@ -2473,3 +2481,4 @@ if (require.main === module) {
 }
 
 module.exports = app;
+module.exports.createMediaEnrichmentHandler = createMediaEnrichmentHandler;

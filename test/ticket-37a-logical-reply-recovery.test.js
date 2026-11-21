@@ -70,7 +70,11 @@ test('every current transport completion path embeds the exact canonical predica
     const w = JSON.parse(fs.readFileSync(path.join(root, 'n8n', file)));
     for (const n of w.nodes || []) {
       const sql = n.parameters?.query || '';
-      if (/processing_completed_at\s*=\s*(?:NOW\(|CASE)/i.test(sql)) {
+      // The media-credential incident intentionally terminalizes an inbound
+      // claim without reserving transport; its no-outbound behavior is covered
+      // by Ticket 96B's dedicated incident-routing test.
+      if (/processing_completed_at\s*=\s*(?:NOW\(|CASE)/i.test(sql)
+        && n.name !== 'Record Media Retrieval Authorization Incident') {
         found.push(n.name);
         const acceptedPredicate = n.name === 'Mark Session Inbound Complete'
           ? logical.fullyAcceptedSql('anchor.id')

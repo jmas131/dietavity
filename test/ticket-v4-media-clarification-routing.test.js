@@ -33,7 +33,9 @@ test('V4 acquired turns enter the claim-owned media boundary before V4', () => {
   assert.deepEqual(outputs('Call Media Enrichment'), ['Classify Media Enrichment Result']);
   assert.deepEqual(outputs('Classify Media Enrichment Result'), ['Route Media Enrichment Result']);
   assert.deepEqual(outputs('Route Media Enrichment Result', 0), ['Persist Media Enrichment']);
-  assert.deepEqual(outputs('Route Media Enrichment Result', 1), ['Prepare Log Data Message Without Text']);
+  assert.deepEqual(outputs('Route Media Enrichment Result', 1), ['Record Media Retrieval Authorization Incident']);
+  assert.deepEqual(outputs('Route Media Enrichment Result', 2), ['Prepare Log Data Message Without Text']);
+  assert.deepEqual(outputs('Record Media Retrieval Authorization Incident'), ['Fail Closed Media Retrieval Authorization']);
   assert.deepEqual(outputs('Persist Media Enrichment'), ['Get V4 Conversation Context']);
   assert.deepEqual(outputs('IF Media Without Text', 0), ['Prepare Log Data Message Without Text']);
   assert.deepEqual(outputs('IF Media Without Text', 1), ['Get V4 Conversation Context']);
@@ -67,5 +69,9 @@ test('textual turns retain V4 and media reservations are duplicate-safe', () => 
   const mediaCall = node('Call Media Enrichment');
   assert.doesNotMatch(JSON.stringify(mediaCall.parameters), /base64|mediaUrl/i);
   assert.match(node('Classify Media Enrichment Result').parameters.jsCode, /TICKET_96B_TRANSIENT_MEDIA/);
+  assert.match(node('Classify Media Enrichment Result').parameters.jsCode, /media_retrieval_authorization_failed/);
+  assert.match(node('Record Media Retrieval Authorization Incident').parameters.query, /processing_outcome = 'reconciliation'/);
+  assert.match(node('Record Media Retrieval Authorization Incident').parameters.query, /reconciliation_state', 'operator_required'/);
+  assert.match(node('Fail Closed Media Retrieval Authorization').parameters.jsCode, /TICKET_96B_MEDIA_RETRIEVAL_AUTHORIZATION_REQUIRED/);
   assert.match(node('Persist Media Enrichment').parameters.options.queryReplacement, /enrichment: \$json\.enrichment/);
 });

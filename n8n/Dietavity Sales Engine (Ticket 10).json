@@ -560,6 +560,20 @@
     },
     {
       "parameters": {
+        "jsCode": "const environment = typeof $env === 'object' && $env ? $env : {};\nconst expected = String(environment.DIETAVITY_PRODUCTION_WHATSAPP_RECIPIENT || '').trim();\nconst items = $input.all();\nconst e164 = /^\\+[1-9]\\d{7,14}$/;\nconst prefix = 'whatsapp:';\nif (!e164.test(expected) || !items.length) return [];\nfor (const item of items) {\n  const rawRecipient = item?.json?.data?.to;\n  if (typeof rawRecipient !== 'string' || !rawRecipient.startsWith(prefix)) return [];\n  const actual = rawRecipient.slice(prefix.length);\n  if (!e164.test(actual) || actual !== expected) return [];\n}\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -11384,
+        -3216
+      ],
+      "id": "e4ebc8da-5d0f-4e27-a2da-17c100000000",
+      "name": "Authorize Production WhatsApp Recipient",
+      "notes": "Ticket 96I: fail-closed recipient isolation for Twilio Event Streams. Accept only whatsapp:+E.164 data.to, strip that exact prefix, and compare the remainder to DIETAVITY_PRODUCTION_WHATSAPP_RECIPIENT as plain E.164. Rejected recipients emit no item, so they cannot create ledger, recovery, AI, or outbound work."
+    },
+    {
+      "parameters": {
         "from": "+18158698400",
         "to": "={{ $json.session_id }}",
         "toWhatsapp": true,
@@ -6112,9 +6126,9 @@
         -448
       ],
       "parameters": {
-        "jsCode": "const v=$input.first().json||{}; const code=String(v.code||v.error||''); if (v.outcome === 'fallback') return [{json:{route:'fallback', code}}]; if (!code && v.kind && v.text) return [{json:{route:'success', enrichment:v}}]; if (['media_unavailable','enrichment_unavailable'].includes(code)) throw new Error('TICKET_96B_TRANSIENT_MEDIA:'+code); throw new Error('TICKET_96B_MEDIA_RESPONSE_INVALID');"
+        "jsCode": "const v=$input.first().json||{}; const code=String(v.code||v.error||''); if (v.outcome === 'operator_required' && code === 'media_retrieval_authorization_failed') return [{json:{route:'operator_required', code}}]; if (v.outcome === 'fallback') return [{json:{route:'fallback', code}}]; if (!code && v.kind && v.text) return [{json:{route:'success', enrichment:v}}]; if (['media_unavailable','enrichment_unavailable'].includes(code)) throw new Error('TICKET_96B_TRANSIENT_MEDIA:'+code); throw new Error('TICKET_96B_MEDIA_RESPONSE_INVALID');"
       },
-      "notes": "Transient provider failures throw to existing Error Handler/recovery. Permanent/disabled media gets deterministic clarification."
+      "notes": "Transient provider failures throw to existing Error Handler/recovery. Attachment failures get deterministic clarification. Twilio credential failures use a terminal operator-required route."
     },
     {
       "name": "Route Media Enrichment Result",
@@ -6148,6 +6162,27 @@
                 ],
                 "combinator": "and"
               }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "operator_required",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
             }
           ]
         },
@@ -6155,6 +6190,44 @@
           "fallbackOutput": "extra"
         }
       }
+    },
+    {
+      "name": "Record Media Retrieval Authorization Incident",
+      "id": "96b-media-authorization-incident",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -6880,
+        -352
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (SELECT $1::jsonb AS payload), anchor AS (\n  SELECT inbound.id\n  FROM public.messages AS inbound\n  CROSS JOIN input\n  WHERE inbound.id = NULLIF(input.payload->>'inbound_message_id', '')::uuid\n    AND inbound.direction = 'inbound'\n    AND inbound.processing_completed_at IS NULL\n    AND inbound.processing_owner = input.payload->>'processing_owner'\n    AND inbound.processing_lease_until > NOW()\n  FOR UPDATE OF inbound\n), terminal AS (\n  UPDATE public.messages AS member\n  SET processing_owner = NULL,\n      processing_lease_until = NULL,\n      processing_completed_at = NOW(),\n      processing_outcome = 'reconciliation',\n      metadata = member.metadata || jsonb_build_object(\n        'session_ordering_state', 'operator_required',\n        'reconciliation_state', 'operator_required',\n        'media_enrichment_state', 'authorization_failed',\n        'media_enrichment_error', 'media_retrieval_authorization_failed',\n        'media_enrichment_escalated_at', NOW()\n      )\n  FROM input\n  CROSS JOIN anchor\n  WHERE COALESCE(member.metadata->>'turn_anchor_id', member.id::text) = anchor.id::text\n    AND member.direction = 'inbound'\n    AND member.processing_completed_at IS NULL\n    AND member.processing_owner = input.payload->>'processing_owner'\n    AND member.processing_lease_until > NOW()\n  RETURNING member.id\n)\nSELECT COUNT(*)::integer AS terminal_member_count FROM terminal;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ inbound_message_id: $('Claim Next Session Inbound').item.json.id, processing_owner: $execution.id }) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "gXJ1myheSM6x1XB8",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Terminal privacy-safe operator incident. No outbound message is reserved; existing Global Error Handler records the execution after this durable reconciliation outcome."
+    },
+    {
+      "name": "Fail Closed Media Retrieval Authorization",
+      "id": "96b-media-authorization-fail-closed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -6656,
+        -352
+      ],
+      "parameters": {
+        "jsCode": "if (Number($input.first().json?.terminal_member_count || 0) < 1) throw new Error('TICKET_96B_MEDIA_AUTHORIZATION_STALE');\nthrow new Error('TICKET_96B_MEDIA_RETRIEVAL_AUTHORIZATION_REQUIRED');"
+      },
+      "notes": "Routes a durable credential incident through the existing Global Error Handler. It intentionally does not send a customer-facing clarification or leave retryable media work."
     }
   ],
   "connections": {
@@ -6370,6 +6443,17 @@
       ]
     },
     "Incoming Message": {
+      "main": [
+        [
+          {
+            "node": "Authorize Production WhatsApp Recipient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorize Production WhatsApp Recipient": {
       "main": [
         [
           {
@@ -8926,7 +9010,25 @@
         ],
         [
           {
+            "node": "Record Media Retrieval Authorization Incident",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Prepare Log Data Message Without Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Media Retrieval Authorization Incident": {
+      "main": [
+        [
+          {
+            "node": "Fail Closed Media Retrieval Authorization",
             "type": "main",
             "index": 0
           }
