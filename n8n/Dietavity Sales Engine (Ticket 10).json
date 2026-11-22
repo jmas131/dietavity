@@ -560,20 +560,6 @@
     },
     {
       "parameters": {
-        "jsCode": "const environment = typeof $env === 'object' && $env ? $env : {};\nconst expected = String(environment.DIETAVITY_PRODUCTION_WHATSAPP_RECIPIENT || '').trim();\nconst items = $input.all();\nconst e164 = /^\\+[1-9]\\d{7,14}$/;\nconst prefix = 'whatsapp:';\nif (!e164.test(expected) || !items.length) return [];\nfor (const item of items) {\n  const rawRecipient = item?.json?.data?.to;\n  if (typeof rawRecipient !== 'string' || !rawRecipient.startsWith(prefix)) return [];\n  const actual = rawRecipient.slice(prefix.length);\n  if (!e164.test(actual) || actual !== expected) return [];\n}\nreturn items;"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -11384,
-        -3216
-      ],
-      "id": "e4ebc8da-5d0f-4e27-a2da-17c100000000",
-      "name": "Authorize Production WhatsApp Recipient",
-      "notes": "Ticket 96I: fail-closed recipient isolation for Twilio Event Streams. Accept only whatsapp:+E.164 data.to, strip that exact prefix, and compare the remainder to DIETAVITY_PRODUCTION_WHATSAPP_RECIPIENT as plain E.164. Rejected recipients emit no item, so they cannot create ledger, recovery, AI, or outbound work."
-    },
-    {
-      "parameters": {
         "from": "+18158698400",
         "to": "={{ $json.session_id }}",
         "toWhatsapp": true,
@@ -5979,6 +5965,19 @@
       ]
     },
     {
+      "parameters": {
+        "jsCode": "const environment = typeof $env === 'object' && $env ? $env : {};\nconst expected = String(\n  environment.DIETAVITY_PRODUCTION_WHATSAPP_RECIPIENT || ''\n).trim();\n\nconst items = $input.all();\nconst e164 = /^\\+[1-9]\\d{7,14}$/;\nconst prefix = 'whatsapp:';\n\nif (!e164.test(expected) || !items.length) return [];\n\nfor (const item of items) {\n  const raw = item?.json?.data?.to;\n\n  if (typeof raw !== 'string' || !raw.startsWith(prefix)) {\n    return [];\n  }\n\n  const actual = raw.slice(prefix.length);\n\n  if (!e164.test(actual) || actual !== expected) {\n    return [];\n  }\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -11424,
+        -3600
+      ],
+      "id": "689ccdbc-2dda-4ac5-a88a-1e1349608df9",
+      "name": "Authorize Production WhatsApp Recipient"
+    },
+    {
       "name": "Route Media Enrichment",
       "id": "96b-route",
       "type": "n8n-nodes-base.switch",
@@ -6447,17 +6446,6 @@
         [
           {
             "node": "Authorize Production WhatsApp Recipient",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Authorize Production WhatsApp Recipient": {
-      "main": [
-        [
-          {
-            "node": "Canonicalize Inbound WhatsApp",
             "type": "main",
             "index": 0
           }
@@ -8934,6 +8922,61 @@
         ]
       ]
     },
+    "Authorize Production WhatsApp Recipient": {
+      "main": [
+        [
+          {
+            "node": "Canonicalize Inbound WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Media Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Classify Media Enrichment Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Media Enrichment Result": {
+      "main": [
+        [
+          {
+            "node": "Route Media Enrichment Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Media Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Get V4 Conversation Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Media Retrieval Authorization Incident": {
+      "main": [
+        [
+          {
+            "node": "Fail Closed Media Retrieval Authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Route Media Enrichment": {
       "main": [
         [
@@ -8966,39 +9009,6 @@
         ]
       ]
     },
-    "Call Media Enrichment": {
-      "main": [
-        [
-          {
-            "node": "Classify Media Enrichment Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Persist Media Enrichment": {
-      "main": [
-        [
-          {
-            "node": "Get V4 Conversation Context",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Classify Media Enrichment Result": {
-      "main": [
-        [
-          {
-            "node": "Route Media Enrichment Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Route Media Enrichment Result": {
       "main": [
         [
@@ -9018,17 +9028,6 @@
         [
           {
             "node": "Prepare Log Data Message Without Text",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Record Media Retrieval Authorization Incident": {
-      "main": [
-        [
-          {
-            "node": "Fail Closed Media Retrieval Authorization",
             "type": "main",
             "index": 0
           }
