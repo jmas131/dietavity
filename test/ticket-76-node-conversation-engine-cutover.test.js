@@ -89,6 +89,11 @@ test('V4 canonical context query projects ledger-only chronological history and 
   assert.doesNotMatch(query, /MIN\(id\) AS id/);
   assert.match(query, /BOOL_AND\(delivery_status IN \('accepted', 'sent', 'delivered'\)/);
   assert.match(query, /read_conversation_durable_memory\(current_inbound\.session_id, current_inbound\.user_id\)/);
+  // Ticket 96B projects media enrichment for the claimed inbound row. The
+  // final SELECT must explicitly scope current_inbound; otherwise PostgreSQL
+  // raises "missing FROM-clause entry for table current_inbound".
+  assert.match(query, /\(SELECT metadata->'media_enrichment' FROM public\.messages WHERE id = current_inbound\.id\) AS media_enrichment\s+FROM current_inbound;/);
+  assert.equal((query.match(/\$[0-9]+/g) || []).every(value => value === '$1' || value === '$2'), true);
   assert.doesNotMatch(query, /inventory|obligation|buyer_signal|conversation_stage|semantic_context/iu);
 });
 
