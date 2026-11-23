@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 
 const workflow = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'Dietavity Sales Engine (Ticket 10).json'), 'utf8'));
 const nodes = new Map(workflow.nodes.map(node => [node.name, node]));
@@ -14,7 +15,10 @@ const expected = '+15550000002';
 function event(to, extra = {}) { return { data: { to, from: 'whatsapp:+15550000001', messageSid: `SM${'a'.repeat(32)}`, ...extra } }; }
 function run(input, environment = { DIETAVITY_PRODUCTION_WHATSAPP_RECIPIENT: expected }) {
   const items = (Array.isArray(input) ? input : [input]).map(json => ({ json }));
-  return Function('$env', '$input', `return (() => {${gate.parameters.jsCode}\n})()`)(environment, { all: () => items });
+  return JSON.parse(JSON.stringify(vm.runInNewContext(`(function () { ${gate.parameters.jsCode}\n})()`, {
+    $env: environment,
+    $input: { all: () => items },
+  })));
 }
 
 test('Ticket 96I recipient authorization precedes all 96B canonical work', () => {

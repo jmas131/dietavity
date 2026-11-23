@@ -65,10 +65,10 @@ test('a real Twilio SID is mandatory and n8n execution identity is metadata only
   assert.doesNotMatch(source, /provider_message_sid[^\n]*\$execution\.id/);
   assert.match(source, /workflow_execution_id: \$execution\.id/);
 
-  const execute = (data) => vm.runInNewContext(`(function () { ${source} })()`, {
+  const execute = (data) => JSON.parse(JSON.stringify(vm.runInNewContext(`(function () { ${source} })()`, {
     $input: { first: () => ({ json: { data } }) },
     $execution: { id: 'n8n-execution-123' },
-  });
+  })));
   assert.throws(() => execute({ from: 'whatsapp:+5215551234567', body: 'Hola' }), /MISSING_REAL_TWILIO/);
   const sid = `SM${'a'.repeat(32)}`;
   const result = execute({ from: 'whatsapp:+52 1 555 123 4567', body: ' Hola ', messageSid: sid })[0].json;
@@ -76,6 +76,34 @@ test('a real Twilio SID is mandatory and n8n execution identity is metadata only
   assert.equal(result.body, 'Hola');
   assert.equal(result.provider_message_sid, sid);
   assert.equal(result.idempotency_key, `inbound:${sid}`);
+});
+
+test('Ticket 96B canonicalizes Twilio media without URL globals and rejects noncanonical media URLs', () => {
+  const source = nodes.get('Canonicalize Inbound WhatsApp').parameters.jsCode;
+  assert.doesNotMatch(source, /\bURL(?:SearchParams)?\b/);
+  const execute = (data) => JSON.parse(JSON.stringify(vm.runInNewContext(`(function () { ${source} })()`, {
+    $input: { first: () => ({ json: { data } }) },
+    $execution: { id: 'n8n-execution-123' },
+  })));
+  const sid = `MM${'b'.repeat(32)}`;
+  const path = `/2010-04-01/Accounts/AC${'c'.repeat(32)}/Messages/${sid}/Media/ME${'d'.repeat(32)}`;
+  const text = execute({ from: 'whatsapp:+5215551234567', body: 'Hola', messageSid: sid })[0].json;
+  assert.deepEqual(text.attachments, []);
+  const image = execute({
+    from: 'whatsapp:+5215551234567', body: '¿Qué es?', messageSid: sid, numMedia: 1,
+    mediaUrl0: `https://api.twilio.com${path}`, mediaContentType0: 'image/jpeg',
+  })[0].json;
+  assert.deepEqual(image.attachments, [{ media_path: path, content_type: 'image/jpeg', provider_message_sid: sid, ordinal: 0 }]);
+  for (const mediaUrl0 of [
+    `http://api.twilio.com${path}`,
+    `https://example.test${path}`,
+    `https://api.twilio.com${path}?Page=1`,
+    `https://api.twilio.com${path.replace(sid, `MM${'e'.repeat(32)}`)}`,
+    `https://api.twilio.com/2010-04-01/Accounts/invalid/Messages/${sid}/Media/ME${'d'.repeat(32)}`,
+  ]) assert.throws(() => execute({
+    from: 'whatsapp:+5215551234567', messageSid: sid, numMedia: 1,
+    mediaUrl0, mediaContentType0: 'image/jpeg',
+  }), /TICKET_96B_MEDIA_URL_INVALID/);
 });
 
 test('inbound reservation is the shared concurrency gate before routing or side effects', () => {
