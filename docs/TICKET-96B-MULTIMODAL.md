@@ -7,6 +7,9 @@ Set no feature flag in production until the activation checks below are complete
 - `DIETAVITY_MEDIA_IMAGES_ENABLED=true` to enable JPEG, PNG, and WebP images.
 - `DIETAVITY_MEDIA_AUDIO_ENABLED=true` to enable short Ogg/Opus WhatsApp voice notes. Other audio containers deliberately receive the unsupported-media clarification in this MVP because their duration is not safely inspected locally.
 - `TWILIO_MEDIA_API_KEY` and `TWILIO_MEDIA_API_SECRET`: restricted server-side credentials able to retrieve Twilio Media API objects; they are never exposed to n8n.
+- `TWILIO_ACCOUNT_SID`: the exact production Account SID expected in signed
+  Event Streams events. Express compares it with the persisted Event Streams
+  descriptor before asking Twilio for Media metadata.
 - `OPENAI_API_KEY`, `MEDIA_VISION_MODEL` (default `gpt-4.1-mini`) and `MEDIA_TRANSCRIPTION_MODEL` (default `gpt-4o-mini-transcribe`).
 - Existing `DIETAVITY_CONVERSATION_ENGINE_SECRET`, shared only by n8n and Express.
 - `DIETAVITY_MEDIA_TEST_WHATSAPP_ALLOWLIST`: a protected Express-only JSON
@@ -16,8 +19,9 @@ Set no feature flag in production until the activation checks below are complete
   value to workflow JSON, logs, credentials, or a response body.
 
 Keep both media flags unset or `false` for rollback. Pruning does not make
-execution history safe by itself: n8n handles only the four-field attachment
-descriptor, the existing canonical sender identity used for the protected
+execution history safe by itself: n8n handles only the identifier-only Event
+Streams attachment descriptor (`account_sid`, `provider_message_sid`, and
+`ordinal`), the existing canonical sender identity used for the protected
 allowlist check, and bounded derived text—never raw binary or Base64.
 
 ## Confirmed provider smoke result
@@ -83,9 +87,11 @@ delivery.
    `DIETAVITY_MEDIA_AUDIO_ENABLED=false`. Verify the endpoint rejects missing
    internal authentication and that the server-side Twilio credentials are
    present without displaying them.
-4. Apply `20261118_ticket_96b_media_enrichment.sql` through the approved
-   production migration procedure. The migration stores only descriptor and
-   bounded enrichment metadata; it does not create binary storage.
+4. Apply `20261118_ticket_96b_media_enrichment.sql`, then
+   `20261123_ticket_96b_event_streams_media_metadata.sql`, through the
+   approved production migration procedure. The second migration preserves
+   legacy pending descriptors while accepting identifier-only Event Streams
+   descriptors; neither creates binary storage.
 5. In the existing Sales Engine workflow ID, add the reviewed media nodes while
    preserving the 96I gate, canonical reservation, FIFO claim, existing
    credentials, and the one active trigger. Do not use workflow import as an
@@ -114,13 +120,16 @@ not a general media launch.
    nonempty JSON array of unique plain E.164 staff sender identities. Keep both
    media flags `false` and restart only Express so the new configuration is
    loaded.
-3. Apply `20261118_ticket_96b_media_enrichment.sql` through the approved
-   production migration procedure. It is additive; do not apply it through
-   n8n or expose its function to browser roles.
+3. Apply `20261118_ticket_96b_media_enrichment.sql`, then
+   `20261123_ticket_96b_event_streams_media_metadata.sql`, through the
+   approved production migration procedure. Both are additive; do not apply
+   them through n8n or expose their function to browser roles.
 4. Verify the private n8n-to-Express media route rejects a missing/wrong shared
    secret, accepts the configured header, and has server-side Twilio Media API
-   credentials. Verify the trusted ingress signature check and that n8n
-   execution history contains neither binary data nor Base64.
+   credentials plus the exact `TWILIO_ACCOUNT_SID`. Express must retrieve the
+   authoritative Message Media list from Twilio before downloading a binary;
+   n8n execution history must contain neither binary data, Base64, nor a Media
+   URL. Verify the trusted ingress signature check.
 5. Update the existing Sales Engine workflow ID in place with this artifact;
    do not import/activate a duplicate Twilio Trigger or create another Event
    Streams subscription. Preserve all existing credentials, FIFO/recovery

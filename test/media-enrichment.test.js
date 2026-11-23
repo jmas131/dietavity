@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { descriptor, magic, detectedType, matchesDeclaredType, imageDimensions, oggDurationSeconds, createMediaEnricher, MediaEnrichmentError, openAiFailure } = require('../lib/media-enrichment');
-const sid = 'SM' + 'a'.repeat(32); const path = `/2010-04-01/Accounts/AC${'b'.repeat(32)}/Messages/${sid}/Media/ME${'c'.repeat(32)}`;
+const sid = 'SM' + 'a'.repeat(32); const account = 'AC' + 'b'.repeat(32); const mediaSid = 'ME' + 'c'.repeat(32); const path = `/2010-04-01/Accounts/${account}/Messages/${sid}/Media/${mediaSid}`;
 function opusOgg(seconds = 1, { eos = true, opusHead = true } = {}) {
   const head = Buffer.alloc(19); head.write(opusHead ? 'OpusHead' : 'BadHead!'); head[8] = 1; head[9] = 1; head.writeUInt16LE(312, 10);
   const page = Buffer.alloc(28 + head.length); page.write('OggS'); page[4] = 0; page[5] = 0x02 | (eos ? 0x04 : 0); page.writeBigUInt64LE(BigInt(Math.round(seconds * 48000) + 312), 6); page.writeUInt32LE(7, 14); page.writeUInt32LE(0, 18); page[26] = 1; page[27] = head.length; head.copy(page, 28); return page;
@@ -13,6 +13,15 @@ function webpVp8x(width, height) { const vp8x = Buffer.alloc(18); vp8x.write('VP
 function httpFailure(status) { const error = new Error(`HTTP ${status}`); error.response = { status }; return error; }
 async function withAudioEnabled(run) { const old = process.env.DIETAVITY_MEDIA_AUDIO_ENABLED; process.env.DIETAVITY_MEDIA_AUDIO_ENABLED = 'true'; try { return await run(); } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_AUDIO_ENABLED; else process.env.DIETAVITY_MEDIA_AUDIO_ENABLED = old; } }
 test('accepts only a canonical single Twilio image descriptor', () => assert.equal(descriptor({ media_path:path, content_type:'image/jpeg', provider_message_sid:sid, ordinal:0 }).kind, 'image'));
+test('accepts only an identifier-only Event Streams attachment descriptor', () => {
+  assert.deepEqual(descriptor({ account_sid: account, provider_message_sid: sid, ordinal: 0 }), { account_sid: account, provider_message_sid: sid, ordinal: 0, source: 'event_streams' });
+  for (const value of [
+    { account_sid: 'invalid', provider_message_sid: sid, ordinal: 0 },
+    { account_sid: account, provider_message_sid: 'invalid', ordinal: 0 },
+    { account_sid: account, provider_message_sid: sid, ordinal: 1 },
+    { account_sid: account, provider_message_sid: sid, ordinal: 0, content_type: 'image/jpeg' },
+  ]) assert.throws(() => descriptor(value), MediaEnrichmentError);
+});
 test('rejects arbitrary URLs, mismatched SIDs and multiple ordinals', () => { for (const value of [{ media_path:'https://evil.test/a',content_type:'image/jpeg',provider_message_sid:sid,ordinal:0 }, { media_path:path,content_type:'image/jpeg',provider_message_sid:'SM'+'d'.repeat(32),ordinal:0 }, { media_path:path,content_type:'image/jpeg',provider_message_sid:sid,ordinal:1 }]) assert.throws(() => descriptor(value), MediaEnrichmentError); });
 test('recognizes supported image and voice container signatures', () => { assert.equal(magic(Buffer.from([0xff,0xd8,0xff]),'image'),true); assert.equal(magic(Buffer.from('OggS'),'audio'),true); assert.equal(magic(Buffer.from('not media'),'image'),false); });
 test('accepts only the declared detected format, with the Ogg/Opus Twilio alias', () => {
@@ -34,6 +43,45 @@ test('reliably reads supported PNG, JPEG, and WebP dimensions', () => {
   assert.deepEqual(imageDimensions(webpVp8x(320, 240), 'image/webp'), [320, 240]);
   assert.equal(imageDimensions(Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'image/png'), null);
   assert.equal(imageDimensions(Buffer.from('RIFFxxxxWEBPVP8X'), 'image/webp'), null);
+});
+test('resolves Event Streams media metadata before binary download and OpenAI processing', async () => {
+  const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
+  const calls = [];
+  const enricher = createMediaEnricher({ apiKey: 'openai-test', twilioKey: 'key', twilioSecret: 'secret', twilioAccountSid: account, http: {
+    async get(url, options) {
+      calls.push({ url, options });
+      if (url.endsWith('/Media.json')) return { data: { media_list: [{ account_sid: account, parent_sid: sid, sid: mediaSid, content_type: 'image/png', uri: `${path}.json` }] } };
+      assert.equal(url, `https://api.twilio.com${path}`); return { data: png(1, 1) };
+    },
+    async post() { return { data: { choices: [{ message: { content: 'Ensalada.' } }] } }; },
+  }});
+  try {
+    assert.deepEqual(await enricher.enrich({ account_sid: account, provider_message_sid: sid, ordinal: 0 }), { kind: 'image', text: 'Ensalada.' });
+    assert.equal(calls.length, 2); assert.equal(calls[0].options.maxRedirects, 0); assert.equal(calls[1].options.maxRedirects, 0);
+  } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
+});
+test('Event Streams metadata lookup fails closed for bad identity and classifies provider failures', async () => {
+  const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
+  const event = { account_sid: account, provider_message_sid: sid, ordinal: 0 };
+  const enrich = response => createMediaEnricher({ twilioKey: 'key', twilioSecret: 'secret', twilioAccountSid: account, http: { async get() { if (response instanceof Error) throw response; return response; } } }).enrich(event);
+  try {
+    await assert.rejects(enrich({ data: { media_list: [{ account_sid: account, parent_sid: sid, sid: mediaSid, content_type: 'image/jpeg', uri: `/2010-04-01/Accounts/${account}/Messages/${sid}/Media/ME${'d'.repeat(32)}.json` }] } }), error => error.code === 'invalid_attachment');
+    await assert.rejects(enrich({ data: { media_list: [] } }), error => error.code === 'media_unavailable' && error.transient);
+    await assert.rejects(enrich(httpFailure(404)), error => error.code === 'media_not_found' && !error.transient);
+    await assert.rejects(enrich(httpFailure(401)), error => error.code === 'media_retrieval_authorization_failed' && !error.transient);
+    await assert.rejects(enrich(httpFailure(429)), error => error.code === 'media_unavailable' && error.transient);
+  } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
+});
+test('Event Streams descriptors skip metadata lookup while both media flags are disabled', async () => {
+  let calls = 0; const enricher = createMediaEnricher({ twilioKey: 'key', twilioSecret: 'secret', twilioAccountSid: account, http: { async get() { calls += 1; } } });
+  await assert.rejects(enricher.enrich({ account_sid: account, provider_message_sid: sid, ordinal: 0 }), error => error.code === 'media_disabled');
+  assert.equal(calls, 0);
+});
+test('Event Streams account mismatches are terminal and never query Twilio', async () => {
+  const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
+  let calls = 0; const enricher = createMediaEnricher({ twilioKey: 'key', twilioSecret: 'secret', twilioAccountSid: `AC${'f'.repeat(32)}`, http: { async get() { calls += 1; } } });
+  try { await assert.rejects(enricher.enrich({ account_sid: account, provider_message_sid: sid, ordinal: 0 }), error => error.code === 'media_retrieval_authorization_failed'); assert.equal(calls, 0); }
+  finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
 });
 test('bounds Twilio download before transcription and rejects a long voice note', async () => {
   const old = process.env.DIETAVITY_MEDIA_AUDIO_ENABLED; process.env.DIETAVITY_MEDIA_AUDIO_ENABLED = 'true';

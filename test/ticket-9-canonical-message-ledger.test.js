@@ -78,32 +78,33 @@ test('a real Twilio SID is mandatory and n8n execution identity is metadata only
   assert.equal(result.idempotency_key, `inbound:${sid}`);
 });
 
-test('Ticket 96B canonicalizes Twilio media without URL globals and rejects noncanonical media URLs', () => {
+test('Ticket 96B canonicalizes Messaging.InboundMessageV1 media as identifier-only metadata', () => {
   const source = nodes.get('Canonicalize Inbound WhatsApp').parameters.jsCode;
   assert.doesNotMatch(source, /\bURL(?:SearchParams)?\b/);
+  assert.doesNotMatch(source, /mediaUrl0|mediaContentType0|media_path/);
   const execute = (data) => JSON.parse(JSON.stringify(vm.runInNewContext(`(function () { ${source} })()`, {
     $input: { first: () => ({ json: { data } }) },
     $execution: { id: 'n8n-execution-123' },
   })));
   const sid = `MM${'b'.repeat(32)}`;
-  const path = `/2010-04-01/Accounts/AC${'c'.repeat(32)}/Messages/${sid}/Media/ME${'d'.repeat(32)}`;
+  const account = `AC${'c'.repeat(32)}`;
   const text = execute({ from: 'whatsapp:+5215551234567', body: 'Hola', messageSid: sid })[0].json;
   assert.deepEqual(text.attachments, []);
   const image = execute({
-    from: 'whatsapp:+5215551234567', body: '¿Qué es?', messageSid: sid, numMedia: 1,
-    mediaUrl0: `https://api.twilio.com${path}`, mediaContentType0: 'image/jpeg',
+    from: 'whatsapp:+5215551234567', to: 'whatsapp:+15550000002', body: '¿Qué es?',
+    accountSid: account, messageSid: sid, numMedia: 1,
   })[0].json;
-  assert.deepEqual(image.attachments, [{ media_path: path, content_type: 'image/jpeg', provider_message_sid: sid, ordinal: 0 }]);
-  for (const mediaUrl0 of [
-    `http://api.twilio.com${path}`,
-    `https://example.test${path}`,
-    `https://api.twilio.com${path}?Page=1`,
-    `https://api.twilio.com${path.replace(sid, `MM${'e'.repeat(32)}`)}`,
-    `https://api.twilio.com/2010-04-01/Accounts/invalid/Messages/${sid}/Media/ME${'d'.repeat(32)}`,
-  ]) assert.throws(() => execute({
-    from: 'whatsapp:+5215551234567', messageSid: sid, numMedia: 1,
-    mediaUrl0, mediaContentType0: 'image/jpeg',
-  }), /TICKET_96B_MEDIA_URL_INVALID/);
+  assert.deepEqual(image.attachments, [{ account_sid: account, provider_message_sid: sid, ordinal: 0 }]);
+  for (const data of [
+    { from: 'whatsapp:+5215551234567', to: 'whatsapp:+15550000002', messageSid: sid, numMedia: 1 },
+    { from: 'whatsapp:+5215551234567', to: 'whatsapp:+15550000002', accountSid: 'invalid', messageSid: sid, numMedia: 1 },
+    { from: 'whatsapp:+5215551234567', to: 'whatsapp:+15550000002', accountSid: account, messageSid: sid, numMedia: '01' },
+    { from: 'whatsapp:+5215551234567', to: 'whatsapp:+15550000002', accountSid: account, messageSid: sid, numMedia: 11 },
+  ]) assert.throws(() => execute(data), /TICKET_96B_MEDIA_(ACCOUNT|COUNT)_INVALID/);
+  for (const data of [
+    { from: 'whatsapp: +5215551234567', to: 'whatsapp:+15550000002' },
+    { from: 'whatsapp:+5215551234567', to: '+15550000002' },
+  ]) assert.throws(() => execute({ ...data, accountSid: account, messageSid: sid, numMedia: 1 }), /TICKET_96B_MEDIA_PARTICIPANT_INVALID/);
 });
 
 test('inbound reservation is the shared concurrency gate before routing or side effects', () => {

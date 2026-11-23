@@ -13,8 +13,7 @@ const { mediaTestAllowlist } = require('../lib/media-enrichment');
 const secret = 's'.repeat(32);
 const allowed = '+15550000002';
 const attachment = {
-  media_path: `/2010-04-01/Accounts/AC${'a'.repeat(32)}/Messages/SM${'b'.repeat(32)}/Media/ME${'c'.repeat(32)}`,
-  content_type: 'image/jpeg',
+  account_sid: `AC${'a'.repeat(32)}`,
   provider_message_sid: `SM${'b'.repeat(32)}`,
   ordinal: 0,
 };
@@ -55,7 +54,7 @@ test('non-allowlisted and malformed allowlist requests cannot call enrichment', 
   assert.equal(calls, 0);
 });
 
-test('allowlisted media reaches enrichment with only its four-field descriptor', async () => {
+test('allowlisted Event Streams media reaches enrichment with only its identifier descriptor', async () => {
   let received;
   const handler = app.createMediaEnrichmentHandler({
     secret,
@@ -65,7 +64,7 @@ test('allowlisted media reaches enrichment with only its four-field descriptor',
   assert.deepEqual(await invoke(handler, { attachment, sender: allowed }), {
     status: 200, body: { kind: 'image', text: 'observación sintética' },
   });
-  assert.deepEqual(received, attachment, 'the allowlist wrapper passes only the four-field descriptor to enrichment');
+  assert.deepEqual(received, attachment, 'the allowlist wrapper passes only the identifier descriptor to enrichment');
 });
 
 test('an allowlisted sender still receives fallback while the relevant feature flag is disabled', async () => {
@@ -74,7 +73,7 @@ test('an allowlisted sender still receives fallback while the relevant feature f
   try {
     const handler = app.createMediaEnrichmentHandler({ secret, allowlistProvider: () => new Set([allowed]) });
     assert.deepEqual(await invoke(handler, { attachment, sender: allowed }), {
-      status: 200, body: { outcome: 'fallback', code: 'image_disabled' },
+      status: 200, body: { outcome: 'fallback', code: 'media_disabled' },
     });
   } finally {
     if (previous === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED;
