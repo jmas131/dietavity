@@ -81,7 +81,7 @@ test('a real Twilio SID is mandatory and n8n execution identity is metadata only
 test('Ticket 96B canonicalizes Messaging.InboundMessageV1 media as identifier-only metadata', () => {
   const source = nodes.get('Canonicalize Inbound WhatsApp').parameters.jsCode;
   assert.doesNotMatch(source, /\bURL(?:SearchParams)?\b/);
-  assert.doesNotMatch(source, /mediaUrl0|mediaContentType0|media_path/);
+  assert.doesNotMatch(source, /TICKET_96B_MEDIA_URL_INVALID|mediaUrl0|mediaContentType0|mediaUrlPattern|media_path/);
   const execute = (data) => JSON.parse(JSON.stringify(vm.runInNewContext(`(function () { ${source} })()`, {
     $input: { first: () => ({ json: { data } }) },
     $execution: { id: 'n8n-execution-123' },
