@@ -6078,7 +6078,14 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ attachment: $('Claim Next Session Inbound').item.json.metadata.attachments[0], sender: $('Claim Next Session Inbound').item.json.session_id }) }}",
         "options": {
-          "timeout": 30000
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "credentials": {
@@ -6125,7 +6132,7 @@
         -448
       ],
       "parameters": {
-        "jsCode": "const v=$input.first().json||{}; const code=String(v.code||v.error||''); const operatorCodes=new Set(['media_retrieval_authorization_failed','enrichment_authorization_failed','enrichment_model_unavailable']); if (v.outcome === 'operator_required' && operatorCodes.has(code)) return [{json:{route:'operator_required', code}}]; if (v.outcome === 'fallback') return [{json:{route:'fallback', code}}]; if (!code && v.kind && v.text) return [{json:{route:'success', enrichment:v}}]; if (['media_unavailable','enrichment_unavailable'].includes(code)) throw new Error('TICKET_96B_TRANSIENT_MEDIA:'+code); throw new Error('TICKET_96B_MEDIA_RESPONSE_INVALID');"
+        "jsCode": "const raw=$input.first().json||{}; const v=raw&&typeof raw.body==='object'&&!Array.isArray(raw.body)?raw.body:raw; const code=typeof v.code==='string'?v.code:(typeof v.error==='string'?v.error:''); const operatorCodes=new Set(['media_retrieval_authorization_failed','enrichment_authorization_failed','enrichment_model_unavailable']); const retryableCodes=new Set(['media_unavailable','enrichment_unavailable','enrichment_rate_limited','enrichment_provider_unavailable','enrichment_timeout','enrichment_network_unavailable']); if (v.outcome === 'operator_required' && operatorCodes.has(code)) return [{json:{route:'operator_required', code}}]; if (v.outcome === 'fallback' && code) return [{json:{route:'fallback', code}}]; if (!code && v.kind && typeof v.text==='string' && v.text) return [{json:{route:'success', enrichment:v}}]; if ((v.outcome === 'retry' || !v.outcome) && retryableCodes.has(code)) throw new Error('TICKET_96B_TRANSIENT_MEDIA:'+code); throw new Error('TICKET_96B_MEDIA_RESPONSE_INVALID');"
       },
       "notes": "Transient provider failures throw to existing Error Handler/recovery. Attachment failures get deterministic clarification. Twilio/OpenAI credential and configured-model failures use a terminal operator-required route."
     },

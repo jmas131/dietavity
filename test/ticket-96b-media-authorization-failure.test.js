@@ -57,9 +57,12 @@ test('transient retrieval failures remain retryable and do not take either termi
   const handler = app.createMediaEnrichmentHandler({
     secret: sharedSecret,
     allowlistProvider: allowlisted,
-    enricher: { async enrich() { throw new MediaEnrichmentError('media_unavailable', true); } },
+    enricher: { async enrich() { throw new MediaEnrichmentError('media_unavailable', true, 'twilio_media_metadata_http_5xx'); } },
   });
-  assert.deepEqual(await invoke(handler), { status: 503, body: { error: 'media_unavailable' } });
+  assert.deepEqual(await invoke(handler), {
+    status: 503,
+    body: { outcome: 'retry', code: 'media_unavailable', diagnostic: 'twilio_media_metadata_http_5xx' },
+  });
 });
 
 test('the workflow has a terminal authorization route with no outbound node', () => {
@@ -77,4 +80,25 @@ test('the workflow has a terminal authorization route with no outbound node', ()
   assert.match(nodes.get('Record Media Retrieval Authorization Incident').parameters.query, /enrichment_model_unavailable/);
   assert.match(nodes.get('Fail Closed Media Retrieval Authorization').parameters.jsCode, /TICKET_96B_MEDIA_OPERATOR_REQUIRED/);
   assert.doesNotMatch(JSON.stringify(workflow.connections['Record Media Retrieval Authorization Incident']), /Twilio|Send|Reserve Media Clarification/);
+});
+
+test('n8n v4.3 HTTP node retains a structured 503 body for Recovery Poller retry', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'Dietavity Sales Engine (Ticket 10).json'), 'utf8'));
+  const nodes = new Map(workflow.nodes.map(node => [node.name, node]));
+  const call = nodes.get('Call Media Enrichment');
+  const classify = nodes.get('Classify Media Enrichment Result');
+  assert.deepEqual(call.parameters.options.response.response, {
+    neverError: true,
+    fullResponse: true,
+    responseFormat: 'json',
+  });
+  const run = value => Function('$input', `return (() => {${classify.parameters.jsCode}\n})()`)({ first: () => ({ json: value }) });
+  assert.throws(
+    () => run({ statusCode: 503, body: { outcome: 'retry', code: 'media_unavailable', diagnostic: 'twilio_media_metadata_http_5xx' } }),
+    /TICKET_96B_TRANSIENT_MEDIA:media_unavailable/,
+  );
+  assert.throws(
+    () => run({ statusCode: 503, body: { error: { message: 'untrusted provider body' } } }),
+    /TICKET_96B_MEDIA_RESPONSE_INVALID/,
+  );
 });

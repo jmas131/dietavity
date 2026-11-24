@@ -66,10 +66,11 @@ test('Event Streams metadata lookup fails closed for bad identity and classifies
   const enrich = response => createMediaEnricher({ twilioKey: 'key', twilioSecret: 'secret', twilioAccountSid: account, http: { async get() { if (response instanceof Error) throw response; return response; } } }).enrich(event);
   try {
     await assert.rejects(enrich({ data: { media_list: [{ account_sid: account, parent_sid: sid, sid: mediaSid, content_type: 'image/jpeg', uri: `/2010-04-01/Accounts/${account}/Messages/${sid}/Media/ME${'d'.repeat(32)}.json` }] } }), error => error.code === 'invalid_attachment');
-    await assert.rejects(enrich({ data: { media_list: [] } }), error => error.code === 'media_unavailable' && error.transient);
+    await assert.rejects(enrich({ data: { media_list: [] } }), error => error.code === 'media_unavailable' && error.transient && error.diagnostic === 'twilio_media_metadata_empty');
     await assert.rejects(enrich(httpFailure(404)), error => error.code === 'media_not_found' && !error.transient);
     await assert.rejects(enrich(httpFailure(401)), error => error.code === 'media_retrieval_authorization_failed' && !error.transient);
-    await assert.rejects(enrich(httpFailure(429)), error => error.code === 'media_unavailable' && error.transient);
+    await assert.rejects(enrich(httpFailure(429)), error => error.code === 'media_unavailable' && error.transient && error.diagnostic === 'twilio_media_metadata_http_429');
+    await assert.rejects(enrich(httpFailure(503)), error => error.code === 'media_unavailable' && error.transient && error.diagnostic === 'twilio_media_metadata_http_5xx');
   } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
 });
 test('Event Streams descriptors skip metadata lookup while both media flags are disabled', async () => {
@@ -111,10 +112,16 @@ test('classifies missing Twilio media as terminal customer fallback', async () =
     await assert.rejects(enricher.enrich({ media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }), error => error.code === 'media_not_found' && !error.transient);
   });
 });
-test('keeps Twilio rate-limit, server, timeout, and network failures retryable', async () => {
-  for (const error of [httpFailure(429), httpFailure(500), new Error('timeout'), Object.assign(new Error('dns'), { code: 'ENOTFOUND' })]) await withAudioEnabled(async () => {
+test('reports bounded diagnostics for retryable Twilio metadata and download failures', async () => {
+  const failures = [
+    [httpFailure(429), 'twilio_media_download_http_429'],
+    [httpFailure(500), 'twilio_media_download_http_5xx'],
+    [new Error('timeout'), 'twilio_media_download_timeout'],
+    [Object.assign(new Error('dns'), { code: 'ENOTFOUND' }), 'twilio_media_download_network_failure'],
+  ];
+  for (const [error, diagnostic] of failures) await withAudioEnabled(async () => {
     const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { throw error; } } });
-    await assert.rejects(enricher.enrich({ media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }), failure => failure.code === 'media_unavailable' && failure.transient);
+    await assert.rejects(enricher.enrich({ media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }), failure => failure.code === 'media_unavailable' && failure.transient && failure.diagnostic === diagnostic);
   });
 });
 test('surfaces Twilio authorization failures as terminal operator incidents', async () => {

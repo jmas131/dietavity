@@ -76,7 +76,15 @@ function createMediaEnrichmentHandler({ enricher = mediaEnricher, secret = proce
     if (error instanceof MediaEnrichmentError && !error.transient) {
       return res.status(200).json({ outcome: 'fallback', code: error.code });
     }
-    return res.status(503).json({ error: error instanceof MediaEnrichmentError ? error.code : 'media_unavailable' });
+    // Keep the non-2xx status so n8n's error path and Recovery Poller retain
+    // their retry semantics. The body contains only stable categories, never
+    // provider bodies, media identifiers, URLs, or credentials.
+    return res.status(503).json({
+      outcome: 'retry',
+      code: error instanceof MediaEnrichmentError ? error.code : 'media_unavailable',
+      diagnostic: error instanceof MediaEnrichmentError && typeof error.diagnostic === 'string'
+        ? error.diagnostic : 'media_unexpected_failure',
+    });
     }
   };
 }
