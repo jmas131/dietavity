@@ -62,6 +62,45 @@ test('operator-required diagnostics are strictly allowlisted', async () => {
   });
 });
 
+test('redirect destination diagnostics expose only fixed categories', async () => {
+  const error = new MediaEnrichmentError('media_retrieval_redirect_invalid', false, 'twilio_media_download_redirect_destination_unapproved');
+  error.redirectDiagnostic = {
+    scheme: 'https', host_class: 'other_twilio_cdn', port: 'explicit', userinfo: 'absent',
+  };
+  const handler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret,
+    allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw error; } },
+  });
+  const result = await invoke(handler);
+  assert.deepEqual(result, {
+    status: 200,
+    body: {
+      outcome: 'operator_required',
+      code: 'media_retrieval_redirect_invalid',
+      diagnostic: 'twilio_media_download_redirect_destination_unapproved',
+      redirect: { scheme: 'https', host_class: 'other_twilio_cdn', port: 'explicit', userinfo: 'absent' },
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(result.body), /signed|token|https?:\/\/|mms\.twiliocdn\.com/i);
+});
+
+test('unallowlisted redirect values cannot reach n8n', async () => {
+  const error = new MediaEnrichmentError('media_retrieval_redirect_invalid', false, 'twilio_media_download_redirect_destination_unapproved');
+  error.redirectDiagnostic = {
+    scheme: 'https', host_class: 'non_twilio_cdn', port: 'default', userinfo: 'absent', location: 'https://evil.test/path?signed=token',
+  };
+  const handler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret,
+    allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw error; } },
+  });
+  assert.deepEqual(await invoke(handler), {
+    status: 200,
+    body: { outcome: 'operator_required', code: 'media_retrieval_redirect_invalid', diagnostic: 'media_operator_incident' },
+  });
+});
+
 test('permanent malformed media remains a deterministic fallback', async () => {
   const handler = app.createMediaEnrichmentHandler({
     secret: sharedSecret,

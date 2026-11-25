@@ -79,15 +79,37 @@ test('follows only one validated Twilio CDN redirect without forwarding credenti
     assert.equal(calls[1].options.maxRedirects, 0); assert.equal(calls[1].options.proxy, false); assert.ok(calls[1].options.httpsAgent);
   } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
 });
-test('rejects malformed or unapproved Twilio CDN redirects without a second request', async () => {
+test('classifies unsupported initial redirect statuses without a second request', async () => {
+  const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
+  const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { throw httpFailure(307); } } });
+  try {
+    await assert.rejects(enricher.enrich({ media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 }), error =>
+      error.code === 'media_retrieval_redirect_invalid' && !error.transient
+      && error.diagnostic === 'twilio_media_download_redirect_status_unapproved' && error.redirectDiagnostic === undefined);
+  } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
+});
+test('classifies rejected Twilio CDN redirect destinations without a second request', async () => {
   const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
   try {
-    for (const location of ['http://mms.twiliocdn.com/file', 'https://evil.test/file', 'https://user@mms.twiliocdn.com/file', 'https://mms.twiliocdn.com:444/file', '/relative']) {
+    const cases = [
+      ['http://mms.twiliocdn.com/file', { scheme:'http', host_class:'approved_twilio_cdn', port:'default', userinfo:'absent' }],
+      ['https://other.twiliocdn.com/file', { scheme:'https', host_class:'other_twilio_cdn', port:'default', userinfo:'absent' }],
+      ['https://evil.test/opaque-path?signed=secret', { scheme:'https', host_class:'non_twilio_cdn', port:'default', userinfo:'absent' }],
+      ['https://mms.twiliocdn.com:444/file', { scheme:'https', host_class:'approved_twilio_cdn', port:'explicit', userinfo:'absent' }],
+      ['https://user@mms.twiliocdn.com/file', { scheme:'https', host_class:'approved_twilio_cdn', port:'default', userinfo:'present' }],
+    ];
+    for (const [location, expected] of cases) {
       let calls = 0;
       const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { calls += 1; return { status: 302, headers: { location } }; } } });
-      await assert.rejects(enricher.enrich({ media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 }), error => error.code === 'media_retrieval_redirect_invalid' && !error.transient);
+      await assert.rejects(enricher.enrich({ media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 }), error =>
+        error.code === 'media_retrieval_redirect_invalid' && !error.transient
+        && error.diagnostic === 'twilio_media_download_redirect_destination_unapproved'
+        && assert.deepEqual(error.redirectDiagnostic, expected) === undefined);
       assert.equal(calls, 1);
     }
+    const malformed = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { return { status:302, headers:{} }; } } });
+    await assert.rejects(malformed.enrich({ media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 }), error =>
+      error.diagnostic === 'twilio_media_download_redirect_invalid' && error.redirectDiagnostic === undefined);
   } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
 });
 test('rejects a further CDN redirect and keeps CDN transport failures retryable', async () => {
