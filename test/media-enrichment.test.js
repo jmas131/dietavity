@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { descriptor, magic, detectedType, matchesDeclaredType, imageDimensions, oggDurationSeconds, createMediaEnricher, MediaEnrichmentError, openAiFailure } = require('../lib/media-enrichment');
+const { descriptor, magic, detectedType, matchesDeclaredType, imageDimensions, oggDurationSeconds, createMediaEnricher, MediaEnrichmentError, openAiFailure, publicAddress, createTwilioCdnLookup } = require('../lib/media-enrichment');
 const sid = 'SM' + 'a'.repeat(32); const account = 'AC' + 'b'.repeat(32); const mediaSid = 'ME' + 'c'.repeat(32); const path = `/2010-04-01/Accounts/${account}/Messages/${sid}/Media/${mediaSid}`;
 function opusOgg(seconds = 1, { eos = true, opusHead = true } = {}) {
   const head = Buffer.alloc(19); head.write(opusHead ? 'OpusHead' : 'BadHead!'); head[8] = 1; head[9] = 1; head.writeUInt16LE(312, 10);
@@ -60,6 +60,54 @@ test('resolves Event Streams media metadata before binary download and OpenAI pr
     assert.equal(calls.length, 2); assert.equal(calls[0].options.maxRedirects, 0); assert.equal(calls[1].options.maxRedirects, 0);
   } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
 });
+test('follows only one validated Twilio CDN redirect without forwarding credentials', async () => {
+  const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
+  const calls = [];
+  const enricher = createMediaEnricher({ apiKey: 'openai-test', twilioKey: 'key', twilioSecret: 'secret', http: {
+    async get(url, options) {
+      calls.push({ url, options });
+      if (calls.length === 1) return { status: 302, headers: { location: 'https://mms.twiliocdn.com/signed-media' } };
+      return { status: 200, data: png(1, 1) };
+    },
+    async post() { return { data: { choices: [{ message: { content: 'Ensalada.' } }] } }; },
+  }});
+  try {
+    assert.deepEqual(await enricher.enrich({ media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 }), { kind: 'image', text: 'Ensalada.' });
+    assert.equal(calls.length, 2); assert.deepEqual(calls[0].options.auth, { username: 'key', password: 'secret' });
+    assert.equal(calls[1].url, 'https://mms.twiliocdn.com/signed-media');
+    assert.equal(calls[1].options.auth, undefined); assert.equal(calls[1].options.headers, undefined);
+    assert.equal(calls[1].options.maxRedirects, 0); assert.ok(calls[1].options.httpsAgent);
+  } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
+});
+test('rejects malformed or unapproved Twilio CDN redirects without a second request', async () => {
+  const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
+  try {
+    for (const location of ['http://mms.twiliocdn.com/file', 'https://evil.test/file', 'https://user@mms.twiliocdn.com/file', 'https://mms.twiliocdn.com:444/file', '/relative']) {
+      let calls = 0;
+      const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { calls += 1; return { status: 302, headers: { location } }; } } });
+      await assert.rejects(enricher.enrich({ media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 }), error => error.code === 'media_retrieval_redirect_invalid' && !error.transient);
+      assert.equal(calls, 1);
+    }
+  } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
+});
+test('rejects a further CDN redirect and keeps CDN transport failures retryable', async () => {
+  const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
+  const item = { media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 };
+  const redirecting = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get(_url, options) { if (options.auth) return { status: 302, headers: { location: 'https://mms.twiliocdn.com/signed-media' } }; throw httpFailure(302); } } });
+  const unavailable = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get(_url, options) { if (options.auth) return { status: 302, headers: { location: 'https://mms.twiliocdn.com/signed-media' } }; throw httpFailure(503); } } });
+  try {
+    await assert.rejects(redirecting.enrich(item), error => error.code === 'media_retrieval_redirect_invalid' && error.diagnostic === 'twilio_media_cdn_download_redirect_unapproved');
+    await assert.rejects(unavailable.enrich(item), error => error.code === 'media_unavailable' && error.transient && error.diagnostic === 'twilio_media_cdn_download_http_5xx');
+  } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
+});
+test('CDN lookup uses its approved public address directly and refuses private results', async () => {
+  assert.equal(publicAddress('1.1.1.1'), true); assert.equal(publicAddress('127.0.0.1'), false); assert.equal(publicAddress('::1'), false);
+  const resolve = (lookup, host) => new Promise(resolve => lookup(host, {}, (error, address, family) => resolve({ error, address, family })));
+  const publicLookup = createTwilioCdnLookup((_host, _options, done) => done(null, [{ address: '1.1.1.1', family: 4 }]));
+  const privateLookup = createTwilioCdnLookup((_host, _options, done) => done(null, [{ address: '127.0.0.1', family: 4 }]));
+  assert.deepEqual(await resolve(publicLookup, 'mms.twiliocdn.com'), { error: null, address: '1.1.1.1', family: 4 });
+  assert.equal((await resolve(privateLookup, 'mms.twiliocdn.com')).error.code, 'TICKET_96B_CDN_PRIVATE_ADDRESS');
+});
 test('Event Streams metadata lookup fails closed for bad identity and classifies provider failures', async () => {
   const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
   const event = { account_sid: account, provider_message_sid: sid, ordinal: 0 };
@@ -117,7 +165,8 @@ test('reports bounded diagnostics for retryable Twilio metadata and download fai
     [httpFailure(429), 'twilio_media_download_http_429'],
     [httpFailure(500), 'twilio_media_download_http_5xx'],
     [new Error('timeout'), 'twilio_media_download_timeout'],
-    [Object.assign(new Error('dns'), { code: 'ENOTFOUND' }), 'twilio_media_download_network_failure'],
+    [Object.assign(new Error('tls'), { code: 'EPROTO' }), 'twilio_media_download_tls_failure'],
+    [Object.assign(new Error('dns'), { code: 'ENOTFOUND' }), 'twilio_media_download_dns_failure'],
   ];
   for (const [error, diagnostic] of failures) await withAudioEnabled(async () => {
     const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { throw error; } } });

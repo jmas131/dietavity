@@ -31,7 +31,7 @@ async function invoke(handler, payload = { attachment, sender }) {
 const allowlisted = () => new Set([sender]);
 
 test('Twilio and OpenAI configuration failures become terminal operator-required results, not customer fallback', async () => {
-  for (const code of ['media_retrieval_authorization_failed', 'enrichment_authorization_failed', 'enrichment_model_unavailable']) {
+  for (const code of ['media_retrieval_authorization_failed', 'media_retrieval_redirect_invalid', 'enrichment_authorization_failed', 'enrichment_model_unavailable']) {
     const handler = app.createMediaEnrichmentHandler({
       secret: sharedSecret,
       allowlistProvider: allowlisted,
@@ -71,13 +71,14 @@ test('the workflow has a terminal authorization route with no outbound node', ()
   const route = nodes.get('Route Media Enrichment Result');
   const classify = nodes.get('Classify Media Enrichment Result');
   const run = value => Function('$input', `return (() => {${classify.parameters.jsCode}\n})()`)({ first: () => ({ json: value }) });
-  for (const code of ['media_retrieval_authorization_failed', 'enrichment_authorization_failed', 'enrichment_model_unavailable']) {
+  for (const code of ['media_retrieval_authorization_failed', 'media_retrieval_redirect_invalid', 'enrichment_authorization_failed', 'enrichment_model_unavailable']) {
     assert.deepEqual(run({ outcome: 'operator_required', code }), [{ json: { route: 'operator_required', code } }]);
   }
   assert.equal(route.parameters.rules.values[1].conditions.conditions[0].rightValue, 'operator_required');
   assert.match(nodes.get('Record Media Retrieval Authorization Incident').parameters.query, /processing_completed_at = NOW\(\)/);
   assert.match(nodes.get('Record Media Retrieval Authorization Incident').parameters.query, /media_enrichment_error/);
   assert.match(nodes.get('Record Media Retrieval Authorization Incident').parameters.query, /enrichment_model_unavailable/);
+  assert.match(nodes.get('Record Media Retrieval Authorization Incident').parameters.query, /media_retrieval_redirect_invalid/);
   assert.match(nodes.get('Fail Closed Media Retrieval Authorization').parameters.jsCode, /TICKET_96B_MEDIA_OPERATOR_REQUIRED/);
   assert.doesNotMatch(JSON.stringify(workflow.connections['Record Media Retrieval Authorization Incident']), /Twilio|Send|Reserve Media Clarification/);
 });

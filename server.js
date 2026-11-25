@@ -51,6 +51,7 @@ app.post('/internal/conversation-engine/v4/resolve', createConversationEngineV4H
 const mediaEnricher = createMediaEnricher();
 const mediaOperatorIncidentCodes = new Set([
   'media_retrieval_authorization_failed',
+  'media_retrieval_redirect_invalid',
   'enrichment_authorization_failed',
   'enrichment_model_unavailable',
 ]);
