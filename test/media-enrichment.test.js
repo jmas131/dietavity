@@ -76,7 +76,7 @@ test('follows only one validated Twilio CDN redirect without forwarding credenti
     assert.equal(calls.length, 2); assert.deepEqual(calls[0].options.auth, { username: 'key', password: 'secret' });
     assert.equal(calls[1].url, 'https://mms.twiliocdn.com/signed-media');
     assert.equal(calls[1].options.auth, undefined); assert.equal(calls[1].options.headers, undefined);
-    assert.equal(calls[1].options.maxRedirects, 0); assert.ok(calls[1].options.httpsAgent);
+    assert.equal(calls[1].options.maxRedirects, 0); assert.equal(calls[1].options.proxy, false); assert.ok(calls[1].options.httpsAgent);
   } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
 });
 test('rejects malformed or unapproved Twilio CDN redirects without a second request', async () => {
