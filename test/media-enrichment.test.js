@@ -81,11 +81,14 @@ test('follows only one validated Twilio CDN redirect without forwarding credenti
 });
 test('classifies unsupported initial redirect statuses without a second request', async () => {
   const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
-  const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { throw httpFailure(307); } } });
   try {
-    await assert.rejects(enricher.enrich({ media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 }), error =>
-      error.code === 'media_retrieval_redirect_invalid' && !error.transient
-      && error.diagnostic === 'twilio_media_download_redirect_status_unapproved' && error.redirectDiagnostic === undefined);
+    for (const [status, redirectStatus] of [[301, '301'], [303, '303'], [307, '307'], [308, '308'], [399, 'other_3xx']]) {
+      const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { throw httpFailure(status); } } });
+      await assert.rejects(enricher.enrich({ media_path:path, content_type:'image/png', provider_message_sid:sid, ordinal:0 }), error =>
+        error.code === 'media_retrieval_redirect_invalid' && !error.transient
+        && error.diagnostic === 'twilio_media_download_redirect_status_unapproved'
+        && error.redirectStatus === redirectStatus && error.redirectDiagnostic === undefined);
+    }
   } finally { if (old === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = old; }
 });
 test('classifies rejected Twilio CDN redirect destinations without a second request', async () => {

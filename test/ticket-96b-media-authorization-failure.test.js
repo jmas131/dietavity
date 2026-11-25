@@ -85,6 +85,39 @@ test('redirect destination diagnostics expose only fixed categories', async () =
   assert.doesNotMatch(JSON.stringify(result.body), /signed|token|https?:\/\/|mms\.twiliocdn\.com/i);
 });
 
+test('redirect status diagnostics expose only the allowlisted initial status', async () => {
+  const error = new MediaEnrichmentError('media_retrieval_redirect_invalid', false, 'twilio_media_download_redirect_status_unapproved');
+  error.redirectStatus = '307';
+  const handler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret,
+    allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw error; } },
+  });
+  assert.deepEqual(await invoke(handler), {
+    status: 200,
+    body: {
+      outcome: 'operator_required',
+      code: 'media_retrieval_redirect_invalid',
+      diagnostic: 'twilio_media_download_redirect_status_unapproved',
+      redirect_status: '307',
+    },
+  });
+});
+
+test('untrusted redirect status values cannot reach n8n', async () => {
+  const error = new MediaEnrichmentError('media_retrieval_redirect_invalid', false, 'twilio_media_download_redirect_status_unapproved');
+  error.redirectStatus = '307 https://untrusted.example/signed-token';
+  const handler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret,
+    allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw error; } },
+  });
+  assert.deepEqual(await invoke(handler), {
+    status: 200,
+    body: { outcome: 'operator_required', code: 'media_retrieval_redirect_invalid', diagnostic: 'media_operator_incident' },
+  });
+});
+
 test('unallowlisted redirect values cannot reach n8n', async () => {
   const error = new MediaEnrichmentError('media_retrieval_redirect_invalid', false, 'twilio_media_download_redirect_destination_unapproved');
   error.redirectDiagnostic = {

@@ -19,7 +19,7 @@ const { createConversationEngineHandler, secretMatches } = require('./lib/conver
 const { createConversationEngineV4 } = require('./lib/conversation-engine-v4/service');
 const { createPrimaryConversationLlmClient } = require('./lib/conversation-engine-v4/llm-client');
 const { createConversationEngineV4Handler } = require('./lib/conversation-engine-v4/internal-route');
-const { createMediaEnricher, MediaEnrichmentError, mediaTestAllowlist, mediaEnrichmentRequest, safeRedirectDestinationDiagnostic } = require('./lib/media-enrichment');
+const { createMediaEnricher, MediaEnrichmentError, mediaTestAllowlist, mediaEnrichmentRequest, safeRedirectDestinationDiagnostic, safeRedirectStatusDiagnostic } = require('./lib/media-enrichment');
 
 const app = express();
 
@@ -76,6 +76,11 @@ function safeMediaOperatorDiagnostic(error) {
     const redirect = safeRedirectDestinationDiagnostic(error.redirectDiagnostic);
     if (!redirect) return { diagnostic: 'media_operator_incident' };
     result.redirect = redirect;
+  }
+  if (error.diagnostic === 'twilio_media_download_redirect_status_unapproved') {
+    const redirectStatus = safeRedirectStatusDiagnostic(error.redirectStatus);
+    if (!redirectStatus) return { diagnostic: 'media_operator_incident' };
+    result.redirect_status = redirectStatus;
   }
   return result;
 }
