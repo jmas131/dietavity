@@ -55,6 +55,20 @@ const mediaOperatorIncidentCodes = new Set([
   'enrichment_authorization_failed',
   'enrichment_model_unavailable',
 ]);
+const mediaOperatorIncidentDiagnostics = new Set([
+  'twilio_media_metadata_http_401', 'twilio_media_metadata_http_403',
+  'twilio_media_download_http_401', 'twilio_media_download_http_403',
+  'twilio_media_cdn_download_http_401', 'twilio_media_cdn_download_http_403',
+  'twilio_media_metadata_redirect_unapproved',
+  'twilio_media_download_redirect_invalid', 'twilio_media_download_redirect_unapproved',
+  'twilio_media_download_dns_unapproved',
+  'twilio_media_cdn_download_redirect_unapproved', 'twilio_media_cdn_download_dns_unapproved',
+  'openai_http_401', 'openai_http_403', 'openai_http_404',
+]);
+function safeMediaOperatorDiagnostic(error) {
+  return error instanceof MediaEnrichmentError && mediaOperatorIncidentDiagnostics.has(error.diagnostic)
+    ? error.diagnostic : 'media_operator_incident';
+}
 function createMediaEnrichmentHandler({ enricher = mediaEnricher, secret = process.env.DIETAVITY_CONVERSATION_ENGINE_SECRET, allowlistProvider = mediaTestAllowlist } = {}) {
   return async (req, res) => {
     if (!secretMatches(req.get('x-dietavity-conversation-engine-secret'), secret)) return res.status(401).json({ error: 'unauthorized' });
@@ -70,7 +84,7 @@ function createMediaEnrichmentHandler({ enricher = mediaEnricher, secret = proce
     // not statements about the customer's attachment. The canonical workflow
     // persists a terminal reconciliation record and invokes its error path.
     if (error instanceof MediaEnrichmentError && mediaOperatorIncidentCodes.has(error.code)) {
-      return res.status(200).json({ outcome: 'operator_required', code: error.code });
+      return res.status(200).json({ outcome: 'operator_required', code: error.code, diagnostic: safeMediaOperatorDiagnostic(error) });
     }
     // Other permanent attachment failures get the deterministic clarification.
     // Transport/provider failures remain retryable.
