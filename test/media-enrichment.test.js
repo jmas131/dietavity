@@ -9,6 +9,26 @@ function opusOgg(seconds = 1, { eos = true, opusHead = true } = {}) {
   const head = Buffer.alloc(19); head.write(opusHead ? 'OpusHead' : 'BadHead!'); head[8] = 1; head[9] = 1; head.writeUInt16LE(312, 10);
   const page = Buffer.alloc(28 + head.length); page.write('OggS'); page[4] = 0; page[5] = 0x02 | (eos ? 0x04 : 0); page.writeBigUInt64LE(BigInt(Math.round(seconds * 48000) + 312), 6); page.writeUInt32LE(7, 14); page.writeUInt32LE(0, 18); page[26] = 1; page[27] = head.length; head.copy(page, 28); return page;
 }
+function oggPage(serial, sequence, flags, granule, packets) {
+  const laces = []; const payload = [];
+  for (const packet of packets) {
+    let remaining = packet.length;
+    while (remaining >= 255) { laces.push(255); remaining -= 255; }
+    laces.push(remaining); payload.push(packet);
+  }
+  const page = Buffer.alloc(27 + laces.length + payload.reduce((sum, packet) => sum + packet.length, 0));
+  page.write('OggS'); page[4] = 0; page[5] = flags; page.writeBigUInt64LE(BigInt(granule), 6); page.writeUInt32LE(serial, 14); page.writeUInt32LE(sequence, 18); page[26] = laces.length; Buffer.from(laces).copy(page, 27); Buffer.concat(payload).copy(page, 27 + laces.length); return page;
+}
+function multiPageOpusOgg(seconds = 1) {
+  const preSkip = 312; const serial = 7;
+  const head = Buffer.alloc(19); head.write('OpusHead'); head[8] = 1; head[9] = 1; head.writeUInt16LE(preSkip, 10);
+  const tags = Buffer.alloc(16); tags.write('OpusTags');
+  return Buffer.concat([
+    oggPage(serial, 0, 0x02, 0, [head]),
+    oggPage(serial, 1, 0, 0, [tags]),
+    oggPage(serial, 2, 0x04, preSkip + Math.round(seconds * 48000), [Buffer.from([0xf8])]),
+  ]);
+}
 function png(width, height) { const chunks = []; const add = (type, data) => { const chunk = Buffer.alloc(12 + data.length); chunk.writeUInt32BE(data.length, 0); chunk.write(type, 4); data.copy(chunk, 8); chunks.push(chunk); }; const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 2; add('IHDR', ihdr); add('IEND', Buffer.alloc(0)); return Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]), ...chunks]); }
 function jpeg(width, height) { const data = Buffer.from([0xff,0xd8,0xff,0xc0,0x00,0x0b,0x08, height >> 8, height & 255, width >> 8, width & 255,0x01,0x01,0x11,0x00,0xff,0xd9]); return data; }
 function webpVp8x(width, height) { const vp8x = Buffer.alloc(18); vp8x.write('VP8X'); vp8x.writeUInt32LE(10, 4); vp8x.writeUIntLE(width - 1, 12, 3); vp8x.writeUIntLE(height - 1, 15, 3); const vp8 = Buffer.alloc(18); vp8.write('VP8 '); vp8.writeUInt32LE(10, 4); vp8[8] = 0; vp8[11] = 0x9d; vp8[12] = 0x01; vp8[13] = 0x2a; vp8.writeUInt16LE(width, 14); vp8.writeUInt16LE(height, 16); const out = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), vp8x, vp8]); out.writeUInt32LE(out.length - 8, 4); return out; }
@@ -36,6 +56,7 @@ test('accepts only the declared detected format, with the Ogg/Opus Twilio alias'
 });
 test('reads Ogg granule duration for the 60 second voice-note guard', () => {
   assert.equal(oggDurationSeconds(opusOgg(60)), 60);
+  assert.equal(oggDurationSeconds(multiPageOpusOgg(1)), 1);
   assert.equal(oggDurationSeconds(opusOgg(1, { eos: false })), null);
   assert.equal(oggDurationSeconds(opusOgg(1, { opusHead: false })), null);
 });
@@ -235,6 +256,20 @@ test('rejects malformed Ogg duration evidence and images with unknown or excessi
     await assert.rejects(run('image/webp', Buffer.from('RIFFxxxxWEBPVP8X')), error => error.code === 'invalid_attachment');
   } finally { if (oldAudio === undefined) delete process.env.DIETAVITY_MEDIA_AUDIO_ENABLED; else process.env.DIETAVITY_MEDIA_AUDIO_ENABLED = oldAudio; if (oldImage === undefined) delete process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; else process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = oldImage; }
 });
+test('attaches fixed diagnostics at each audio validation failure site', async () => {
+  const event = { account_sid: account, provider_message_sid: sid, ordinal:0 };
+  const metadata = value => ({ data: { media_list: [{ account_sid:account, parent_sid:sid, sid:mediaSid, content_type:'audio/ogg', uri:`${path}.json`, ...value }] } });
+  const rejected = async (enricher, input, diagnostic) => assert.rejects(enricher.enrich(input), error =>
+    error.code === 'invalid_attachment' && !error.transient && error.diagnostic === diagnostic);
+  await withAudioEnabled(async () => {
+    await rejected(createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', twilioAccountSid:account, http:{ async get() { return metadata({ content_type:'audio/mpeg' }); } } }), event, 'twilio_media_audio_declared_mime_unsupported');
+    await rejected(createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', twilioAccountSid:account, http:{ async get() { return metadata({ sid:`ME${'d'.repeat(32)}` }); } } }), event, 'twilio_media_audio_metadata_invalid');
+    const oversized = Buffer.alloc(8 * 1024 * 1024 + 1); oversized.write('OggS');
+    await rejected(createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http:{ async get() { return { data:oversized }; } } }), { media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }, 'twilio_media_audio_size_limit_exceeded');
+    await rejected(createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http:{ async get() { return { data:Buffer.from('ID3') }; } } }), { media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }, 'twilio_media_audio_signature_mismatch');
+    await rejected(createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http:{ async get() { return { data:Buffer.from('OggS') }; } } }), { media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }, 'twilio_media_audio_ogg_invalid');
+  });
+});
 test('classifies missing Twilio media as terminal customer fallback', async () => {
   for (const status of [404, 410]) await withAudioEnabled(async () => {
     const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: { async get() { throw httpFailure(status); } } });
@@ -289,7 +324,7 @@ test('surfaces Twilio authorization failures as terminal operator incidents', as
   });
 });
 test('valid Ogg/Opus media still reaches the transcription contract', async () => withAudioEnabled(async () => {
-  const enricher = createMediaEnricher({ apiKey:'openai-test', twilioKey:'key', twilioSecret:'secret', http: { async get() { return { data: opusOgg(1) }; }, async post(_url, form) { assert.ok(form instanceof FormData); return { data: { text: 'Comí una ensalada.' } }; } } });
+  const enricher = createMediaEnricher({ apiKey:'openai-test', twilioKey:'key', twilioSecret:'secret', http: { async get() { return { data: multiPageOpusOgg(1) }; }, async post(_url, form) { assert.ok(form instanceof FormData); return { data: { text: 'Comí una ensalada.' } }; } } });
   assert.deepEqual(await enricher.enrich({ media_path:path, content_type:'audio/opus', provider_message_sid:sid, ordinal:0 }), { kind: 'audio', text: 'Comí una ensalada.' });
 }));
 test('rejects a MIME/signature mismatch before any OpenAI request', async () => {

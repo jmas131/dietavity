@@ -143,6 +143,36 @@ test('permanent malformed media remains a deterministic fallback', async () => {
   assert.deepEqual(await invoke(handler), { status: 200, body: { outcome: 'fallback', code: 'invalid_attachment' } });
 });
 
+test('audio attachment validation exposes only the fixed failing-stage diagnostic', async () => {
+  const diagnostics = [
+    'twilio_media_audio_metadata_invalid',
+    'twilio_media_audio_declared_mime_unsupported',
+    'twilio_media_audio_size_limit_exceeded',
+    'twilio_media_audio_signature_mismatch',
+    'twilio_media_audio_ogg_invalid',
+  ];
+  for (const diagnostic of diagnostics) {
+    const handler = app.createMediaEnrichmentHandler({
+      secret: sharedSecret,
+      allowlistProvider: allowlisted,
+      enricher: { async enrich() { throw new MediaEnrichmentError('invalid_attachment', false, diagnostic); } },
+    });
+    assert.deepEqual(await invoke(handler), {
+      status: 200,
+      body: { outcome: 'fallback', code: 'invalid_attachment', diagnostic },
+    });
+  }
+});
+
+test('untrusted audio attachment diagnostics cannot reach n8n', async () => {
+  const handler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret,
+    allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw new MediaEnrichmentError('invalid_attachment', false, 'https://untrusted.example/signed-token'); } },
+  });
+  assert.deepEqual(await invoke(handler), { status: 200, body: { outcome: 'fallback', code: 'invalid_attachment' } });
+});
+
 test('transient retrieval failures remain retryable and do not take either terminal route', async () => {
   const handler = app.createMediaEnrichmentHandler({
     secret: sharedSecret,
@@ -205,6 +235,7 @@ test('the workflow has a terminal authorization route with no outbound node', ()
   for (const code of ['media_retrieval_authorization_failed', 'media_retrieval_redirect_invalid', 'enrichment_authorization_failed', 'enrichment_model_unavailable']) {
     assert.deepEqual(run({ outcome: 'operator_required', code, diagnostic: 'twilio_media_download_redirect_unapproved' }), [{ json: { route: 'operator_required', code } }]);
   }
+  assert.deepEqual(run({ outcome:'fallback', code:'invalid_attachment', diagnostic:'twilio_media_audio_ogg_invalid' }), [{ json:{ route:'fallback', code:'invalid_attachment' } }]);
   assert.equal(route.parameters.rules.values[1].conditions.conditions[0].rightValue, 'operator_required');
   assert.match(nodes.get('Record Media Retrieval Authorization Incident').parameters.query, /processing_completed_at = NOW\(\)/);
   assert.match(nodes.get('Record Media Retrieval Authorization Incident').parameters.query, /media_enrichment_error/);
