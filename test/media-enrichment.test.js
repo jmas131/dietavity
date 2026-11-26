@@ -1,6 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const https = require('node:https');
+const net = require('node:net');
 const { descriptor, magic, detectedType, matchesDeclaredType, imageDimensions, oggDurationSeconds, createMediaEnricher, MediaEnrichmentError, openAiFailure, publicAddress, createTwilioCdnLookup } = require('../lib/media-enrichment');
 const sid = 'SM' + 'a'.repeat(32); const account = 'AC' + 'b'.repeat(32); const mediaSid = 'ME' + 'c'.repeat(32); const path = `/2010-04-01/Accounts/${account}/Messages/${sid}/Media/${mediaSid}`;
 function opusOgg(seconds = 1, { eos = true, opusHead = true } = {}) {
@@ -150,6 +152,42 @@ test('CDN lookup uses its approved public address directly and refuses private r
   const privateLookup = createTwilioCdnLookup((_host, _options, done) => done(null, [{ address: '127.0.0.1', family: 4 }]));
   assert.deepEqual(await resolve(publicLookup, 'mms.twiliocdn.com'), { error: null, address: '1.1.1.1', family: 4 });
   assert.equal((await resolve(privateLookup, 'mms.twiliocdn.com')).error.code, 'TICKET_96B_CDN_PRIVATE_ADDRESS');
+});
+test('CDN lookup returns all validated addresses for Node automatic family selection', async () => {
+  const lookup = createTwilioCdnLookup((_host, _options, done) => done(null, [
+    { address:'2001:db8::1', family:6 }, { address:'2001:4860:4860::8888', family:6 },
+    { address:'10.0.0.1', family:4 }, { address:'1.1.1.1', family:4 },
+  ]));
+  const result = await new Promise(resolve => lookup('mms.twiliocdn.com', { all:true }, (...args) => resolve(args)));
+  assert.deepEqual(result, [null, [{ address:'2001:4860:4860::8888', family:6 }, { address:'1.1.1.1', family:4 }]]);
+});
+test('CDN lookup respects the requested address family and fails closed when unavailable', async () => {
+  const lookup = createTwilioCdnLookup((_host, _options, done) => done(null, [
+    { address:'2001:4860:4860::8888', family:6 }, { address:'1.1.1.1', family:4 },
+  ]));
+  const resolve = options => new Promise(resolve => lookup('mms.twiliocdn.com', options, (...args) => resolve(args)));
+  assert.deepEqual(await resolve({ family:4 }), [null, '1.1.1.1', 4]);
+  assert.deepEqual(await resolve({ family:'IPv6', all:true }), [null, [{ address:'2001:4860:4860::8888', family:6 }]]);
+  const ipv4Only = createTwilioCdnLookup((_host, _options, done) => done(null, [{ address:'1.1.1.1', family:4 }]));
+  const rejected = await new Promise(resolve => ipv4Only('mms.twiliocdn.com', { family:6, all:true }, (...args) => resolve(args)));
+  assert.equal(rejected[0].code, 'TICKET_96B_CDN_PRIVATE_ADDRESS');
+});
+test('Node HTTPS agent accepts the all-address custom lookup contract with automatic family selection', async () => {
+  const server = net.createServer(socket => socket.destroy());
+  await new Promise((resolve, reject) => server.listen(0, '127.0.0.1', error => error ? reject(error) : resolve()));
+  try {
+    const calls = [];
+    const agent = new https.Agent({ lookup(hostname, options, callback) {
+      calls.push({ hostname, all: options.all === true });
+      callback(null, [{ address:'127.0.0.1', family:4 }]);
+    }});
+    const outcome = await new Promise(resolve => {
+      const request = https.get(`https://mms.twiliocdn.com:${server.address().port}/`, { agent, autoSelectFamily:true, timeout:2000 });
+      request.on('error', error => resolve(error.code));
+    });
+    assert.notEqual(outcome, 'ERR_INVALID_IP_ADDRESS');
+    assert.deepEqual(calls, [{ hostname:'mms.twiliocdn.com', all:true }]);
+  } finally { await new Promise(resolve => server.close(resolve)); }
 });
 test('Event Streams metadata lookup fails closed for bad identity and classifies provider failures', async () => {
   const old = process.env.DIETAVITY_MEDIA_IMAGES_ENABLED; process.env.DIETAVITY_MEDIA_IMAGES_ENABLED = 'true';
