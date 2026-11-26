@@ -94,7 +94,9 @@ test('classifies each rejected Ogg duration evidence stage without exposing stre
     [streamIdentity, 'stream_identity_invalid'],
     [sequence, 'sequence_invalid'],
     [opusOgg(1, { opusHead: false }), 'opus_head_invalid'],
-    [opusOgg(1, { eos: false }), 'eos_invalid'],
+    [opusOgg(1, { eos: false }), 'eos_missing'],
+    [Buffer.concat([opusOgg(1), Buffer.from([0])]), 'eos_not_terminal'],
+    [Buffer.concat([opusOgg(1), oggPage(7, 1, 0, 0, [Buffer.from([0xf8])])]), 'eos_not_terminal'],
     [finalGranule, 'final_granule_invalid'],
   ];
   for (const [input, ogg_stage] of cases) assert.deepEqual(oggDurationEvidence(input), { duration: null, ogg_stage });
