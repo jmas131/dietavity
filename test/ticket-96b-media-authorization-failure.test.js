@@ -164,6 +164,41 @@ test('audio attachment validation exposes only the fixed failing-stage diagnosti
   }
 });
 
+test('Ogg parser stage is exposed only for the fixed Ogg audio diagnostic', async () => {
+  const valid = new MediaEnrichmentError('invalid_attachment', false, 'twilio_media_audio_ogg_invalid');
+  valid.oggStage = 'sequence_invalid';
+  const handler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret, allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw valid; } },
+  });
+  assert.deepEqual(await invoke(handler), {
+    status: 200,
+    body: { outcome: 'fallback', code: 'invalid_attachment', diagnostic: 'twilio_media_audio_ogg_invalid', ogg_stage: 'sequence_invalid' },
+  });
+
+  const untrusted = new MediaEnrichmentError('invalid_attachment', false, 'twilio_media_audio_ogg_invalid');
+  untrusted.oggStage = 'sequence_invalid https://untrusted.example/signed-token';
+  const untrustedHandler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret, allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw untrusted; } },
+  });
+  assert.deepEqual(await invoke(untrustedHandler), {
+    status: 200,
+    body: { outcome: 'fallback', code: 'invalid_attachment', diagnostic: 'twilio_media_audio_ogg_invalid' },
+  });
+
+  const unrelated = new MediaEnrichmentError('invalid_attachment', false, 'twilio_media_audio_signature_mismatch');
+  unrelated.oggStage = 'sequence_invalid';
+  const unrelatedHandler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret, allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw unrelated; } },
+  });
+  assert.deepEqual(await invoke(unrelatedHandler), {
+    status: 200,
+    body: { outcome: 'fallback', code: 'invalid_attachment', diagnostic: 'twilio_media_audio_signature_mismatch' },
+  });
+});
+
 test('untrusted audio attachment diagnostics cannot reach n8n', async () => {
   const handler = app.createMediaEnrichmentHandler({
     secret: sharedSecret,

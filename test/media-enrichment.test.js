@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const https = require('node:https');
 const net = require('node:net');
-const { descriptor, magic, detectedType, matchesDeclaredType, imageDimensions, oggDurationSeconds, createMediaEnricher, MediaEnrichmentError, openAiFailure, publicAddress, createTwilioCdnLookup } = require('../lib/media-enrichment');
+const { descriptor, magic, detectedType, matchesDeclaredType, imageDimensions, oggDurationSeconds, oggDurationEvidence, createMediaEnricher, MediaEnrichmentError, openAiFailure, publicAddress, createTwilioCdnLookup } = require('../lib/media-enrichment');
 const sid = 'SM' + 'a'.repeat(32); const account = 'AC' + 'b'.repeat(32); const mediaSid = 'ME' + 'c'.repeat(32); const path = `/2010-04-01/Accounts/${account}/Messages/${sid}/Media/${mediaSid}`;
 function opusOgg(seconds = 1, { eos = true, opusHead = true } = {}) {
   const head = Buffer.alloc(19); head.write(opusHead ? 'OpusHead' : 'BadHead!'); head[8] = 1; head[9] = 1; head.writeUInt16LE(312, 10);
@@ -19,6 +19,12 @@ function oggPage(serial, sequence, flags, granule, packets) {
   const page = Buffer.alloc(27 + laces.length + payload.reduce((sum, packet) => sum + packet.length, 0));
   page.write('OggS'); page[4] = 0; page[5] = flags; page.writeBigUInt64LE(BigInt(granule), 6); page.writeUInt32LE(serial, 14); page.writeUInt32LE(sequence, 18); page[26] = laces.length; Buffer.from(laces).copy(page, 27); Buffer.concat(payload).copy(page, 27 + laces.length); return page;
 }
+function oggPageWithLaces(serial, sequence, flags, granule, laces, payload) {
+  const page = Buffer.alloc(27 + laces.length + payload.length);
+  page.write('OggS'); page[4] = 0; page[5] = flags; page.writeBigUInt64LE(BigInt(granule), 6);
+  page.writeUInt32LE(serial, 14); page.writeUInt32LE(sequence, 18); page[26] = laces.length;
+  Buffer.from(laces).copy(page, 27); payload.copy(page, 27 + laces.length); return page;
+}
 function multiPageOpusOgg(seconds = 1) {
   const preSkip = 312; const serial = 7;
   const head = Buffer.alloc(19); head.write('OpusHead'); head[8] = 1; head[9] = 1; head.writeUInt16LE(preSkip, 10);
@@ -27,6 +33,19 @@ function multiPageOpusOgg(seconds = 1) {
     oggPage(serial, 0, 0x02, 0, [head]),
     oggPage(serial, 1, 0, 0, [tags]),
     oggPage(serial, 2, 0x04, preSkip + Math.round(seconds * 48000), [Buffer.from([0xf8])]),
+  ]);
+}
+function continuedPacketOpusOgg(seconds = 1) {
+  const preSkip = 312; const serial = 7;
+  const head = Buffer.alloc(19); head.write('OpusHead'); head[8] = 1; head[9] = 1; head.writeUInt16LE(preSkip, 10);
+  const tags = Buffer.alloc(16); tags.write('OpusTags');
+  return Buffer.concat([
+    oggPage(serial, 0, 0x02, 0, [head]),
+    oggPage(serial, 1, 0, 0, [tags]),
+    // A 256-byte audio packet split over pages: the 255-byte lacing value
+    // continues it, and the final byte terminates it on the EOS page.
+    oggPageWithLaces(serial, 2, 0, 0, [255], Buffer.alloc(255, 0xf8)),
+    oggPageWithLaces(serial, 3, 0x01 | 0x04, preSkip + Math.round(seconds * 48000), [1], Buffer.from([0xf8])),
   ]);
 }
 function png(width, height) { const chunks = []; const add = (type, data) => { const chunk = Buffer.alloc(12 + data.length); chunk.writeUInt32BE(data.length, 0); chunk.write(type, 4); data.copy(chunk, 8); chunks.push(chunk); }; const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 2; add('IHDR', ihdr); add('IEND', Buffer.alloc(0)); return Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]), ...chunks]); }
@@ -57,8 +76,28 @@ test('accepts only the declared detected format, with the Ogg/Opus Twilio alias'
 test('reads Ogg granule duration for the 60 second voice-note guard', () => {
   assert.equal(oggDurationSeconds(opusOgg(60)), 60);
   assert.equal(oggDurationSeconds(multiPageOpusOgg(1)), 1);
+  assert.equal(oggDurationSeconds(continuedPacketOpusOgg(1)), 1);
   assert.equal(oggDurationSeconds(opusOgg(1, { eos: false })), null);
   assert.equal(oggDurationSeconds(opusOgg(1, { opusHead: false })), null);
+});
+test('classifies each rejected Ogg duration evidence stage without exposing stream data', () => {
+  const bounds = Buffer.alloc(27); bounds.write('OggS'); bounds[4] = 0; bounds[26] = 1;
+  const streamIdentity = opusOgg(1); streamIdentity[5] = 0;
+  const sequence = Buffer.concat([
+    oggPage(7, 0, 0x02, 0, [Buffer.from('OpusHead\x01\x01\x38\x01' + '\0'.repeat(7))]),
+    oggPage(7, 2, 0x04, 48_312, [Buffer.from([0xf8])]),
+  ]);
+  const finalGranule = opusOgg(1); finalGranule.writeBigUInt64LE(0n, 6);
+  const cases = [
+    [Buffer.concat([Buffer.from('NotOgg'), Buffer.alloc(22)]), 'page_header_invalid'],
+    [bounds, 'page_bounds_invalid'],
+    [streamIdentity, 'stream_identity_invalid'],
+    [sequence, 'sequence_invalid'],
+    [opusOgg(1, { opusHead: false }), 'opus_head_invalid'],
+    [opusOgg(1, { eos: false }), 'eos_invalid'],
+    [finalGranule, 'final_granule_invalid'],
+  ];
+  for (const [input, ogg_stage] of cases) assert.deepEqual(oggDurationEvidence(input), { duration: null, ogg_stage });
 });
 test('reliably reads supported PNG, JPEG, and WebP dimensions', () => {
   assert.deepEqual(imageDimensions(png(320, 240), 'image/png'), [320, 240]);
@@ -267,7 +306,9 @@ test('attaches fixed diagnostics at each audio validation failure site', async (
     const oversized = Buffer.alloc(8 * 1024 * 1024 + 1); oversized.write('OggS');
     await rejected(createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http:{ async get() { return { data:oversized }; } } }), { media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }, 'twilio_media_audio_size_limit_exceeded');
     await rejected(createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http:{ async get() { return { data:Buffer.from('ID3') }; } } }), { media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }, 'twilio_media_audio_signature_mismatch');
-    await rejected(createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http:{ async get() { return { data:Buffer.from('OggS') }; } } }), { media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }, 'twilio_media_audio_ogg_invalid');
+    const oggInvalid = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http:{ async get() { return { data:Buffer.from('OggS') }; } } });
+    await assert.rejects(oggInvalid.enrich({ media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }), error =>
+      error.code === 'invalid_attachment' && error.diagnostic === 'twilio_media_audio_ogg_invalid' && error.oggStage === 'page_bounds_invalid');
   });
 });
 test('classifies missing Twilio media as terminal customer fallback', async () => {

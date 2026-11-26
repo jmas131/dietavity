@@ -19,7 +19,7 @@ const { createConversationEngineHandler, secretMatches } = require('./lib/conver
 const { createConversationEngineV4 } = require('./lib/conversation-engine-v4/service');
 const { createPrimaryConversationLlmClient } = require('./lib/conversation-engine-v4/llm-client');
 const { createConversationEngineV4Handler } = require('./lib/conversation-engine-v4/internal-route');
-const { createMediaEnricher, MediaEnrichmentError, mediaTestAllowlist, mediaEnrichmentRequest, safeRedirectDestinationDiagnostic, safeRedirectStatusDiagnostic, safeCdnTransportClass, safeAudioAttachmentDiagnostic } = require('./lib/media-enrichment');
+const { createMediaEnricher, MediaEnrichmentError, mediaTestAllowlist, mediaEnrichmentRequest, safeRedirectDestinationDiagnostic, safeRedirectStatusDiagnostic, safeCdnTransportClass, safeAudioAttachmentDiagnostic, safeOggRejectionStage } = require('./lib/media-enrichment');
 
 const app = express();
 
@@ -108,6 +108,10 @@ function createMediaEnrichmentHandler({ enricher = mediaEnricher, secret = proce
       if (error.code === 'invalid_attachment') {
         const diagnostic = safeAudioAttachmentDiagnostic(error.diagnostic);
         if (diagnostic) fallback.diagnostic = diagnostic;
+        if (diagnostic === 'twilio_media_audio_ogg_invalid') {
+          const oggStage = safeOggRejectionStage(error.oggStage);
+          if (oggStage) fallback.ogg_stage = oggStage;
+        }
       }
       return res.status(200).json(fallback);
     }
