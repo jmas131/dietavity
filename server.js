@@ -19,7 +19,7 @@ const { createConversationEngineHandler, secretMatches } = require('./lib/conver
 const { createConversationEngineV4 } = require('./lib/conversation-engine-v4/service');
 const { createPrimaryConversationLlmClient } = require('./lib/conversation-engine-v4/llm-client');
 const { createConversationEngineV4Handler } = require('./lib/conversation-engine-v4/internal-route');
-const { createMediaEnricher, MediaEnrichmentError, mediaTestAllowlist, mediaEnrichmentRequest, safeRedirectDestinationDiagnostic, safeRedirectStatusDiagnostic } = require('./lib/media-enrichment');
+const { createMediaEnricher, MediaEnrichmentError, mediaTestAllowlist, mediaEnrichmentRequest, safeRedirectDestinationDiagnostic, safeRedirectStatusDiagnostic, safeCdnTransportClass } = require('./lib/media-enrichment');
 
 const app = express();
 
@@ -109,12 +109,16 @@ function createMediaEnrichmentHandler({ enricher = mediaEnricher, secret = proce
     // Keep the non-2xx status so n8n's error path and Recovery Poller retain
     // their retry semantics. The body contains only stable categories, never
     // provider bodies, media identifiers, URLs, or credentials.
-    return res.status(503).json({
+    const result = {
       outcome: 'retry',
       code: error instanceof MediaEnrichmentError ? error.code : 'media_unavailable',
       diagnostic: error instanceof MediaEnrichmentError && typeof error.diagnostic === 'string'
         ? error.diagnostic : 'media_unexpected_failure',
-    });
+    };
+    if (error instanceof MediaEnrichmentError && error.diagnostic === 'twilio_media_cdn_download_network_failure') {
+      result.transport_class = safeCdnTransportClass(error.transportClass) || 'network_other';
+    }
+    return res.status(503).json(result);
     }
   };
 }

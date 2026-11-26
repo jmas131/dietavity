@@ -216,6 +216,33 @@ test('reports bounded diagnostics for retryable Twilio metadata and download fai
     await assert.rejects(enricher.enrich({ media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }), failure => failure.code === 'media_unavailable' && failure.transient && failure.diagnostic === diagnostic);
   });
 });
+test('classifies only bounded CDN transport failures after a validated redirect', async () => {
+  const failures = [
+    ['ECONNREFUSED', 'connection_refused'],
+    ['ENETUNREACH', 'network_unreachable'],
+    ['EHOSTUNREACH', 'host_unreachable'],
+    ['ECONNRESET', 'connection_reset'],
+    ['ENODATA', 'dns_other'],
+    ['ERR_SSL_WRONG_VERSION_NUMBER', 'tls_other'],
+    ['UNRECOGNIZED_TRANSPORT', 'network_other'],
+  ];
+  for (const [code, transportClass] of failures) await withAudioEnabled(async () => {
+    let calls = 0;
+    const error = Object.assign(new Error('untrusted transport detail'), { code });
+    const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', http: {
+      async get() {
+        calls += 1;
+        if (calls === 1) return { status:307, headers:{ location:'https://mms.twiliocdn.com/signed-media' } };
+        throw error;
+      },
+    }});
+    await assert.rejects(enricher.enrich({ media_path:path, content_type:'audio/ogg', provider_message_sid:sid, ordinal:0 }), failure =>
+      failure.code === 'media_unavailable' && failure.transient
+      && failure.diagnostic === 'twilio_media_cdn_download_network_failure'
+      && failure.transportClass === transportClass);
+    assert.equal(calls, 2);
+  });
+});
 test('surfaces Twilio authorization failures as terminal operator incidents', async () => {
   for (const status of [401, 403]) await withAudioEnabled(async () => {
     const events = []; const enricher = createMediaEnricher({ twilioKey:'key', twilioSecret:'secret', diagnosticLogger: { error: event => events.push(event) }, http: { async get() { throw httpFailure(status); } } });

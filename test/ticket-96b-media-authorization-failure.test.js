@@ -155,6 +155,47 @@ test('transient retrieval failures remain retryable and do not take either termi
   });
 });
 
+test('CDN network failures expose only a fixed transport class', async () => {
+  for (const transportClass of ['connection_refused', 'network_unreachable', 'host_unreachable', 'connection_reset', 'dns_other', 'tls_other', 'network_other']) {
+    const error = new MediaEnrichmentError('media_unavailable', true, 'twilio_media_cdn_download_network_failure');
+    error.transportClass = transportClass;
+    const handler = app.createMediaEnrichmentHandler({
+      secret: sharedSecret,
+      allowlistProvider: allowlisted,
+      enricher: { async enrich() { throw error; } },
+    });
+    assert.deepEqual(await invoke(handler), {
+      status: 503,
+      body: { outcome: 'retry', code: 'media_unavailable', diagnostic: 'twilio_media_cdn_download_network_failure', transport_class: transportClass },
+    });
+  }
+});
+
+test('untrusted CDN transport values are reduced to network_other and excluded elsewhere', async () => {
+  const cdnError = new MediaEnrichmentError('media_unavailable', true, 'twilio_media_cdn_download_network_failure');
+  cdnError.transportClass = 'ECONNRESET https://untrusted.example/signed-token';
+  const cdnHandler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret,
+    allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw cdnError; } },
+  });
+  assert.deepEqual(await invoke(cdnHandler), {
+    status: 503,
+    body: { outcome: 'retry', code: 'media_unavailable', diagnostic: 'twilio_media_cdn_download_network_failure', transport_class: 'network_other' },
+  });
+  const otherError = new MediaEnrichmentError('media_unavailable', true, 'twilio_media_download_network_failure');
+  otherError.transportClass = 'connection_reset';
+  const otherHandler = app.createMediaEnrichmentHandler({
+    secret: sharedSecret,
+    allowlistProvider: allowlisted,
+    enricher: { async enrich() { throw otherError; } },
+  });
+  assert.deepEqual(await invoke(otherHandler), {
+    status: 503,
+    body: { outcome: 'retry', code: 'media_unavailable', diagnostic: 'twilio_media_download_network_failure' },
+  });
+});
+
 test('the workflow has a terminal authorization route with no outbound node', () => {
   const workflow = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'Dietavity Sales Engine (Ticket 10).json'), 'utf8'));
   const nodes = new Map(workflow.nodes.map(node => [node.name, node]));
